@@ -1,0 +1,15 @@
+Collecting pytest
+  Downloading pytest-8.4.1-py3-none-any.whl.metadata (7.7 kB)
+Requirement already satisfied: colorama>=0.4 in c:\users\conta\onedrive\jungproject\.venv\lib\site-packages (from pytest) (0.4.6)
+Collecting iniconfig>=1 (from pytest)
+  Downloading iniconfig-2.1.0-py3-none-any.whl.metadata (2.7 kB)
+Requirement already satisfied: packaging>=20 in c:\users\conta\onedrive\jungproject\.venv\lib\site-packages (from pytest) (24.2)
+Collecting pluggy<2,>=1.5 (from pytest)
+  Downloading pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+Requirement already satisfied: pygments>=2.7.2 in c:\users\conta\onedrive\jungproject\.venv\lib\site-packages (from pytest) (2.19.2)
+Downloading pytest-8.4.1-py3-none-any.whl (365 kB)
+Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+Downloading iniconfig-2.1.0-py3-none-any.whl (6.0 kB)
+Installing collected packages: pluggy, iniconfig, pytest
+
+Successfully installed iniconfig-2.1.0 pluggy-1.6.0 pytest-8.4.1

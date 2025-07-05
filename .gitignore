@@ -1,0 +1,17 @@
+# Ambiente virtual
+venv/
+env/
+
+# Chaves de API
+.env
+
+# Base de dados
+data/chroma_db/
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log

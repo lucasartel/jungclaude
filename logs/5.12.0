@@ -1,0 +1,5 @@
+Collecting isort
+  Downloading isort-6.0.1-py3-none-any.whl.metadata (11 kB)
+Downloading isort-6.0.1-py3-none-any.whl (94 kB)
+Installing collected packages: isort
+Successfully installed isort-6.0.1

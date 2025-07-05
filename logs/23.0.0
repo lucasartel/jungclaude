@@ -1,0 +1,19 @@
+Collecting black
+  Downloading black-25.1.0-cp313-cp313-win_amd64.whl.metadata (81 kB)
+Requirement already satisfied: click>=8.0.0 in c:\users\conta\onedrive\jungproject\.venv\lib\site-packages (from black) (8.2.1)
+Collecting mypy-extensions>=0.4.3 (from black)
+  Using cached mypy_extensions-1.1.0-py3-none-any.whl.metadata (1.1 kB)
+Requirement already satisfied: packaging>=22.0 in c:\users\conta\onedrive\jungproject\.venv\lib\site-packages (from black) (24.2)
+Collecting pathspec>=0.9.0 (from black)
+  Downloading pathspec-0.12.1-py3-none-any.whl.metadata (21 kB)
+Collecting platformdirs>=2 (from black)
+  Using cached platformdirs-4.3.8-py3-none-any.whl.metadata (12 kB)
+Requirement already satisfied: colorama in c:\users\conta\onedrive\jungproject\.venv\lib\site-packages (from click>=8.0.0->black) (0.4.6)
+Downloading black-25.1.0-cp313-cp313-win_amd64.whl (1.4 MB)
+   ---------------------------------------- 1.4/1.4 MB 479.3 kB/s eta 0:00:00
+Using cached mypy_extensions-1.1.0-py3-none-any.whl (5.0 kB)
+Downloading pathspec-0.12.1-py3-none-any.whl (31 kB)
+Using cached platformdirs-4.3.8-py3-none-any.whl (18 kB)
+Installing collected packages: platformdirs, pathspec, mypy-extensions, black
+
+Successfully installed black-25.1.0 mypy-extensions-1.1.0 pathspec-0.12.1 platformdirs-4.3.8
