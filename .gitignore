@@ -1,17 +1,22 @@
-# Ambiente virtual
-venv/
-env/
-
-# Chaves de API
+# Arquivo de ambiente com chaves de API - NUNCA ENVIAR!
 .env
 
-# Base de dados
-data/chroma_db/
+# Pasta do ambiente virtual do Python
+venv/
+.venv/
 
-# Cache Python
+# Arquivos de cache e compilados do Python
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 
-# Logs
-*.log
+# Pastas de banco de dados e IDE
+.vscode/
+chroma_db/
+data/chroma_db/
+logs/
+Docs-Teoricos/
+
+# Arquivos para testes
+memorias.py
