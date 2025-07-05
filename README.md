@@ -13,3 +13,12 @@ Este projeto nasceu da ideia de aplicar conceitos da psicologia analítica para 
 * **Processamento de Linguagem Natural com Profundidade:** Analisa textos buscando por temas e sentimentos subjacentes.
 
 ---
+
+---
+
+## 📧 Contato
+
+Lucas Pedro
+
+* **Email:** `lucas.arte@gmail.com`
+* **LinkedIn:** `https://www.linkedin.com/in/lucas-pedro-37graus/`
