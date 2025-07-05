@@ -3,7 +3,9 @@
 Claude Jung v1.0 - Interface Web Streamlit
 Sistema único com memória semântica ativa + ARQUÉTIPOS
 """
-
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import streamlit as st
 import asyncio
 import json
