@@ -1535,10 +1535,39 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
         final_charge = (emotional_charge * 6) + (amplifier_count * 3)
         return min(final_charge, 100)
     
-    async def reactive_flow(self, user_id: str, user_input: str, session_id: str = None) -> tuple[str, str]:
-        """🧠 FLUXO COMPLETO: CONSULTA SEMÂNTICA + TODOS OS ARQUÉTIPOS"""
-        # A limpeza de logs foi removida do início.
+# Dentro da classe CentralOrchestrator
 
+    async def reactive_flow(self, user_id: str, user_input: str, session_id: str = None, bypass_agent: bool = False) -> tuple[str, str]:
+        """🧠 FLUXO COMPLETO OU BYPASS DIRETO PARA O CLAUDE"""
+
+        if bypass_agent:
+            # ==========================================================
+            # <<< CAMINHO RÁPIDO: MODO CLAUDE PURO (BYPASS) >>>
+            # ==========================================================
+            self._debug_log(">>> MODO CLAUDE PURO (BYPASS) ATIVADO <<<")
+            self._debug_log(f"Enviando input direto para o modelo base: '{user_input[:80]}...'")
+            
+            try:
+                # Usar a instância do LLM da Persona como modelo base
+                base_llm = self.assistants["persona"].llm
+                response = await base_llm.ainvoke(user_input)
+                pure_response = response.content
+                
+                self._debug_log("Resposta recebida diretamente do modelo base.")
+                self._debug_log("NENHUMA memória foi consultada ou armazenada.")
+                
+                system_logs = log_capture.get_formatted_logs()
+                log_capture.clear_logs()
+                return pure_response, system_logs
+            except Exception as e:
+                self._debug_log(f"❌ ERRO no modo Bypass: {e}")
+                error_logs = log_capture.get_formatted_logs()
+                log_capture.clear_logs()
+                return "Desculpe, ocorreu um erro na chamada direta ao Claude.", error_logs
+
+        # ==========================================================
+        # <<< FLUXO NORMAL DO AGENTE (SE BYPASS FOR FALSE) >>>
+        # ==========================================================
         if not session_id:
             session_id = str(uuid.uuid4())
         
@@ -1592,7 +1621,11 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
                 
                 # Enriquecer ciência interna com memórias vetoriais adicionais
                 additional_memories = await self.memory.retrieve_relevant_memories(user_id, user_input, k=3)
+                
+                # ================== INÍCIO DA CORREÇÃO ==================
+                # Inicializar o 'enhanced_context' com o contexto original
                 enhanced_context = semantic_context
+                # =================== FIM DA CORREÇÃO ====================
                 
                 if additional_memories:
                     enhanced_context += "\n\n=== MEMÓRIAS VETORIAIS ADICIONAIS ===\n"
@@ -1641,20 +1674,13 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
             # 6. Armazenar memória
             self._debug_log("Armazenando memória na base de dados...")
             memory = InteractionMemory(
-                user_id=user_id,
-                user_name=user_name,
-                session_id=session_id,
-                timestamp=datetime.now(),
-                user_input=user_input,
-                archetype_voices=archetype_voices,
-                raw_synthesis=raw_synthesis,
-                final_response=final_response,
-                tension_level=tension_level,
+                user_id=user_id, user_name=user_name, session_id=session_id, timestamp=datetime.now(),
+                user_input=user_input, archetype_voices=archetype_voices, raw_synthesis=raw_synthesis,
+                final_response=final_response, tension_level=tension_level,
                 dominant_archetype=self._determine_dominant_archetype(archetype_voices),
                 affective_charge=self._calculate_affective_charge(user_input, final_response),
                 keywords=self._extract_keywords(user_input, final_response),
-                existential_depth=interaction_depth,
-                intensity_level=intensity_level,
+                existential_depth=interaction_depth, intensity_level=intensity_level,
                 response_complexity=complexity
             )
             
@@ -1663,20 +1689,16 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
             self._debug_log(f"✅ Resposta final gerada com CIÊNCIA INTERNA + TODOS OS ARQUÉTIPOS")
             self._debug_log("=== FIM DO FLUXO COMPLETO ===")
 
-            # ETAPA DE CORREÇÃO:
-            # 1. Capturar os logs desta interação
             system_logs = log_capture.get_formatted_logs()
-            # 2. Limpar para a PRÓXIMA interação
             log_capture.clear_logs()
-            # 3. Retornar a resposta E os logs
             return final_response, system_logs
             
         except Exception as e:
             self._debug_log(f"❌ ERRO no fluxo: {e}")
-            # ETAPA DE CORREÇÃO EM CASO DE ERRO:
             error_logs = log_capture.get_formatted_logs()
             log_capture.clear_logs()
             return "Desculpe, encontrei dificuldades. Pode tentar novamente?", error_logs
+        
 
     def _extract_keywords(self, user_input: str, response: str) -> List[str]:
         text = (user_input + " " + response).lower()
