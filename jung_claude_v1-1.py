@@ -458,99 +458,94 @@ class MemoryModule:
                 cache['facts_extracted'].append(f"EVENTO-VIDA: {event} - {user_input}")
                 self._debug_log(f"Evento da vida: {event}")
     
-async def semantic_query_total_database(self, user_id: str, current_input: str, k: int = 8, 
-                                       chat_history: List[Dict] = None) -> Dict[str, Any]:
-    """NOVO: Consulta semântica TOTAL da base de dados para o input atual"""
-    
-    self._debug_log(f"=== CONSULTA SEMÂNTICA TOTAL ===")
-    self._debug_log(f"Input atual: '{current_input}'")
-    self._debug_log(f"Histórico da conversa: {len(chat_history) if chat_history else 0} mensagens")
-    self._debug_log(f"Buscando na base completa do usuário...")
-    
-    if user_id not in self.semantic_knowledge:
-        self._debug_log(f"Usuário {user_id} não tem base semântica")
-        return {'relevant_memories': [], 'contextual_knowledge': '', 'semantic_connections': []}
-    
-    try:
-        # 1. BUSCA SEMÂNTICA VETORIAL na base completa
-        semantic_docs = self.vectorstore.similarity_search(
-            current_input,
-            k=k*2,
-            filter={"user_id": user_id}
-        )
+    async def semantic_query_total_database(self, user_id: str, current_input: str, k: int = 8) -> Dict[str, Any]:
+        """NOVO: Consulta semântica TOTAL da base de dados para o input atual"""
         
-        self._debug_log(f"Busca vetorial retornou: {len(semantic_docs)} documentos")
+        self._debug_log(f"=== CONSULTA SEMÂNTICA TOTAL ===")
+        self._debug_log(f"Input atual: '{current_input}'")
+        self._debug_log(f"Buscando na base completa do usuário...")
         
-        # 2. EXTRAÇÃO DE INPUTS RELEVANTES dos documentos
-        relevant_user_inputs = []
-        for doc in semantic_docs:
-            user_input_pattern = r"Input:\s*(.+?)(?:\n|Arquétipos:|$)"
-            user_input_match = re.search(user_input_pattern, doc.page_content, re.DOTALL)
+        if user_id not in self.semantic_knowledge:
+            self._debug_log(f"Usuário {user_id} não tem base semântica")
+            return {'relevant_memories': [], 'contextual_knowledge': '', 'semantic_connections': []}
+        
+        try:
+            # 1. BUSCA SEMÂNTICA VETORIAL na base completa
+            semantic_docs = self.vectorstore.similarity_search(
+                current_input,
+                k=k*2,
+                filter={"user_id": user_id}
+            )
             
-            if user_input_match:
-                extracted_input = user_input_match.group(1).strip()
+            self._debug_log(f"Busca vetorial retornou: {len(semantic_docs)} documentos")
+            
+            # 2. EXTRAÇÃO DE INPUTS RELEVANTES dos documentos
+            relevant_user_inputs = []
+            for doc in semantic_docs:
+                user_input_pattern = r"Input:\s*(.+?)(?:\n|Arquétipos:|$)"
+                user_input_match = re.search(user_input_pattern, doc.page_content, re.DOTALL)
                 
-                # Calcular relevância semântica básica
-                relevance_score = self._calculate_semantic_relevance(current_input, extracted_input)
-                
-                relevant_user_inputs.append({
-                    'input_text': extracted_input,
-                    'timestamp': doc.metadata.get('timestamp', ''),
-                    'relevance_score': relevance_score,
-                    'full_document': doc.page_content,
-                    'metadata': doc.metadata
-                })
-        
-        # 3. ORDENAR POR RELEVÂNCIA e pegar os melhores
-        relevant_user_inputs.sort(key=lambda x: x['relevance_score'], reverse=True)
-        top_relevant = relevant_user_inputs[:k]
-        
-        self._debug_log(f"Inputs mais relevantes encontrados: {len(top_relevant)}")
-        for i, rel in enumerate(top_relevant[:3], 1):
-            self._debug_log(f"  {i}. [{rel['relevance_score']:.2f}] {rel['input_text'][:60]}...")
-        
-        # 4. BUSCA POR FATOS ESTRUTURADOS RELACIONADOS
-        cache = self.memory_cache.get(user_id, {})
-        related_facts = []
-        
-        # Buscar em fatos extraídos
-        current_words = set(current_input.lower().split())
-        for fact in cache.get('facts_extracted', []):
-            fact_words = set(fact.lower().split())
-            if current_words.intersection(fact_words):
-                related_facts.append(fact)
-        
-        # ================== CORREÇÃO CRÍTICA ==================
-        # 5. CONSTRUIR CONHECIMENTO CONTEXTUAL COM HISTÓRICO DA CONVERSA
-        contextual_knowledge = self._build_contextual_knowledge(
-            user_id, current_input, top_relevant, related_facts, chat_history
-        )
-        # =================== FIM DA CORREÇÃO ====================
-        
-        # 6. IDENTIFICAR CONEXÕES SEMÂNTICAS
-        semantic_connections = self._find_semantic_connections(
-            current_input, top_relevant, cache
-        )
-        
-        result = {
-            'relevant_memories': top_relevant,
-            'contextual_knowledge': contextual_knowledge,
-            'semantic_connections': semantic_connections,
-            'related_facts': related_facts,
-            'total_searched': len(semantic_docs)
-        }
-        
-        self._debug_log(f"Consulta semântica completa:")
-        self._debug_log(f"  - {len(top_relevant)} memórias relevantes")
-        self._debug_log(f"  - {len(related_facts)} fatos relacionados")
-        self._debug_log(f"  - {len(semantic_connections)} conexões semânticas")
-        self._debug_log(f"  - Histórico incluído: {'Sim' if chat_history else 'Não'}")
-        
-        return result
-        
-    except Exception as e:
-        self._debug_log(f"ERRO na consulta semântica: {e}")
-        return {'relevant_memories': [], 'contextual_knowledge': '', 'semantic_connections': []}
+                if user_input_match:
+                    extracted_input = user_input_match.group(1).strip()
+                    
+                    # Calcular relevância semântica básica
+                    relevance_score = self._calculate_semantic_relevance(current_input, extracted_input)
+                    
+                    relevant_user_inputs.append({
+                        'input_text': extracted_input,
+                        'timestamp': doc.metadata.get('timestamp', ''),
+                        'relevance_score': relevance_score,
+                        'full_document': doc.page_content,
+                        'metadata': doc.metadata
+                    })
+            
+            # 3. ORDENAR POR RELEVÂNCIA e pegar os melhores
+            relevant_user_inputs.sort(key=lambda x: x['relevance_score'], reverse=True)
+            top_relevant = relevant_user_inputs[:k]
+            
+            self._debug_log(f"Inputs mais relevantes encontrados: {len(top_relevant)}")
+            for i, rel in enumerate(top_relevant[:3], 1):
+                self._debug_log(f"  {i}. [{rel['relevance_score']:.2f}] {rel['input_text'][:60]}...")
+            
+            # 4. BUSCA POR FATOS ESTRUTURADOS RELACIONADOS
+            cache = self.memory_cache.get(user_id, {})
+            related_facts = []
+            
+            # Buscar em fatos extraídos
+            current_words = set(current_input.lower().split())
+            for fact in cache.get('facts_extracted', []):
+                fact_words = set(fact.lower().split())
+                if current_words.intersection(fact_words):
+                    related_facts.append(fact)
+            
+            # 5. CONSTRUIR CONHECIMENTO CONTEXTUAL
+            contextual_knowledge = self._build_contextual_knowledge(
+                user_id, current_input, top_relevant, related_facts
+            )
+            
+            # 6. IDENTIFICAR CONEXÕES SEMÂNTICAS
+            semantic_connections = self._find_semantic_connections(
+                current_input, top_relevant, cache
+            )
+            
+            result = {
+                'relevant_memories': top_relevant,
+                'contextual_knowledge': contextual_knowledge,
+                'semantic_connections': semantic_connections,
+                'related_facts': related_facts,
+                'total_searched': len(semantic_docs)
+            }
+            
+            self._debug_log(f"Consulta semântica completa:")
+            self._debug_log(f"  - {len(top_relevant)} memórias relevantes")
+            self._debug_log(f"  - {len(related_facts)} fatos relacionados")
+            self._debug_log(f"  - {len(semantic_connections)} conexões semânticas")
+            
+            return result
+            
+        except Exception as e:
+            self._debug_log(f"ERRO na consulta semântica: {e}")
+            return {'relevant_memories': [], 'contextual_knowledge': '', 'semantic_connections': []}
     
     def _calculate_semantic_relevance(self, current_input: str, stored_input: str) -> float:
         """Calcula relevância semântica entre inputs"""
@@ -583,92 +578,73 @@ async def semantic_query_total_database(self, user_id: str, current_input: str, 
         
         return jaccard + theme_bonus
 
-def _build_contextual_knowledge(self, user_id: str, current_input: str, 
-                               relevant_memories: List[Dict], related_facts: List[str],
-                               chat_history: List[Dict] = None) -> str:
-    """Constrói conhecimento contextual baseado na consulta, incluindo histórico recente"""
-    
-    identity = self.get_user_identity(user_id)
-    name = identity.full_name if identity else "Usuário"
-    
-    cache = self.memory_cache.get(user_id, {})
-    has_conversations = len(cache.get('raw_conversations', [])) > 0
-    total_facts = len(cache.get('facts_extracted', []))
-    
-    interaction_status = f"USUÁRIO CONHECIDO - {len(cache.get('raw_conversations', []))} conversas, {total_facts} fatos conhecidos" if has_conversations or total_facts > 0 else "PRIMEIRA INTERAÇÃO - SEM CIÊNCIA INTERNA DISPONÍVEL"
-    
-    knowledge = f"""
+    def _build_contextual_knowledge(self, user_id: str, current_input: str, 
+                                   relevant_memories: List[Dict], related_facts: List[str]) -> str:
+        """Constrói conhecimento contextual baseado na consulta"""
+        
+        identity = self.get_user_identity(user_id)
+        name = identity.full_name if identity else "Usuário"
+        
+        # CORREÇÃO: Detectar se há histórico real
+        has_memories = len(relevant_memories) > 0 or len(related_facts) > 0
+        cache = self.memory_cache.get(user_id, {})
+        has_conversations = len(cache.get('raw_conversations', [])) > 0
+        total_facts = len(cache.get('facts_extracted', []))
+        
+        if has_memories or has_conversations or total_facts > 0:
+            interaction_status = f"USUÁRIO CONHECIDO - {len(cache.get('raw_conversations', []))} conversas, {total_facts} fatos conhecidos"
+        else:
+            interaction_status = "PRIMEIRA INTERAÇÃO - SEM CIÊNCIA INTERNA DISPONÍVEL"
+        
+        knowledge = f"""
 === CIÊNCIA INTERNA SOBRE {name.upper()} ===
 
 📊 STATUS: {interaction_status}
 📊 CONSULTA ATUAL: "{current_input}"
-"""
-    
-    # ================== CORREÇÃO CRÍTICA ==================
-    # Adicionar histórico da conversa atual (memória de curto prazo)
-    if chat_history and len(chat_history) > 0:
-        knowledge += "\n💬 HISTÓRICO DA CONVERSA ATUAL (MEMÓRIA DE CURTO PRAZO):\n"
-        
-        # Pegar os últimos 6-8 turnos para contexto suficiente
-        recent_history = chat_history[-8:] if len(chat_history) > 8 else chat_history
-        
-        for i, message in enumerate(recent_history):
-            role = "Usuário" if message["role"] == "user" else "Assistente"
-            content = message["content"]
-            
-            # Truncar mensagens muito longas
-            if len(content) > 200:
-                content = content[:200] + "..."
-            
-            knowledge += f"- {role}: {content}\n"
-        
-        knowledge += f"\n🔍 CONTEXTO IMEDIATO: O input atual '{current_input}' refere-se ao histórico da conversa acima.\n"
-    # =================== FIM DA CORREÇÃO ====================
 
-    knowledge += "\n🧠 MEMÓRIA SEMÂNTICA (LONGO PRAZO):\n"
-    
-    if related_facts:
-        knowledge += "\nFATOS ESTRUTURADOS RELEVANTES:\n"
-        for fact in related_facts[:5]:
-            knowledge += f"• {fact}\n"
-    
-    if relevant_memories:
-        knowledge += f"\nMEMÓRIAS DE CONVERSAS PASSADAS RELEVANTES:\n"
-        for i, memory in enumerate(relevant_memories[:5], 1):
-            timestamp = memory['timestamp'][:10] if memory['timestamp'] else 'N/A'
-            relevance = memory['relevance_score']
-            knowledge += f"{i}. [Relevância: {relevance:.2f}] [{timestamp}] \"{memory['input_text']}\"\n"
-    
-    if cache.get('personality_traits'):
-        knowledge += f"\nTRAÇOS DE PERSONALIDADE CONHECIDOS:\n"
-        knowledge += f"• {', '.join(cache['personality_traits'])}\n"
-    
-    if cache.get('work_info'):
-        knowledge += f"\nINFORMAÇÕES PROFISSIONAIS:\n"
-        for category, info in list(cache['work_info'].items())[:3]:
-            knowledge += f"• {category}: {info['text'][:100]}...\n"
-    
-    if cache.get('preferences'):
-        knowledge += f"\nPREFERÊNCIAS CONHECIDAS:\n"
-        for pref, info in list(cache['preferences'].items())[:3]:
-            knowledge += f"• {pref}: {info['text'][:100]}...\n"
-    
-    knowledge += f"""
+🧠 CONHECIMENTO SEMÂNTICO RELACIONADO:
+"""
+        
+        # Adicionar fatos estruturados relacionados
+        if related_facts:
+            knowledge += "\nFATOS ESTRUTURADOS RELEVANTES:\n"
+            for fact in related_facts[:5]:
+                knowledge += f"• {fact}\n"
+        
+        # Adicionar memórias mais relevantes
+        if relevant_memories:
+            knowledge += f"\nMEMÓRIAS SEMANTICAMENTE RELEVANTES:\n"
+            for i, memory in enumerate(relevant_memories[:5], 1):
+                timestamp = memory['timestamp'][:10] if memory['timestamp'] else 'N/A'
+                relevance = memory['relevance_score']
+                knowledge += f"{i}. [Relevância: {relevance:.2f}] [{timestamp}] \"{memory['input_text']}\"\n"
+        
+        # Adicionar contexto comportamental
+        if cache.get('personality_traits'):
+            knowledge += f"\nTRAÇOS DE PERSONALIDADE CONHECIDOS:\n"
+            knowledge += f"• {', '.join(cache['personality_traits'])}\n"
+        
+        if cache.get('work_info'):
+            knowledge += f"\nINFORMAÇÕES PROFISSIONAIS:\n"
+            for category, info in list(cache['work_info'].items())[:3]:
+                knowledge += f"• {category}: {info['text'][:100]}...\n"
+        
+        if cache.get('preferences'):
+            knowledge += f"\nPREFERÊNCIAS CONHECIDAS:\n"
+            for pref, info in list(cache['preferences'].items())[:3]:
+                knowledge += f"• {pref}: {info['text'][:100]}...\n"
+        
+        knowledge += f"""
 
 🎯 INSTRUÇÕES PARA USO DESTE CONHECIMENTO:
-• PRIORIZE o histórico da conversa atual para contexto imediato
-• Use a memória semântica para conhecimento de longo prazo sobre {name}
-• Conecte o input atual com AMBOS os tipos de memória
-• Se o usuário se refere a algo mencionado na conversa atual, use o histórico recente
-• Se precisa de informações sobre personalidade/preferências, use a memória de longo prazo
+• Use essas informações para demonstrar CIÊNCIA INTERNA sobre {name}
 • Conecte o input atual com padrões e temas do histórico dele
 • Referencie experiências e características específicas quando relevante
 • Mostre que você CONHECE ele profundamente através dessas conexões
 • SE HÁ INFORMAÇÕES CONHECIDAS, NUNCA DIGA QUE É PRIMEIRA INTERAÇÃO
-• SEMPRE considere o contexto da conversa em andamento
 """
-    
-    return knowledge
+        
+        return knowledge
         
     def _find_semantic_connections(self, current_input: str, relevant_memories: List[Dict], 
                                  cache: Dict) -> List[str]:
@@ -1559,170 +1535,167 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
     
 # Dentro da classe CentralOrchestrator
 
-async def reactive_flow(self, user_id: str, user_input: str, session_id: str = None, 
-                       bypass_agent: bool = False, chat_history: List[Dict] = None) -> tuple[str, str]:
-    """🧠 FLUXO COMPLETO OU BYPASS DIRETO PARA O CLAUDE"""
+    async def reactive_flow(self, user_id: str, user_input: str, session_id: str = None, bypass_agent: bool = False) -> tuple[str, str]:
+        """🧠 FLUXO COMPLETO OU BYPASS DIRETO PARA O CLAUDE"""
 
-    if bypass_agent:
+        if bypass_agent:
+            # ==========================================================
+            # <<< CAMINHO RÁPIDO: MODO CLAUDE PURO (BYPASS) >>>
+            # ==========================================================
+            self._debug_log(">>> MODO CLAUDE PURO (BYPASS) ATIVADO <<<")
+            self._debug_log(f"Enviando input direto para o modelo base: '{user_input[:80]}...'")
+            
+            try:
+                # Usar a instância do LLM da Persona como modelo base
+                base_llm = self.assistants["persona"].llm
+                response = await base_llm.ainvoke(user_input)
+                pure_response = response.content
+                
+                self._debug_log("Resposta recebida diretamente do modelo base.")
+                self._debug_log("NENHUMA memória foi consultada ou armazenada.")
+                
+                system_logs = log_capture.get_formatted_logs()
+                log_capture.clear_logs()
+                return pure_response, system_logs
+            except Exception as e:
+                self._debug_log(f"❌ ERRO no modo Bypass: {e}")
+                error_logs = log_capture.get_formatted_logs()
+                log_capture.clear_logs()
+                return "Desculpe, ocorreu um erro na chamada direta ao Claude.", error_logs
+
         # ==========================================================
-        # <<< CAMINHO RÁPIDO: MODO CLAUDE PURO (BYPASS) >>>
+        # <<< FLUXO NORMAL DO AGENTE (SE BYPASS FOR FALSE) >>>
         # ==========================================================
-        self._debug_log(">>> MODO CLAUDE PURO (BYPASS) ATIVADO <<<")
-        self._debug_log(f"Enviando input direto para o modelo base: '{user_input[:80]}...'")
+        if not session_id:
+            session_id = str(uuid.uuid4())
+        
+        identity = self.memory.get_user_identity(user_id)
+        user_name = identity.full_name if identity else "Usuário"
+        
+        self._debug_log(f"=== FLUXO COMPLETO COM TODOS OS ARQUÉTIPOS ===")
+        self._debug_log(f"Usuário: {user_name}")
+        self._debug_log(f"Input: '{user_input}'")
+        
+        # Determinar complexidade
+        complexity = self._determine_response_complexity(user_input)
+        self._debug_log(f"Complexidade determinada: {complexity}")
         
         try:
-            # Usar a instância do LLM da Persona como modelo base
-            base_llm = self.assistants["persona"].llm
-            response = await base_llm.ainvoke(user_input)
-            pure_response = response.content
+            # 🧠 CONSULTA SEMÂNTICA ATIVA
+            self._debug_log("Executando CONSULTA SEMÂNTICA TOTAL da base de dados...")
             
-            self._debug_log("Resposta recebida diretamente do modelo base.")
-            self._debug_log("NENHUMA memória foi consultada ou armazenada.")
+            semantic_query_result = await self.memory.semantic_query_total_database(
+                user_id, user_input, k=8
+            )
             
+            # Construir CIÊNCIA INTERNA baseada na consulta
+            semantic_context = semantic_query_result['contextual_knowledge']
+            relevant_memories = semantic_query_result['relevant_memories']
+            semantic_connections = semantic_query_result['semantic_connections']
+            
+            self._debug_log(f"Consulta semântica completada:")
+            self._debug_log(f"  - {len(relevant_memories)} memórias relevantes encontradas")
+            self._debug_log(f"  - {len(semantic_connections)} conexões semânticas")
+            self._debug_log(f"  - Ciência interna: {len(semantic_context)} caracteres")
+            
+            # 1. PERSONA com CIÊNCIA INTERNA completa
+            self._debug_log("Enviando CIÊNCIA INTERNA para Persona...")
+            initial_response = await self.assistants["persona"].respond(
+                user_input, 
+                semantic_context,
+                complexity
+            )
+            self._debug_log(f"Persona respondeu com ciência interna")
+            
+            # 2. Verificar se deve ativar outros arquétipos
+            should_activate = self._should_activate_archetypes(user_input, initial_response, complexity)
+            self._debug_log(f"Ativar outros arquétipos: {should_activate}")
+            
+            archetype_voices = {"persona": initial_response}
+            
+            # 3. 🎭 TODOS OS OUTROS ARQUÉTIPOS COM CIÊNCIA INTERNA
+            if should_activate:
+                self._debug_log("🎭 ATIVANDO TODOS OS ARQUÉTIPOS COM CIÊNCIA INTERNA...")
+                
+                # Enriquecer ciência interna com memórias vetoriais adicionais
+                additional_memories = await self.memory.retrieve_relevant_memories(user_id, user_input, k=3)
+                
+                # ================== INÍCIO DA CORREÇÃO ==================
+                # Inicializar o 'enhanced_context' com o contexto original
+                enhanced_context = semantic_context
+                # =================== FIM DA CORREÇÃO ====================
+                
+                if additional_memories:
+                    enhanced_context += "\n\n=== MEMÓRIAS VETORIAIS ADICIONAIS ===\n"
+                    for doc in additional_memories:
+                        enhanced_context += f"- {doc.page_content[:150]}...\n"
+                    self._debug_log(f"Adicionadas {len(additional_memories)} memórias vetoriais extras")
+                
+                tasks = []
+                for name, assistant in self.assistants.items():
+                    if name != "persona":
+                        self._debug_log(f"Preparando {name} com ciência interna...")
+                        task = assistant.respond(user_input, enhanced_context, complexity)
+                        tasks.append((name, task))
+                
+                self._debug_log(f"Executando {len(tasks)} arquétipos em paralelo...")
+                responses = await asyncio.gather(*[task for _, task in tasks])
+                
+                for (name, _), response in zip(tasks, responses):
+                    archetype_voices[name] = response
+                    self._debug_log(f"🎭 {name} respondeu com ciência interna")
+                    
+                self._debug_log(f"🎭 Arquétipos ativos: {list(archetype_voices.keys())}")
+            
+            interaction_depth = self._calculate_existential_depth(user_input, archetype_voices)
+            self._debug_log(f"Profundidade existencial calculada: {interaction_depth:.2f}")
+            
+            # 4. Síntese se múltiplas vozes
+            if len(archetype_voices) > 1:
+                self._debug_log("🔄 Fazendo síntese arquetípica...")
+                raw_synthesis = await self._synthesize_response(user_input, archetype_voices, user_id, user_name, complexity)
+            else:
+                raw_synthesis = initial_response
+                self._debug_log("Usando apenas resposta da Persona com ciência interna")
+            
+            # 5. Filtro do Ego
+            self._debug_log("Aplicando filtro do Ego...")
+            final_response = await self._ego_filter(raw_synthesis, user_input, user_id, user_name, complexity)
+            
+            intensity_level = self._detect_response_intensity(final_response)
+            tension_level = self.libido.detect_tension(initial_response)
+            
+            self._debug_log(f"Intensidade final: {intensity_level}/10, Tensão: {tension_level}/100")
+            
+            self._update_existential_state(user_id, interaction_depth, user_name)
+            
+            # 6. Armazenar memória
+            self._debug_log("Armazenando memória na base de dados...")
+            memory = InteractionMemory(
+                user_id=user_id, user_name=user_name, session_id=session_id, timestamp=datetime.now(),
+                user_input=user_input, archetype_voices=archetype_voices, raw_synthesis=raw_synthesis,
+                final_response=final_response, tension_level=tension_level,
+                dominant_archetype=self._determine_dominant_archetype(archetype_voices),
+                affective_charge=self._calculate_affective_charge(user_input, final_response),
+                keywords=self._extract_keywords(user_input, final_response),
+                existential_depth=interaction_depth, intensity_level=intensity_level,
+                response_complexity=complexity
+            )
+            
+            await self.memory.store_memory(memory)
+            
+            self._debug_log(f"✅ Resposta final gerada com CIÊNCIA INTERNA + TODOS OS ARQUÉTIPOS")
+            self._debug_log("=== FIM DO FLUXO COMPLETO ===")
+
             system_logs = log_capture.get_formatted_logs()
             log_capture.clear_logs()
-            return pure_response, system_logs
+            return final_response, system_logs
+            
         except Exception as e:
-            self._debug_log(f"❌ ERRO no modo Bypass: {e}")
+            self._debug_log(f"❌ ERRO no fluxo: {e}")
             error_logs = log_capture.get_formatted_logs()
             log_capture.clear_logs()
-            return "Desculpe, ocorreu um erro na chamada direta ao Claude.", error_logs
-
-    # ==========================================================
-    # <<< FLUXO NORMAL DO AGENTE (SE BYPASS FOR FALSE) >>>
-    # ==========================================================
-    if not session_id:
-        session_id = str(uuid.uuid4())
-    
-    identity = self.memory.get_user_identity(user_id)
-    user_name = identity.full_name if identity else "Usuário"
-    
-    self._debug_log(f"=== FLUXO COMPLETO COM TODOS OS ARQUÉTIPOS ===")
-    self._debug_log(f"Usuário: {user_name}")
-    self._debug_log(f"Input: '{user_input}'")
-    self._debug_log(f"Histórico disponível: {len(chat_history) if chat_history else 0} mensagens")
-    
-    # Determinar complexidade
-    complexity = self._determine_response_complexity(user_input)
-    self._debug_log(f"Complexidade determinada: {complexity}")
-    
-    try:
-        # ================== CORREÇÃO CRÍTICA ==================
-        # 🧠 CONSULTA SEMÂNTICA ATIVA COM HISTÓRICO DA CONVERSA
-        self._debug_log("Executando CONSULTA SEMÂNTICA TOTAL da base de dados...")
-        
-        semantic_query_result = await self.memory.semantic_query_total_database(
-            user_id, user_input, k=8, chat_history=chat_history
-        )
-        # =================== FIM DA CORREÇÃO ====================
-        
-        # Construir CIÊNCIA INTERNA baseada na consulta
-        semantic_context = semantic_query_result['contextual_knowledge']
-        relevant_memories = semantic_query_result['relevant_memories']
-        semantic_connections = semantic_query_result['semantic_connections']
-        
-        self._debug_log(f"Consulta semântica completada:")
-        self._debug_log(f"  - {len(relevant_memories)} memórias relevantes encontradas")
-        self._debug_log(f"  - {len(semantic_connections)} conexões semânticas")
-        self._debug_log(f"  - Ciência interna: {len(semantic_context)} caracteres")
-        self._debug_log(f"  - Inclui histórico da conversa: {'Sim' if chat_history else 'Não'}")
-        
-        # 1. PERSONA com CIÊNCIA INTERNA completa
-        self._debug_log("Enviando CIÊNCIA INTERNA para Persona...")
-        initial_response = await self.assistants["persona"].respond(
-            user_input, 
-            semantic_context,
-            complexity
-        )
-        self._debug_log(f"Persona respondeu com ciência interna")
-        
-        # 2. Verificar se deve ativar outros arquétipos
-        should_activate = self._should_activate_archetypes(user_input, initial_response, complexity)
-        self._debug_log(f"Ativar outros arquétipos: {should_activate}")
-        
-        archetype_voices = {"persona": initial_response}
-        
-        # 3. 🎭 TODOS OS OUTROS ARQUÉTIPOS COM CIÊNCIA INTERNA
-        if should_activate:
-            self._debug_log("🎭 ATIVANDO TODOS OS ARQUÉTIPOS COM CIÊNCIA INTERNA...")
-            
-            # Enriquecer ciência interna com memórias vetoriais adicionais
-            additional_memories = await self.memory.retrieve_relevant_memories(user_id, user_input, k=3)
-            
-            # Inicializar o 'enhanced_context' com o contexto original
-            enhanced_context = semantic_context
-            
-            if additional_memories:
-                enhanced_context += "\n\n=== MEMÓRIAS VETORIAIS ADICIONAIS ===\n"
-                for doc in additional_memories:
-                    enhanced_context += f"- {doc.page_content[:150]}...\n"
-                self._debug_log(f"Adicionadas {len(additional_memories)} memórias vetoriais extras")
-            
-            tasks = []
-            for name, assistant in self.assistants.items():
-                if name != "persona":
-                    self._debug_log(f"Preparando {name} com ciência interna...")
-                    task = assistant.respond(user_input, enhanced_context, complexity)
-                    tasks.append((name, task))
-            
-            self._debug_log(f"Executando {len(tasks)} arquétipos em paralelo...")
-            responses = await asyncio.gather(*[task for _, task in tasks])
-            
-            for (name, _), response in zip(tasks, responses):
-                archetype_voices[name] = response
-                self._debug_log(f"🎭 {name} respondeu com ciência interna")
-                
-            self._debug_log(f"🎭 Arquétipos ativos: {list(archetype_voices.keys())}")
-        
-        interaction_depth = self._calculate_existential_depth(user_input, archetype_voices)
-        self._debug_log(f"Profundidade existencial calculada: {interaction_depth:.2f}")
-        
-        # 4. Síntese se múltiplas vozes
-        if len(archetype_voices) > 1:
-            self._debug_log("🔄 Fazendo síntese arquetípica...")
-            raw_synthesis = await self._synthesize_response(user_input, archetype_voices, user_id, user_name, complexity)
-        else:
-            raw_synthesis = initial_response
-            self._debug_log("Usando apenas resposta da Persona com ciência interna")
-        
-        # 5. Filtro do Ego
-        self._debug_log("Aplicando filtro do Ego...")
-        final_response = await self._ego_filter(raw_synthesis, user_input, user_id, user_name, complexity)
-        
-        intensity_level = self._detect_response_intensity(final_response)
-        tension_level = self.libido.detect_tension(initial_response)
-        
-        self._debug_log(f"Intensidade final: {intensity_level}/10, Tensão: {tension_level}/100")
-        
-        self._update_existential_state(user_id, interaction_depth, user_name)
-        
-        # 6. Armazenar memória
-        self._debug_log("Armazenando memória na base de dados...")
-        memory = InteractionMemory(
-            user_id=user_id, user_name=user_name, session_id=session_id, timestamp=datetime.now(),
-            user_input=user_input, archetype_voices=archetype_voices, raw_synthesis=raw_synthesis,
-            final_response=final_response, tension_level=tension_level,
-            dominant_archetype=self._determine_dominant_archetype(archetype_voices),
-            affective_charge=self._calculate_affective_charge(user_input, final_response),
-            keywords=self._extract_keywords(user_input, final_response),
-            existential_depth=interaction_depth, intensity_level=intensity_level,
-            response_complexity=complexity
-        )
-        
-        await self.memory.store_memory(memory)
-        
-        self._debug_log(f"✅ Resposta final gerada com CIÊNCIA INTERNA + TODOS OS ARQUÉTIPOS")
-        self._debug_log("=== FIM DO FLUXO COMPLETO ===")
-
-        system_logs = log_capture.get_formatted_logs()
-        log_capture.clear_logs()
-        return final_response, system_logs
-        
-    except Exception as e:
-        self._debug_log(f"❌ ERRO no fluxo: {e}")
-        error_logs = log_capture.get_formatted_logs()
-        log_capture.clear_logs()
-        return "Desculpe, encontrei dificuldades. Pode tentar novamente?", error_logs
+            return "Desculpe, encontrei dificuldades. Pode tentar novamente?", error_logs
         
 
     def _extract_keywords(self, user_input: str, response: str) -> List[str]:
@@ -2011,16 +1984,12 @@ def render_chat_interface():
                     orchestrator.intensity_settings["force_archetypes_on_emotion"] = True
                     orchestrator.libido.threshold_tension = 0  # Força ativação
                 
-                # ================== CORREÇÃO CRÍTICA ==================
                 async def run_reactive_flow():
                     return await orchestrator.reactive_flow(
                         user_id, 
                         user_input.strip(), 
-                        st.session_state.session_id,
-                        bypass_agent=False,
-                        chat_history=st.session_state.chat_history  # ← PASSAR HISTÓRICO
+                        st.session_state.session_id
                     )
-                # =================== FIM DA CORREÇÃO ====================
                 
                 # Agora capturamos os dois valores: a resposta e os logs
                 response, system_logs = asyncio.run(run_reactive_flow())
@@ -2029,7 +1998,7 @@ def render_chat_interface():
                 # Resetar configurações
                 if force_archetypes:
                     orchestrator.intensity_settings["force_archetypes_on_emotion"] = True
-                    orchestrator.libido.threshold_tension = 25
+                    orchestrator.libido.threshold_tension = 14
                 
                 # Adicionar resposta da IA ao histórico
                 ai_message = {
@@ -2040,16 +2009,14 @@ def render_chat_interface():
                 # Tentar obter informações dos arquétipos da última interação
                 try:
                     # Obter a última memória salva para pegar os arquétipos reais
-                    if orchestrator.memory.memory_cache.get(user_id, {}).get('raw_conversations'):
-                        last_memory = orchestrator.memory.memory_cache[user_id]['raw_conversations'][-1]
-                        archetype_voices_str = re.search(r"Arquétipos: ({.*?})", last_memory['full_document']).group(1)
-                        archetype_voices = json.loads(archetype_voices_str)
-                        ai_message["archetype_voices"] = archetype_voices
-                    else:
-                        ai_message["archetype_voices"] = {"persona": "Ativo"}
+                    last_memory = orchestrator.memory.memory_cache[user_id]['raw_conversations'][-1]
+                    archetype_voices_str = re.search(r"Arquétipos: ({.*?})", last_memory['full_document']).group(1)
+                    archetype_voices = json.loads(archetype_voices_str)
+                    ai_message["archetype_voices"] = archetype_voices
                 except Exception:
                     # Fallback em caso de erro na extração
                     ai_message["archetype_voices"] = {"persona": "Ativo"}
+
                 
                 # Adicionar debug info com a variável system_logs que recebemos
                 if show_debug:
@@ -2063,8 +2030,7 @@ def render_chat_interface():
                         "complexity": last_memory_metadata.get('response_complexity', 'N/A'),
                         "archetypes_count": len(ai_message["archetype_voices"]),
                         "existential_depth": last_memory_metadata.get('existential_depth', 0.0),
-                        "system_logs": system_logs,
-                        "chat_history_used": len(st.session_state.chat_history)  # ← NOVO INDICADOR
+                        "system_logs": system_logs
                     }
                 
                 st.session_state.chat_history.append(ai_message)
