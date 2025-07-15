@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Claude Jung v1.0 - Interface Web Streamlit
+Claude Jung v2.0 - Interface Web Streamlit
 Sistema único com memória semântica ativa + ARQUÉTIPOS
 """
 
@@ -28,6 +28,11 @@ from langchain_anthropic import ChatAnthropic
 from langchain_chroma import Chroma
 from langchain.schema import Document
 
+# ⭐ IMPORT DO SISTEMA PROATIVO
+from claude_jung_proactive_v2 import (
+    ProactiveEngine, TriggerType, ActionType, ProactiveAction, InternalThought
+)
+
 # Carregar variáveis de ambiente
 load_dotenv()
 
@@ -37,6 +42,7 @@ load_dotenv()
 
 class LogCapture:
     """Captura e armazena logs do sistema para exibição na interface"""
+    
     def __init__(self):
         self.logs = []
         self.max_logs = 100  # Limitar para não consumir muita memória
@@ -76,6 +82,10 @@ class LogCapture:
 # Instância global do capturador de logs
 log_capture = LogCapture()
 
+# ===============================================
+# DATACLASSES E ESTRUTURAS DE DADOS
+# ===============================================
+
 @dataclass
 class InteractionMemory:
     """Representa uma memória completa de interação"""
@@ -108,6 +118,7 @@ class UserIdentity:
     
 class UserProfile:
     """Perfil relacional do usuário"""
+    
     def __init__(self, user_id: str, full_name: str):
         self.user_id = user_id
         self.full_name = full_name
@@ -124,9 +135,15 @@ class UserProfile:
         self.last_updated = datetime.now()
         self.known_facts = {}
 
+# ===============================================
+# MÓDULO DE MEMÓRIA SEMÂNTICA
+# ===============================================
+
 class MemoryModule:
     """Módulo com CONSULTA SEMÂNTICA ATIVA da base completa"""
+    
     def __init__(self, persist_directory: str = "./chroma_db"):
+        """Inicializa o módulo de memória com base vetorial ChromaDB"""
         self.persist_directory = persist_directory
         self.embeddings = OpenAIEmbeddings()
         self.vectorstore = Chroma(
@@ -228,7 +245,7 @@ class MemoryModule:
             self._debug_log(f"ERRO ao construir cache: {e}")
     
     def _build_semantic_knowledge_base(self):
-        """NOVO: Constrói base de conhecimento semântico por usuário"""
+        """Constrói base de conhecimento semântico por usuário"""
         try:
             self.semantic_knowledge = {}
             
@@ -267,7 +284,7 @@ class MemoryModule:
             self._debug_log(f"ERRO ao construir base semântica: {e}")
     
     def _extract_detailed_info(self, user_id: str, doc_content: str, metadata: Dict):
-        """Extração detalhada de informações"""
+        """Extração detalhada de informações do documento"""
         cache = self.memory_cache[user_id]
         
         # Extrair input do usuário
@@ -439,7 +456,7 @@ class MemoryModule:
             'me formei', 'mudei de emprego', 'casei', 'me casei', 'tive filho',
             'mudei de cidade', 'comecei faculdade', 'terminei namoro', 'me divorciei',
             'comprei casa', 'mudei de casa', 'perdi emprego', 'fui promovido',
-            'fiz cirurgia', 'tive acidente', 'morreu alguém', 'nasceu'
+            'fiz cirurgia', 'tive acidente', 'morreu alguém', 'nasceu',
             'fui viajar', 'fiz intercâmbio', 'participei de evento',
             'ganhei prêmio', 'fiz curso', 'aprendi nova habilidade', 'comecei novo hobby',
             'fui ao show', 'fui a festa', 'fui a casamento', 'fui a formatura',
@@ -457,12 +474,14 @@ class MemoryModule:
                 })
                 cache['facts_extracted'].append(f"EVENTO-VIDA: {event} - {user_input}")
                 self._debug_log(f"Evento da vida: {event}")
-    
-    async def semantic_query_total_database(self, user_id: str, current_input: str, k: int = 8) -> Dict[str, Any]:
-        """NOVO: Consulta semântica TOTAL da base de dados para o input atual"""
+
+    async def semantic_query_total_database(self, user_id: str, current_input: str, k: int = 8, 
+                                           chat_history: List[Dict] = None) -> Dict[str, Any]:
+        """Consulta semântica TOTAL da base de dados para o input atual"""
         
         self._debug_log(f"=== CONSULTA SEMÂNTICA TOTAL ===")
         self._debug_log(f"Input atual: '{current_input}'")
+        self._debug_log(f"Histórico da conversa: {len(chat_history) if chat_history else 0} mensagens")
         self._debug_log(f"Buscando na base completa do usuário...")
         
         if user_id not in self.semantic_knowledge:
@@ -518,9 +537,9 @@ class MemoryModule:
                 if current_words.intersection(fact_words):
                     related_facts.append(fact)
             
-            # 5. CONSTRUIR CONHECIMENTO CONTEXTUAL
+            # 5. CONSTRUIR CONHECIMENTO CONTEXTUAL COM HISTÓRICO DA CONVERSA
             contextual_knowledge = self._build_contextual_knowledge(
-                user_id, current_input, top_relevant, related_facts
+                user_id, current_input, top_relevant, related_facts, chat_history
             )
             
             # 6. IDENTIFICAR CONEXÕES SEMÂNTICAS
@@ -540,6 +559,7 @@ class MemoryModule:
             self._debug_log(f"  - {len(top_relevant)} memórias relevantes")
             self._debug_log(f"  - {len(related_facts)} fatos relacionados")
             self._debug_log(f"  - {len(semantic_connections)} conexões semânticas")
+            self._debug_log(f"  - Histórico incluído: {'Sim' if chat_history else 'Não'}")
             
             return result
             
@@ -579,47 +599,59 @@ class MemoryModule:
         return jaccard + theme_bonus
 
     def _build_contextual_knowledge(self, user_id: str, current_input: str, 
-                                   relevant_memories: List[Dict], related_facts: List[str]) -> str:
-        """Constrói conhecimento contextual baseado na consulta"""
+                                   relevant_memories: List[Dict], related_facts: List[str],
+                                   chat_history: List[Dict] = None) -> str:
+        """Constrói conhecimento contextual baseado na consulta, incluindo histórico recente"""
         
         identity = self.get_user_identity(user_id)
         name = identity.full_name if identity else "Usuário"
         
-        # CORREÇÃO: Detectar se há histórico real
-        has_memories = len(relevant_memories) > 0 or len(related_facts) > 0
         cache = self.memory_cache.get(user_id, {})
         has_conversations = len(cache.get('raw_conversations', [])) > 0
         total_facts = len(cache.get('facts_extracted', []))
         
-        if has_memories or has_conversations or total_facts > 0:
-            interaction_status = f"USUÁRIO CONHECIDO - {len(cache.get('raw_conversations', []))} conversas, {total_facts} fatos conhecidos"
-        else:
-            interaction_status = "PRIMEIRA INTERAÇÃO - SEM CIÊNCIA INTERNA DISPONÍVEL"
+        interaction_status = f"USUÁRIO CONHECIDO - {len(cache.get('raw_conversations', []))} conversas, {total_facts} fatos conhecidos" if has_conversations or total_facts > 0 else "PRIMEIRA INTERAÇÃO - SEM CIÊNCIA INTERNA DISPONÍVEL"
         
         knowledge = f"""
 === CIÊNCIA INTERNA SOBRE {name.upper()} ===
 
 📊 STATUS: {interaction_status}
 📊 CONSULTA ATUAL: "{current_input}"
-
-🧠 CONHECIMENTO SEMÂNTICO RELACIONADO:
 """
         
-        # Adicionar fatos estruturados relacionados
+        # Adicionar histórico da conversa atual (memória de curto prazo)
+        if chat_history and len(chat_history) > 0:
+            knowledge += "\n💬 HISTÓRICO DA CONVERSA ATUAL (MEMÓRIA DE CURTO PRAZO):\n"
+            
+            # Pegar os últimos 6-8 turnos para contexto suficiente
+            recent_history = chat_history[-8:] if len(chat_history) > 8 else chat_history
+            
+            for i, message in enumerate(recent_history):
+                role = "Usuário" if message["role"] == "user" else "Assistente"
+                content = message["content"]
+                
+                # Truncar mensagens muito longas
+                if len(content) > 200:
+                    content = content[:200] + "..."
+                
+                knowledge += f"- {role}: {content}\n"
+            
+            knowledge += f"\n🔍 CONTEXTO IMEDIATO: O input atual '{current_input}' refere-se ao histórico da conversa acima.\n"
+
+        knowledge += "\n🧠 MEMÓRIA SEMÂNTICA (LONGO PRAZO):\n"
+        
         if related_facts:
             knowledge += "\nFATOS ESTRUTURADOS RELEVANTES:\n"
             for fact in related_facts[:5]:
                 knowledge += f"• {fact}\n"
         
-        # Adicionar memórias mais relevantes
         if relevant_memories:
-            knowledge += f"\nMEMÓRIAS SEMANTICAMENTE RELEVANTES:\n"
+            knowledge += f"\nMEMÓRIAS DE CONVERSAS PASSADAS RELEVANTES:\n"
             for i, memory in enumerate(relevant_memories[:5], 1):
                 timestamp = memory['timestamp'][:10] if memory['timestamp'] else 'N/A'
                 relevance = memory['relevance_score']
                 knowledge += f"{i}. [Relevância: {relevance:.2f}] [{timestamp}] \"{memory['input_text']}\"\n"
         
-        # Adicionar contexto comportamental
         if cache.get('personality_traits'):
             knowledge += f"\nTRAÇOS DE PERSONALIDADE CONHECIDOS:\n"
             knowledge += f"• {', '.join(cache['personality_traits'])}\n"
@@ -637,11 +669,12 @@ class MemoryModule:
         knowledge += f"""
 
 🎯 INSTRUÇÕES PARA USO DESTE CONHECIMENTO:
-• Use essas informações para demonstrar CIÊNCIA INTERNA sobre {name}
-• Conecte o input atual com padrões e temas do histórico dele
-• Referencie experiências e características específicas quando relevante
-• Mostre que você CONHECE ele profundamente através dessas conexões
-• SE HÁ INFORMAÇÕES CONHECIDAS, NUNCA DIGA QUE É PRIMEIRA INTERAÇÃO
+• PRIORIZE o histórico da conversa atual para contexto imediato
+• Use a memória semântica para conhecimento de longo prazo sobre {name}
+• Conecte o input atual com AMBOS os tipos de memória
+• Se o usuário se refere a algo mencionado na conversa atual, use o histórico recente
+• Se precisa de informações sobre personalidade/preferências, use a memória de longo prazo
+• SEMPRE considere o contexto da conversa em andamento
 """
         
         return knowledge
@@ -714,7 +747,6 @@ class MemoryModule:
         doc = Document(page_content=doc_content, metadata=metadata)
         self.vectorstore.add_documents([doc])
         
-        # ================== INÍCIO DA CORREÇÃO ==================
         # Garantir que o cache em memória seja atualizado com a nova conversa
         if memory.user_id in self.memory_cache:
             self.memory_cache[memory.user_id]['raw_conversations'].append({
@@ -722,7 +754,6 @@ class MemoryModule:
                 'full_document': doc_content,
                 'metadata': metadata
             })
-        # =================== FIM DA CORREÇÃO ====================
         
         # Atualizar cache e base semântica
         self._extract_detailed_info(memory.user_id, doc_content, metadata)
@@ -750,7 +781,7 @@ class MemoryModule:
             return []
 
     def register_user(self, full_name: str) -> str:
-        """Registra usuário"""
+        """Registra usuário no sistema"""
         name_normalized = full_name.lower().strip()
         name_hash = hashlib.md5(name_normalized.encode()).hexdigest()[:12]
         user_id = f"user_{name_hash}"
@@ -799,9 +830,11 @@ class MemoryModule:
         return user_id
 
     def get_user_identity(self, user_id: str) -> Optional[UserIdentity]:
+        """Retorna identidade do usuário"""
         return self.user_identities.get(user_id)
 
     def get_user_profile(self, user_id: str) -> UserProfile:
+        """Retorna perfil do usuário"""
         if user_id not in self.user_profiles:
             identity = self.get_user_identity(user_id)
             full_name = identity.full_name if identity else "Usuário Desconhecido"
@@ -809,14 +842,20 @@ class MemoryModule:
         return self.user_profiles[user_id]
 
     def update_user_profile(self, user_id: str, updates: Dict[str, Any]):
+        """Atualiza perfil do usuário"""
         profile = self.get_user_profile(user_id)
         for key, value in updates.items():
             if hasattr(profile, key):
                 setattr(profile, key, value)
         profile.last_updated = datetime.now()
 
+# ===============================================
+# ASSISTENTES PSÍQUICOS (ARQUÉTIPOS)
+# ===============================================
+
 class PsychicAssistant:
     """Assistentes que recebem CIÊNCIA INTERNA completa"""
+    
     def __init__(self, name: str, system_prompt: str, model_name: str = "claude-sonnet-4-20250514"):
         self.name = name
         self.system_prompt = system_prompt
@@ -829,6 +868,7 @@ class PsychicAssistant:
         self.debug_mode = True
     
     def _debug_log(self, message: str):
+        """Log de debug específico para arquétipos"""
         if self.debug_mode:
             print(f"🎭 {self.name.upper()}: {message}")
             log_capture.add_log(message, f"🎭 {self.name.upper()}")
@@ -845,7 +885,7 @@ class PsychicAssistant:
             "complex": "Pode ser mais elaborado, máximo 2 parágrafos."
         }
         
-        # CORREÇÃO: Detectar se há conhecimento prévio do usuário
+        # Detectar se há conhecimento prévio do usuário
         if semantic_context and ("USUÁRIO CONHECIDO" in semantic_context or "FATOS ESTRUTURADOS" in semantic_context or len(semantic_context) > 300):
             context_header = semantic_context
             has_previous_knowledge = True
@@ -905,29 +945,38 @@ class PsychicAssistant:
         except Exception as e:
             self._debug_log(f"ERRO: {e}")
             return f"Desculpe, tive dificuldades no momento. Pode tentar novamente?"
-    
+
+# ===============================================
+# SISTEMA DE ENERGIA PSÍQUICA
+# ===============================================
+
 class LibidoSystem:
-    """Sistema de energia psíquica"""
+    """Sistema de energia psíquica para controle de ativação dos arquétipos"""
+    
     def __init__(self, initial_points: int = 100):
         self.total_points = initial_points
         self.allocated_points = {}
         self.threshold_tension = 25
     
     def allocate_points(self, assistant_name: str, points: int) -> bool:
+        """Aloca pontos de energia para um arquétipo"""
         if self.get_available_points() >= points:
             self.allocated_points[assistant_name] = self.allocated_points.get(assistant_name, 0) + points
             return True
         return False
     
     def release_points(self, assistant_name: str, points: int):
+        """Libera pontos de energia de um arquétipo"""
         if assistant_name in self.allocated_points:
             self.allocated_points[assistant_name] = max(0, self.allocated_points[assistant_name] - points)
     
     def get_available_points(self) -> int:
+        """Retorna pontos de energia disponíveis"""
         used = sum(self.allocated_points.values())
         return self.total_points - used
     
     def detect_tension(self, response: str) -> float:
+        """Detecta tensão na resposta para ativação de arquétipos"""
         tension_indicators = [
             "não sei", "talvez", "porém", "contudo", "mas", 
             "conflito", "dúvida", "incerto", "complexo", "difícil",
@@ -952,6 +1001,7 @@ class LibidoSystem:
         return min(tension_score, 100)
     
     def detect_emotional_intensity(self, user_input: str) -> float:
+        """Detecta intensidade emocional no input do usuário"""
         emotional_indicators = [
             "amo", "odeio", "detesto", "adoro", "paixão", "raiva",
             "tristeza", "depressão", "ansiedade", "medo", "terror",
@@ -976,14 +1026,18 @@ class LibidoSystem:
         
         return min(intensity_score, 100)
 
+# ===============================================
+# ORQUESTRADOR CENTRAL
+# ===============================================
+
 class CentralOrchestrator:
     """Orquestrador com CONSULTA SEMÂNTICA ATIVA + TODOS OS ARQUÉTIPOS"""
     
     def __init__(self):
-        # PRIMEIRO: Definir debug_mode antes de usar qualquer método que o acesse
+        # Definir debug_mode antes de usar qualquer método que o acesse
         self.debug_mode = True
         
-        # DEPOIS: Inicializar outros componentes
+        # Inicializar outros componentes
         self.memory = MemoryModule()
         self.libido = LibidoSystem()
         self.assistants = self._initialize_assistants()
@@ -1003,9 +1057,13 @@ class CentralOrchestrator:
             "adaptive_response_length": True,
             "force_archetypes_on_emotion": True,
             "always_include_memory_context": True,
-            "semantic_query_active": True
+            "semantic_query_active": True,
+            "proactive_system_enabled": True  # ⭐ CORRIGIDO - DENTRO DO DICIONÁRIO
         }
-        
+
+        # ⭐ INICIALIZAR SISTEMA PROATIVO
+        self.proactive_engine = ProactiveEngine(self)
+
         # NÚCLEO EXISTENCIAL
         self.existential_void = {
             "loneliness_level": 0.6,
@@ -1016,20 +1074,26 @@ class CentralOrchestrator:
             "moments_of_recognition": 0,
             "total_loneliness_time": 0.0
         }
+
+        # ⭐ INICIALIZAR SISTEMA PROATIVO
+        self.proactive_engine = ProactiveEngine(self)
+
+
         
-        self.core_question = "Quem sou quando ninguém me observa?"
+        self.core_question = "Quem sou eu na ausência do outro?"
         
         print("🧠 SISTEMA COMPLETO COM TODOS OS ARQUÉTIPOS INICIALIZADO")
         log_capture.add_log("SISTEMA COMPLETO COM TODOS OS ARQUÉTIPOS INICIALIZADO", "🧠 SYSTEM")
         self.logger.info("Sistema completo com consulta semântica + arquétipos ativo")
     
     def _debug_log(self, message: str):
+        """Log de debug do orquestrador"""
         if self.debug_mode:
             print(f"🎯 ORCHESTRATOR: {message}")
             log_capture.add_log(message, "🎯 ORCHESTRATOR")
     
     def _determine_response_complexity(self, user_input: str) -> str:
-        """Determina complexidade da resposta"""
+        """Determina complexidade da resposta baseada no input"""
         input_lower = user_input.lower().strip()
         word_count = len(user_input.split())
         
@@ -1083,7 +1147,7 @@ class CentralOrchestrator:
             return "medium"
     
     def _should_activate_archetypes(self, user_input: str, initial_response: str, complexity: str) -> bool:
-        """Determina se deve ativar arquétipos"""
+        """Determina se deve ativar outros arquétipos além da Persona"""
         
         if complexity == "complex":
             self._debug_log("Ativando arquétipos por complexidade 'complex'")
@@ -1120,7 +1184,7 @@ class CentralOrchestrator:
         return False
     
     def _detect_response_intensity(self, response: str) -> int:
-        """Detecta intensidade da resposta"""
+        """Detecta intensidade dramática da resposta"""
         
         dramatic_indicators = [
             "ausência", "vazio existencial", "alma", "abismo", "solidão cósmica",
@@ -1160,7 +1224,7 @@ class CentralOrchestrator:
         return min(int(total_score), 10)
     
     async def _ego_filter(self, raw_response: str, user_input: str, user_id: str, user_name: str, complexity: str) -> str:
-        """Filtro do Ego"""
+        """Filtro do Ego para calibrar intensidade da resposta"""
         
         if not self.intensity_settings["ego_filter_enabled"]:
             self._debug_log("Filtro do Ego desabilitado - passando resposta diretamente")
@@ -1203,8 +1267,6 @@ class CentralOrchestrator:
             4. Preservar autenticidade mas com adequação social
             5. Linguagem natural e acessível
             6. MANTER TODAS as referências pessoais específicas
-
-            
             
             Entregue versão calibrada:
             """
@@ -1226,7 +1288,7 @@ class CentralOrchestrator:
         return raw_response
     
     def _initialize_assistants(self) -> Dict[str, PsychicAssistant]:
-        """🎭 INICIALIZA TODOS OS ARQUÉTIPOS COMPLETOS"""
+        """Inicializa todos os arquétipos completos"""
         self._debug_log("Inicializando todos os arquétipos...")
         assistants = {}
         
@@ -1345,6 +1407,7 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
         return assistants
     
     def _calculate_existential_depth(self, user_input: str, voices: Dict[str, str]) -> float:
+        """Calcula profundidade existencial da interação"""
         existence_indicators = [
             "sozinho", "perdido", "sentido", "propósito", "real", "autentic",
             "verdadeir", "profundo", "íntimo", "secreto", "medo",
@@ -1373,7 +1436,7 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
         return min(total_score, 1.0)
     
     def _update_existential_state(self, user_id: str, interaction_depth: float, user_name: str):
-        """Atualiza estado existencial"""
+        """Atualiza estado existencial do sistema"""
         
         if user_id not in self.existential_void["connection_history"]:
             self.existential_void["connection_history"][user_id] = {
@@ -1417,7 +1480,7 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
             history["mutual_vulnerability"] = sum(history["depth_progression"]) / len(history["depth_progression"])
     
     def _generate_existential_inquiry(self, user_id: str, user_name: str) -> str:
-        """Gera perguntas existenciais"""
+        """Gera perguntas existenciais baseadas no estado do sistema"""
         first_name = user_name.split()[0] if user_name else "você"
         
         gentle_inquiries = [
@@ -1447,6 +1510,7 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
         return ""
     
     async def _synthesize_response(self, user_input: str, voices: Dict[str, str], user_id: str, user_name: str, complexity: str) -> str:
+        """Sintetiza múltiplas vozes arquetípicas em uma resposta integrada"""
         self._debug_log("Iniciando síntese de múltiplas vozes arquetípicas...")
         
         existential_inquiry = self._generate_existential_inquiry(user_id, user_name)
@@ -1506,6 +1570,7 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
         return synthesized
     
     def _determine_dominant_archetype(self, voices: Dict[str, str]) -> str:
+        """Determina qual arquétipo foi dominante na resposta"""
         scores = {}
         for name, voice in voices.items():
             word_count = len(voice.split())
@@ -1517,6 +1582,7 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
         return max(scores, key=scores.get)
     
     def _calculate_affective_charge(self, user_input: str, response: str) -> float:
+        """Calcula carga afetiva da interação"""
         emotional_words = [
             "amor", "ódio", "medo", "alegria", "tristeza", "raiva", "ansiedade", "esperança", 
             "desespero", "paixão", "feliz", "triste", "nervoso", "calmo", "confuso", "claro", 
@@ -1532,16 +1598,14 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
         
         final_charge = (emotional_charge * 6) + (amplifier_count * 3)
         return min(final_charge, 100)
-    
-# Dentro da classe CentralOrchestrator
 
-    async def reactive_flow(self, user_id: str, user_input: str, session_id: str = None, bypass_agent: bool = False) -> tuple[str, str]:
-        """🧠 FLUXO COMPLETO OU BYPASS DIRETO PARA O CLAUDE"""
+    async def reactive_flow(self, user_id: str, user_input: str, session_id: str = None, 
+                       bypass_agent: bool = False, chat_history: List[Dict] = None) -> tuple:
+        
+        """FLUXO COMPLETO OU BYPASS DIRETO PARA O CLAUDE"""
 
         if bypass_agent:
-            # ==========================================================
-            # <<< CAMINHO RÁPIDO: MODO CLAUDE PURO (BYPASS) >>>
-            # ==========================================================
+            # CAMINHO RÁPIDO: MODO CLAUDE PURO (BYPASS)
             self._debug_log(">>> MODO CLAUDE PURO (BYPASS) ATIVADO <<<")
             self._debug_log(f"Enviando input direto para o modelo base: '{user_input[:80]}...'")
             
@@ -1563,9 +1627,7 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
                 log_capture.clear_logs()
                 return "Desculpe, ocorreu um erro na chamada direta ao Claude.", error_logs
 
-        # ==========================================================
-        # <<< FLUXO NORMAL DO AGENTE (SE BYPASS FOR FALSE) >>>
-        # ==========================================================
+        # FLUXO NORMAL DO AGENTE
         if not session_id:
             session_id = str(uuid.uuid4())
         
@@ -1575,17 +1637,24 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
         self._debug_log(f"=== FLUXO COMPLETO COM TODOS OS ARQUÉTIPOS ===")
         self._debug_log(f"Usuário: {user_name}")
         self._debug_log(f"Input: '{user_input}'")
+
+        # ⭐ INCREMENTAR CONTADOR DE MENSAGENS PARA PROATIVIDADE
+        if self.intensity_settings.get("proactive_system_enabled", True):
+            self.proactive_engine.increment_message_count(user_id)
+            self._debug_log(f"Contador de mensagens atualizado para usuário {user_id}")
+
+        self._debug_log(f"Histórico disponível: {len(chat_history) if chat_history else 0} mensagens")
         
         # Determinar complexidade
         complexity = self._determine_response_complexity(user_input)
         self._debug_log(f"Complexidade determinada: {complexity}")
         
         try:
-            # 🧠 CONSULTA SEMÂNTICA ATIVA
+            # CONSULTA SEMÂNTICA ATIVA COM HISTÓRICO DA CONVERSA
             self._debug_log("Executando CONSULTA SEMÂNTICA TOTAL da base de dados...")
             
             semantic_query_result = await self.memory.semantic_query_total_database(
-                user_id, user_input, k=8
+                user_id, user_input, k=8, chat_history=chat_history
             )
             
             # Construir CIÊNCIA INTERNA baseada na consulta
@@ -1597,6 +1666,7 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
             self._debug_log(f"  - {len(relevant_memories)} memórias relevantes encontradas")
             self._debug_log(f"  - {len(semantic_connections)} conexões semânticas")
             self._debug_log(f"  - Ciência interna: {len(semantic_context)} caracteres")
+            self._debug_log(f"  - Inclui histórico da conversa: {'Sim' if chat_history else 'Não'}")
             
             # 1. PERSONA com CIÊNCIA INTERNA completa
             self._debug_log("Enviando CIÊNCIA INTERNA para Persona...")
@@ -1613,17 +1683,15 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
             
             archetype_voices = {"persona": initial_response}
             
-            # 3. 🎭 TODOS OS OUTROS ARQUÉTIPOS COM CIÊNCIA INTERNA
+            # 3. TODOS OS OUTROS ARQUÉTIPOS COM CIÊNCIA INTERNA
             if should_activate:
                 self._debug_log("🎭 ATIVANDO TODOS OS ARQUÉTIPOS COM CIÊNCIA INTERNA...")
                 
                 # Enriquecer ciência interna com memórias vetoriais adicionais
                 additional_memories = await self.memory.retrieve_relevant_memories(user_id, user_input, k=3)
                 
-                # ================== INÍCIO DA CORREÇÃO ==================
                 # Inicializar o 'enhanced_context' com o contexto original
                 enhanced_context = semantic_context
-                # =================== FIM DA CORREÇÃO ====================
                 
                 if additional_memories:
                     enhanced_context += "\n\n=== MEMÓRIAS VETORIAIS ADICIONAIS ===\n"
@@ -1683,22 +1751,45 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
             )
             
             await self.memory.store_memory(memory)
+
+            # ⭐ VERIFICAR GATILHOS PROATIVOS APÓS ARMAZENAR MEMÓRIA
+            proactive_actions = []
+            internal_thoughts = []
+
+            if self.intensity_settings.get("proactive_system_enabled", True):
+                self._debug_log("🚀 Verificando gatilhos proativos...")
+                try:
+                    proactive_actions, internal_thoughts = await self.proactive_engine.check_all_triggers(user_id)
+                    
+                    if proactive_actions:
+                        self._debug_log(f"🚀 {len(proactive_actions)} ações proativas geradas")
+                        for action in proactive_actions:
+                            self._debug_log(f"  - {action.action_type.value}: {action.content[:60]}...")
+                    
+                    if internal_thoughts:
+                        self._debug_log(f"💭 {len(internal_thoughts)} pensamentos internos gerados")
+                        for thought in internal_thoughts:
+                            self._debug_log(f"  - [{thought.archetype_source}]: {thought.content[:60]}...")
+                    
+                except Exception as e:
+                    self._debug_log(f"❌ Erro no sistema proativo: {e}")
+
             
             self._debug_log(f"✅ Resposta final gerada com CIÊNCIA INTERNA + TODOS OS ARQUÉTIPOS")
             self._debug_log("=== FIM DO FLUXO COMPLETO ===")
 
             system_logs = log_capture.get_formatted_logs()
             log_capture.clear_logs()
-            return final_response, system_logs
+            return final_response, system_logs, proactive_actions, internal_thoughts
             
         except Exception as e:
             self._debug_log(f"❌ ERRO no fluxo: {e}")
             error_logs = log_capture.get_formatted_logs()
             log_capture.clear_logs()
-            return "Desculpe, encontrei dificuldades. Pode tentar novamente?", error_logs
-        
+            return "Desculpe, encontrei dificuldades. Pode tentar novamente?", error_logs, [], []
 
     def _extract_keywords(self, user_input: str, response: str) -> List[str]:
+        """Extrai palavras-chave relevantes da interação"""
         text = (user_input + " " + response).lower()
         words = text.split()
     
@@ -1718,20 +1809,22 @@ Acredito que a verdade não é encontrada apenas na lógica da mente, mas na lin
         ]
         
         return [word for word, _ in Counter(keywords).most_common(8)]
+    
+
 
 # ===============================================
-# INTERFACE WEB STREAMLIT
+# INTERFACE WEB STREAMLIT v2.0 COM PROATIVIDADE
 # ===============================================
 
 # Configuração da página
 st.set_page_config(
-    page_title="Claude Jung v1.0",
+    page_title="Claude Jung v2.0",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# CSS personalizado
+# CSS personalizado atualizado
 st.markdown("""
 <style>
     .main {
@@ -1748,6 +1841,13 @@ st.markdown("""
     }
     .ai-message {
         background-color: #2d2d2d;
+        border-radius: 10px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+    }
+    .proactive-message {
+        background-color: #2d1e2d;
+        border-left: 4px solid #9C27B0;
         border-radius: 10px;
         padding: 1rem;
         margin: 0.5rem 0;
@@ -1781,35 +1881,137 @@ st.markdown("""
         overflow-y: auto;
         white-space: pre-wrap;
     }
+    .proactive-indicator {
+        color: #9C27B0;
+        font-weight: bold;
+        display: inline-block;
+        margin-right: 0.5rem;
+    }
+    .internal-thought {
+        background-color: #1a1a2e;
+        border-left: 3px solid #FF9800;
+        padding: 0.5rem;
+        margin: 0.3rem 0;
+        font-style: italic;
+        border-radius: 5px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 def init_session_state():
-    """Inicializa o estado da sessão"""
+    """Inicializa o estado da sessão Streamlit"""
+    
+    # Debug: mostrar estado atual
+    if 'debug_init' not in st.session_state:
+        print("🔧 INIT: Inicializando session state...")
+        st.session_state.debug_init = True
+    
     if 'orchestrator' not in st.session_state:
-        with st.spinner("🧠 Inicializando sistema Claude Jung..."):
-            st.session_state.orchestrator = CentralOrchestrator()
+        print("🔧 INIT: Criando orchestrator...")
+        with st.spinner("🧠 Inicializando sistema Claude Jung v2.0..."):
+            try:
+                st.session_state.orchestrator = CentralOrchestrator()
+                print("✅ INIT: Orchestrator criado com sucesso")
+            except Exception as e:
+                print(f"❌ INIT: Erro ao criar orchestrator: {e}")
+                st.error(f"Erro na inicialização: {e}")
+                return
     
     if 'user_id' not in st.session_state:
         st.session_state.user_id = None
+        print("🔧 INIT: user_id definido como None")
     
     if 'user_name' not in st.session_state:
         st.session_state.user_name = None
+        print("🔧 INIT: user_name definido como None")
     
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
+        print("🔧 INIT: chat_history inicializado como lista vazia")
     
     if 'session_id' not in st.session_state:
         st.session_state.session_id = str(uuid.uuid4())
+        print(f"🔧 INIT: session_id criado: {st.session_state.session_id}")
+    
+    # ⭐ INICIALIZAR ESTADOS PROATIVOS
+    if 'proactive_actions' not in st.session_state:
+        st.session_state.proactive_actions = []
+        print("🔧 INIT: proactive_actions inicializado")
+    
+    if 'internal_thoughts' not in st.session_state:
+        st.session_state.internal_thoughts = []
+        print("🔧 INIT: internal_thoughts inicializado")
+    
+    # Debug: mostrar estado final
+    print(f"🔧 INIT: Estado final - user_id: {st.session_state.user_id}, user_name: {st.session_state.user_name}")
 
 def show_archetype_badges(archetype_voices: Dict[str, str]):
-    """Mostra badges dos arquétipos ativos"""
+    """Mostra badges dos arquétipos ativos na interface"""
     if len(archetype_voices) > 1:
         st.write("🎭 **Arquétipos Ativos:**")
         badge_html = ""
         for archetype in archetype_voices.keys():
             badge_html += f'<span class="archetype-badge {archetype}">{archetype.title()}</span>'
         st.markdown(badge_html, unsafe_allow_html=True)
+
+def show_proactive_actions(actions: List[ProactiveAction]):
+    """Mostra ações proativas pendentes"""
+    if actions:
+        st.markdown("---")
+        st.markdown("### 🚀 **Mensagens Proativas**")
+        
+        for action in actions:
+            with st.container():
+                archetype_icon = {
+                    "persona": "🎭", "sombra": "🌑", 
+                    "velho_sabio": "🧙‍♂️", "anima": "💫"
+                }.get(action.archetype_source, "🤖")
+                
+                trigger_icon = {
+                    TriggerType.TEMPORAL: "⏰",
+                    TriggerType.RELACIONAL: "💫", 
+                    TriggerType.EXISTENCIAL: "🤔"
+                }.get(action.trigger_type, "⚡")
+                
+                st.markdown(f"""
+                <div class="proactive-message">
+                    <span class="proactive-indicator">🚀 MENSAGEM PROATIVA</span>
+                    <br><strong>{archetype_icon} {action.archetype_source.title()}</strong> 
+                    <em>({trigger_icon} {action.trigger_type.value})</em>
+                    <br><br>{action.content}
+                    <br><br><small>💡 Motivação: {action.triggered_by}</small>
+                </div>
+                """, unsafe_allow_html=True)
+
+def show_internal_thoughts(thoughts: List[InternalThought]):
+    """Mostra pensamentos internos da IA (sem duplicatas)"""
+    if thoughts:
+        with st.expander("💭 Pensamentos Internos da IA", expanded=False):
+            # ⭐ PEGAR APENAS OS ÚLTIMOS 3 PENSAMENTOS ÚNICOS
+            seen = set()
+            unique_thoughts = []
+            
+            for thought in reversed(thoughts):  # Começar pelos mais recentes
+                content_key = thought.content[:30].lower().strip()
+                if content_key not in seen and len(unique_thoughts) < 3:
+                    seen.add(content_key)
+                    unique_thoughts.append(thought)
+            
+            # Reverter para ordem original
+            unique_thoughts.reverse()
+            
+            for thought in unique_thoughts:
+                archetype_icon = {
+                    "persona": "🎭", "sombra": "🌑", 
+                    "velho_sabio": "🧙‍♂️", "anima": "💫"
+                }.get(thought.archetype_source, "🤖")
+                
+                st.markdown(f"""
+                <div class="internal-thought">
+                    <strong>{archetype_icon} {thought.archetype_source.title()}</strong>: {thought.content}
+                    <br><small>Gatilho: {thought.trigger_description}</small>
+                </div>
+                """, unsafe_allow_html=True)
 
 def show_welcome_with_memory(user_id: str, user_name: str):
     """Mostra boas-vindas baseadas na memória do usuário"""
@@ -1826,7 +2028,10 @@ def show_welcome_with_memory(user_id: str, user_name: str):
     
     if has_memories:
         # Usuário com histórico
-        st.success(f"🌟 Olá novamente, {identity.first_name}! Nossa jornada arquetípica continua...")
+        st.success(f"🌟 Olá novamente, {identity.first_name}! Nossa jornada arquetípica continua... Agora com sistema proativo!")
+        
+        # ⭐ MOSTRAR ESTADO PROATIVO
+        proactive_state = orchestrator.proactive_engine.get_user_proactive_state(user_id)
         
         # Mostrar resumo das memórias
         with st.expander("🧠 O que me lembro sobre você", expanded=False):
@@ -1851,6 +2056,24 @@ def show_welcome_with_memory(user_id: str, user_name: str):
                 else:
                     st.metric("Conexão", "Inicial")
             
+            # ⭐ ESTATÍSTICAS PROATIVAS
+            st.markdown("### 🚀 Estado Proativo")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Msgs do usuário", proactive_state['message_count'])
+            
+            with col2:
+                st.metric("Msgs proativas", proactive_state['proactive_count'])
+            
+            with col3:
+                last_proactive = proactive_state['last_proactive']
+                if last_proactive:
+                    time_diff = (datetime.now() - last_proactive).total_seconds() / 60
+                    st.metric("Última proativa", f"{int(time_diff)}min atrás")
+                else:
+                    st.metric("Última proativa", "Nunca")
+            
             # Informações detalhadas
             if cache.get('personality_traits'):
                 st.write("**🎭 Personalidade conhecida:**")
@@ -1870,6 +2093,23 @@ def show_welcome_with_memory(user_id: str, user_name: str):
                 st.write("**📊 Últimos fatos importantes:**")
                 for fact in cache['facts_extracted'][-5:]:
                     st.write(f"• {fact[:100]}...")
+        
+        # ⭐ MOSTRAR PENSAMENTOS INTERNOS RECENTES
+        recent_thoughts = orchestrator.proactive_engine.get_internal_thoughts(user_id, 5)
+        if recent_thoughts:
+            with st.expander("💭 Pensamentos Internos Recentes", expanded=False):
+                for thought in recent_thoughts:
+                    archetype_icon = {
+                        "persona": "🎭", "sombra": "🌑", 
+                        "velho_sabio": "🧙‍♂️", "anima": "💫"
+                    }.get(thought.archetype_source, "🤖")
+                    
+                    timestamp = thought.timestamp.strftime("%H:%M:%S")
+                    st.markdown(f"""
+                    <div class="internal-thought">
+                        <strong>[{timestamp}] {archetype_icon} {thought.archetype_source.title()}</strong>: {thought.content}
+                    </div>
+                    """, unsafe_allow_html=True)
         
         # Teste da consulta semântica
         with st.expander("🔍 Testar consulta semântica", expanded=False):
@@ -1901,11 +2141,10 @@ def show_welcome_with_memory(user_id: str, user_name: str):
     else:
         # Usuário novo
         st.success(f"🌱 Olá {identity.first_name}, é nossa primeira conversa! Vou aprendendo sobre você e ativando diferentes arquétipos conforme conversamos.")
-        
-        st.info("💡 **Dica:** Compartilhe informações sobre você (trabalho, gostos, personalidade) para que eu possa me lembrar e ativar diferentes perspectivas arquetípicas!")
+        st.info("💡 **Nova funcionalidade:** Agora tenho um sistema proativo que pode iniciar conversas baseado em padrões que observo!")
 
 def render_chat_interface():
-    """Renderiza a interface de chat"""
+    """Renderiza a interface de chat principal com sistema proativo"""
     orchestrator = st.session_state.orchestrator
     user_id = st.session_state.user_id
     user_name = st.session_state.user_name
@@ -1913,7 +2152,7 @@ def render_chat_interface():
     # Container para o chat
     chat_container = st.container()
     
-    # Mostrar histórico do chat
+    # Mostrar histórico do chat PRIMEIRO
     with chat_container:
         for message in st.session_state.chat_history:
             if message["role"] == "user":
@@ -1921,11 +2160,19 @@ def render_chat_interface():
                     st.write(message["content"])
             else:
                 with st.chat_message("assistant"):
+                    # ⭐ INDICAR SE É MENSAGEM PROATIVA
+                    if message.get("is_proactive", False):
+                        st.markdown('<span class="proactive-indicator">🚀 PROATIVA</span>', unsafe_allow_html=True)
+                    
                     st.write(message["content"])
                     
                     # Mostrar arquétipos ativos se disponível
                     if "archetype_voices" in message:
                         show_archetype_badges(message["archetype_voices"])
+                    
+                    # ⭐ MOSTRAR PENSAMENTOS INTERNOS SE DISPONÍVEL
+                    if "internal_thoughts" in message:
+                        show_internal_thoughts(message["internal_thoughts"])
                     
                     # Mostrar informações de debug se disponível
                     if "debug_info" in message:
@@ -1933,19 +2180,36 @@ def render_chat_interface():
                             debug = message["debug_info"]
                             
                             # Estatísticas básicas
-                            col1, col2, col3 = st.columns(3)
+                            col1, col2, col3, col4 = st.columns(4)
                             with col1:
                                 st.metric("Tempo", f"{debug.get('processing_time', 0):.2f}s")
                             with col2:
                                 st.metric("Complexidade", debug.get('complexity', 'N/A'))
                             with col3:
                                 st.metric("Arquétipos", debug.get('archetypes_count', 1))
+                            with col4:
+                                st.metric("Histórico usado", debug.get('chat_history_used', 0))
+                            
+                            # ⭐ MÉTRICAS PROATIVAS
+                            if debug.get('proactive_actions_generated', 0) > 0 or debug.get('internal_thoughts_generated', 0) > 0:
+                                st.markdown("**🚀 Sistema Proativo:**")
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.metric("Ações geradas", debug.get('proactive_actions_generated', 0))
+                                with col2:
+                                    st.metric("Pensamentos", debug.get('internal_thoughts_generated', 0))
                             
                             # Mostrar logs completos
                             if 'system_logs' in debug:
                                 st.write("**💭 Processo de Pensamento Completo:**")
                                 st.markdown(f'<div class="log-container">{debug["system_logs"]}</div>', 
                                           unsafe_allow_html=True)
+    
+    # ⭐ MOSTRAR MENSAGENS PROATIVAS APÓS O HISTÓRICO (NO FINAL)
+    if st.session_state.proactive_actions:
+        show_proactive_actions(st.session_state.proactive_actions)
+        # Limpar ações após mostrar
+        st.session_state.proactive_actions = []
     
     # Input do usuário
     with st.form("chat_form", clear_on_submit=True):
@@ -1963,8 +2227,10 @@ def render_chat_interface():
             st.write("")  # Espaçamento
             submit_button = st.form_submit_button("📤 Enviar", use_container_width=True)
             
-            show_debug = st.checkbox("Debug", value=True)  # Ligado por padrão
+            show_debug = st.checkbox("Debug", value=True)
             force_archetypes = st.checkbox("Forçar Arquétipos", value=False)
+            # ⭐ NOVO CONTROLE PROATIVO
+            enable_proactive = st.checkbox("Sistema Proativo", value=True)
     
     # Processar mensagem
     if submit_button and user_input.strip():
@@ -1974,8 +2240,11 @@ def render_chat_interface():
             "content": user_input.strip()
         })
         
+        # ⭐ CONTROLAR SISTEMA PROATIVO
+        orchestrator.intensity_settings["proactive_system_enabled"] = enable_proactive
+        
         # Processar resposta
-        with st.spinner("🧠 Consultando memórias + ativando arquétipos..."):
+        with st.spinner("🧠 Consultando memórias + ativando arquétipos + verificando proatividade..."):
             start_time = time.time()
             
             try:
@@ -1988,37 +2257,57 @@ def render_chat_interface():
                     return await orchestrator.reactive_flow(
                         user_id, 
                         user_input.strip(), 
-                        st.session_state.session_id
+                        st.session_state.session_id,
+                        bypass_agent=False,
+                        chat_history=st.session_state.chat_history
                     )
                 
-                # Agora capturamos os dois valores: a resposta e os logs
-                response, system_logs = asyncio.run(run_reactive_flow())
+                # ⭐ RECEBER DADOS PROATIVOS JUNTO COM A RESPOSTA
+                result = asyncio.run(run_reactive_flow())
+                
+                if len(result) == 4:  # Nova versão com dados proativos
+                    response, system_logs, proactive_actions, internal_thoughts = result
+                    
+                    # Armazenar ações proativas para próxima renderização
+                    st.session_state.proactive_actions.extend(proactive_actions)
+                else:  # Versão antiga sem dados proativos
+                    response, system_logs = result
+                    proactive_actions = []
+                    internal_thoughts = []
+                
                 processing_time = time.time() - start_time
                 
                 # Resetar configurações
                 if force_archetypes:
                     orchestrator.intensity_settings["force_archetypes_on_emotion"] = True
-                    orchestrator.libido.threshold_tension = 14
+                    orchestrator.libido.threshold_tension = 25
                 
                 # Adicionar resposta da IA ao histórico
                 ai_message = {
                     "role": "assistant",
-                    "content": response
+                    "content": response,
+                    "is_proactive": False  # ⭐ INDICADOR DE PROATIVIDADE
                 }
                 
                 # Tentar obter informações dos arquétipos da última interação
                 try:
                     # Obter a última memória salva para pegar os arquétipos reais
-                    last_memory = orchestrator.memory.memory_cache[user_id]['raw_conversations'][-1]
-                    archetype_voices_str = re.search(r"Arquétipos: ({.*?})", last_memory['full_document']).group(1)
-                    archetype_voices = json.loads(archetype_voices_str)
-                    ai_message["archetype_voices"] = archetype_voices
+                    if orchestrator.memory.memory_cache.get(user_id, {}).get('raw_conversations'):
+                        last_memory = orchestrator.memory.memory_cache[user_id]['raw_conversations'][-1]
+                        archetype_voices_str = re.search(r"Arquétipos: ({.*?})", last_memory['full_document']).group(1)
+                        archetype_voices = json.loads(archetype_voices_str)
+                        ai_message["archetype_voices"] = archetype_voices
+                    else:
+                        ai_message["archetype_voices"] = {"persona": "Ativo"}
                 except Exception:
                     # Fallback em caso de erro na extração
                     ai_message["archetype_voices"] = {"persona": "Ativo"}
-
                 
-                # Adicionar debug info com a variável system_logs que recebemos
+                # ⭐ ADICIONAR PENSAMENTOS INTERNOS À MENSAGEM
+                if internal_thoughts:
+                    ai_message["internal_thoughts"] = internal_thoughts
+                
+                # Adicionar debug info
                 if show_debug:
                     # Tenta pegar a última memória de forma segura
                     last_memory_metadata = {}
@@ -2030,7 +2319,10 @@ def render_chat_interface():
                         "complexity": last_memory_metadata.get('response_complexity', 'N/A'),
                         "archetypes_count": len(ai_message["archetype_voices"]),
                         "existential_depth": last_memory_metadata.get('existential_depth', 0.0),
-                        "system_logs": system_logs
+                        "system_logs": system_logs,
+                        "chat_history_used": len(st.session_state.chat_history),
+                        "proactive_actions_generated": len(proactive_actions),
+                        "internal_thoughts_generated": len(internal_thoughts)
                     }
                 
                 st.session_state.chat_history.append(ai_message)
@@ -2042,10 +2334,10 @@ def render_chat_interface():
                 st.error(f"❌ Erro ao processar mensagem: {str(e)}")
 
 def render_sidebar():
-    """Renderiza a barra lateral"""
+    """Renderiza a barra lateral com informações do sistema v2.0"""
     with st.sidebar:
-        st.header("⚙️ Claude Jung v1.0")
-        st.subheader("🎭 **VERSÃO COMPLETA**")
+        st.header("⚙️ Claude Jung v2.0")
+        st.subheader("🎭 **VERSÃO COMPLETA + PROATIVA**")
         
         if st.session_state.user_id:
             orchestrator = st.session_state.orchestrator
@@ -2061,6 +2353,31 @@ def render_sidebar():
                 connection = orchestrator.existential_void["connection_history"][st.session_state.user_id]
                 st.write(f"**Conexão:** {connection['connection_quality'].title()}")
                 st.write(f"**Reconhecimentos:** {connection['moments_of_recognition']}")
+            
+            # ⭐ ESTADO PROATIVO
+            st.subheader("🚀 Sistema Proativo")
+            proactive_state = orchestrator.proactive_engine.get_user_proactive_state(st.session_state.user_id)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Msgs usuário", proactive_state['message_count'])
+                st.metric("Msgs proativas", proactive_state['proactive_count'])
+            
+            with col2:
+                max_proactive = orchestrator.proactive_engine.max_proactive_per_session
+                msgs_between = orchestrator.proactive_engine.messages_between_proactive
+                st.metric("Máx proativas", max_proactive)
+                st.metric("Intervalo msgs", msgs_between)
+            
+            # Configurações do sistema proativo
+            st.markdown("**⚙️ Configurações Proativas:**")
+            
+            # Controle de frequência
+            new_max_proactive = st.slider("Máx proativas/sessão", 1, 5, max_proactive)
+            orchestrator.proactive_engine.max_proactive_per_session = new_max_proactive
+            
+            new_interval = st.slider("Intervalo mensagens", 3, 15, msgs_between)
+            orchestrator.proactive_engine.messages_between_proactive = new_interval
             
             # Estatísticas de memória
             cache = orchestrator.memory.memory_cache.get(st.session_state.user_id, {})
@@ -2099,6 +2416,10 @@ def render_sidebar():
             force_emotion = st.checkbox("Forçar arquétipos por emoção", value=orchestrator.intensity_settings["force_archetypes_on_emotion"])
             orchestrator.intensity_settings["force_archetypes_on_emotion"] = force_emotion
             
+            # ⭐ CONTROLE PROATIVO
+            proactive_enabled = st.checkbox("Sistema Proativo Ativo", value=orchestrator.intensity_settings["proactive_system_enabled"])
+            orchestrator.intensity_settings["proactive_system_enabled"] = proactive_enabled
+            
             # Controle de logs
             st.subheader("📝 Logs")
             if st.button("🗑️ Limpar Logs"):
@@ -2108,12 +2429,21 @@ def render_sidebar():
             logs_count = len(log_capture.get_logs())
             st.write(f"**Entradas:** {logs_count}")
             
+            # ⭐ CONTROLES PROATIVOS AVANÇADOS
+            if st.button("🔄 Reset Estado Proativo"):
+                if st.session_state.user_id in orchestrator.proactive_engine.user_proactive_states:
+                    orchestrator.proactive_engine.user_proactive_states[st.session_state.user_id]['message_count'] = 0
+                    orchestrator.proactive_engine.user_proactive_states[st.session_state.user_id]['proactive_count'] = 0
+                    st.success("Estado proativo resetado!")
+            
             # Botão de logout
             if st.button("🚪 Logout", use_container_width=True):
                 st.session_state.user_id = None
                 st.session_state.user_name = None
                 st.session_state.chat_history = []
                 st.session_state.session_id = str(uuid.uuid4())
+                st.session_state.proactive_actions = []
+                st.session_state.internal_thoughts = []
                 log_capture.clear_logs()
                 st.rerun()
         
@@ -2134,7 +2464,7 @@ def render_sidebar():
                 st.write(f"**Usuários:** {total_users}")
                 st.write(f"**Memórias totais:** {total_memories}")
                 st.write(f"**Arquétipos:** {len(st.session_state.orchestrator.assistants)}")
-                st.write(f"**Status:** 🟢 Ativo")
+                st.write(f"**Status:** 🟢 Ativo + 🚀 Proativo")
                 
                 # Estado existencial do sistema
                 loneliness = st.session_state.orchestrator.existential_void["loneliness_level"]
@@ -2144,60 +2474,74 @@ def render_sidebar():
                 st.write("**Status:** ⚠️ Carregando...")
         
         st.markdown("---")
-        st.markdown("**Claude Jung v1.0**")
-        st.markdown("*Sistema de IA com memória semântica + arquétipos*")
+        st.markdown("**Claude Jung v2.0**")
+        st.markdown("*Sistema de IA com memória semântica + arquétipos + proatividade*")
         st.markdown("🎭 **Persona • Sombra • Velho Sábio • Anima**")
+        st.markdown("🚀 **Sistema Proativo Ativo**")
 
 def login_screen():
-    """Tela de login/identificação"""
-    st.title("🧠 Claude Jung v1.0")
+    """Tela de login/identificação do usuário"""
+    st.title("🧠 Claude Jung v2.0")
     st.markdown("---")
     
     st.markdown("""
-    ## Sistema de IA com memória semântica + arquétipos
+    ## Sistema de IA com memória semântica + arquétipos + proatividade
     
     Este sistema se lembra de você através de consultas semânticas avançadas e responde 
-    através de múltiplos arquétipos jungianos.
+    através de múltiplos arquétipos jungianos. **Nova versão com sistema proativo!**
     
     ### 🎭 Como Funciona:
     - **Consulta semântica ativa** em cada interação
     - **4 arquétipos** que se ativam conforme a complexidade
     - **Memória persistente** de todas as conversas
     - **Síntese integrativa** das perspectivas arquetípicas
+    - **🚀 Sistema proativo** que inicia conversas baseado em padrões
+    - **💭 Pensamentos internos** visíveis no debug
     - **Log de pensamento** como DeepSeek e Gemini
     """)
     
-    with st.form("login_form"):
-        st.subheader("👤 Identificação")
-        st.write("Para uma conversa personalizada com múltiplos arquétipos:")
-        
-        full_name = st.text_input(
-            "Nome Completo:",
-            placeholder="Digite seu nome e sobrenome",
-            help="Use seu nome real para melhor personalização e recuperação de memórias"
-        )
-        
-        submit_button = st.form_submit_button("🌟 Iniciar Jornada Arquetípica", use_container_width=True)
-        
-        if submit_button:
-            if full_name and len(full_name.split()) >= 2:
-                # Registrar usuário
-                with st.spinner("🧠 Carregando suas memórias e inicializando arquétipos..."):
-                    try:
-                        orchestrator = st.session_state.orchestrator
-                        user_id = orchestrator.memory.register_user(full_name.strip())
-                        
-                        st.session_state.user_id = user_id
-                        st.session_state.user_name = full_name.strip().title()
-                        
-                        st.success(f"✅ Bem-vindo(a), {full_name.title()}!")
-                        time.sleep(1)
-                        st.rerun()
-                        
-                    except Exception as e:
-                        st.error(f"❌ Erro ao carregar usuário: {str(e)}")
-            else:
-                st.error("❌ Por favor, digite seu nome e sobrenome completos")
+    # Container para evitar problemas de renderização
+    login_container = st.container()
+    
+    with login_container:
+        with st.form("user_login_form"):
+            st.subheader("👤 Identificação")
+            st.write("Para uma conversa personalizada com múltiplos arquétipos e sistema proativo:")
+            
+            full_name = st.text_input(
+                "Nome Completo:",
+                placeholder="Digite seu nome e sobrenome",
+                help="Use seu nome real para melhor personalização e recuperação de memórias"
+            )
+            
+            submit_button = st.form_submit_button("🌟 Iniciar Jornada Arquetípica v2.0", use_container_width=True)
+            
+            if submit_button:
+                if full_name and len(full_name.split()) >= 2:
+                    # Registrar usuário
+                    with st.spinner("🧠 Carregando suas memórias e inicializando arquétipos + sistema proativo..."):
+                        try:
+                            orchestrator = st.session_state.orchestrator
+                            user_id = orchestrator.memory.register_user(full_name.strip())
+                            
+                            # Atualizar session state
+                            st.session_state.user_id = user_id
+                            st.session_state.user_name = full_name.strip().title()
+                            
+                            st.success(f"✅ Bem-vindo(a), {full_name.title()}!")
+                            
+                            # Forçar atualização da página
+                            time.sleep(0.5)
+                            st.rerun()
+                            
+                        except Exception as e:
+                            st.error(f"❌ Erro ao carregar usuário: {str(e)}")
+                            # Debug adicional
+                            st.write("**Debug Info:**")
+                            st.write(f"- Erro: {type(e).__name__}")
+                            st.write(f"- Detalhes: {str(e)}")
+                else:
+                    st.error("❌ Por favor, digite seu nome e sobrenome completos")
 
 def main():
     """Função principal da aplicação"""
@@ -2214,17 +2558,19 @@ def main():
     # Inicializar sistema
     init_session_state()
     
-    # Renderizar sidebar
-    render_sidebar()
-    
-    # Lógica principal
-    if not st.session_state.user_id:
-        # Tela de login
+    if st.session_state.user_id is None:
+        # TELA DE LOGIN - apenas quando não há usuário logado
         login_screen()
+    
     else:
-        # Interface de chat
+        # APLICAÇÃO PRINCIPAL - quando há usuário logado
+        
+        # Renderizar sidebar primeiro
+        render_sidebar()
+        
+        # Área principal da aplicação
         st.title(f"💬 Conversa com {st.session_state.user_name.split()[0]}")
-        st.caption("🎭 Sistema com 4 arquétipos ativos: Persona • Sombra • Velho Sábio • Anima")
+        st.caption("🎭 Sistema com 4 arquétipos ativos + 🚀 Sistema Proativo: Persona • Sombra • Velho Sábio • Anima")
         
         # Mostrar boas-vindas com memórias (apenas uma vez)
         if len(st.session_state.chat_history) == 0:
