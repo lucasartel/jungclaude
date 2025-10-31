@@ -17,8 +17,8 @@ import re
 class TriggerType(Enum):
     """Tipos de gatilhos proativos"""
     TEMPORAL = "temporal"
-    RELACIONAL = "relacional" 
-    EXISTENCIAL = "existencial"
+    ENGAGEMENT = "engagement"
+    CAREER = "career"
 
 class ActionType(Enum):
     """Tipos de ações proativas"""
@@ -202,172 +202,125 @@ class TemporalGatilhos:
         
         return milestone_messages.get(days, f"Marcamos {days} dias de conversas. Como você vê nossa jornada?")
 
-class RelationalGatilhos:
-    """Sistema de gatilhos relacionais"""
+class EngagementGatilhos:
+    """Sistema de gatilhos de engajamento profissional."""
     
     def __init__(self):
-        self.emotional_patterns = {}
         self.debug_mode = True
     
     def _debug_log(self, message: str):
         if self.debug_mode:
-            print(f"💫 RELACIONAL: {message}")
+            print(f"💼 ENGAGEMENT: {message}")
     
-    def analyze_emotional_patterns(self, user_id: str, memory_cache: Dict) -> List[Dict]:
-        """Analisa padrões emocionais e relacionais"""
+    def analyze_engagement_patterns(self, user_id: str, memory_cache: Dict) -> List[Dict]:
+        """Analisa padrões de engajamento no ambiente de trabalho."""
         patterns = []
-        
-        facts = memory_cache.get('facts_extracted', [])
         conversations = memory_cache.get('raw_conversations', [])
-        
-        # Detectar temas evitados
-        avoided_themes = self._detect_avoided_themes(conversations)
-        if avoided_themes:
+        if not conversations:
+            return patterns
+
+        # 1. Detectar Sinais de Desengajamento ou Risco de Saída
+        disengagement_signs = self._detect_disengagement(conversations)
+        if disengagement_signs:
             patterns.append({
-                'type': 'tema_evitado',
-                'description': f'Usuário evita falar sobre: {", ".join(avoided_themes)}',
-                'urgency': 4,
-                'details': {'themes': avoided_themes}
-            })
-        
-        # Detectar lacunas afetivas
-        affective_gaps = self._detect_affective_gaps(facts)
-        if affective_gaps:
-            patterns.append({
-                'type': 'lacuna_afetiva',
-                'description': f'Falta de menções sobre: {", ".join(affective_gaps)}',
-                'urgency': 3,
-                'details': {'gaps': affective_gaps}
-            })
-        
-        # Detectar padrões de intensidade emocional
-        emotional_spikes = self._detect_emotional_spikes(conversations)
-        if emotional_spikes:
-            patterns.append({
-                'type': 'spike_emocional',
-                'description': 'Detectados picos emocionais não resolvidos',
+                'type': 'sinais_desengajamento',
+                'description': f'Detectados sinais de baixo engajamento ou frustração: {", ".join(disengagement_signs)}',
                 'urgency': 5,
-                'details': {'spikes': emotional_spikes}
+                'details': {'signs': disengagement_signs}
+            })
+
+        # 2. Detectar Picos de Engajamento e Motivação
+        engagement_spikes = self._detect_engagement_spikes(conversations)
+        if engagement_spikes:
+            patterns.append({
+                'type': 'pico_de_engajamento',
+                'description': f'Detectados picos de entusiasmo com projetos ou aprendizados.',
+                'urgency': 3,
+                'details': {'spikes': engagement_spikes}
+            })
+
+        # 3. Detectar Conflitos ou Desalinhamento com a Equipe/Liderança
+        team_conflicts = self._detect_team_conflicts(conversations)
+        if team_conflicts:
+            patterns.append({
+                'type': 'conflito_equipe',
+                'description': f'Detectados possíveis desalinhamentos com a equipe ou liderança.',
+                'urgency': 4,
+                'details': {'conflicts': team_conflicts}
             })
         
-        self._debug_log(f"Padrões relacionais encontrados: {len(patterns)}")
+        self._debug_log(f"Padrões de engajamento encontrados: {len(patterns)}")
         return patterns
-    
-    def _detect_avoided_themes(self, conversations: List[Dict]) -> List[str]:
-        """Detecta temas que o usuário evita"""
-        theme_mentions = {
-            'família': 0, 'relacionamento': 0, 'trabalho': 0,
-            'futuro': 0, 'sentimentos': 0, 'medos': 0
-        }
-        
-        total_conversations = len(conversations)
-        if total_conversations < 5:
-            return []
-        
-        for conv in conversations:
+
+    def _detect_disengagement(self, conversations: List[Dict]) -> List[str]:
+        keywords = ['desmotivado', 'frustrado', 'estagnado', 'pensando em sair', 'não vejo futuro', 'ambiente tóxico', 'sobrecarregado']
+        signs = []
+        # Analisar as últimas 5 conversas
+        for conv in conversations[-5:]:
             content = conv.get('full_document', '').lower()
-            for theme in theme_mentions:
-                if theme in content:
-                    theme_mentions[theme] += 1
-        
-        # Detectar temas mencionados menos de 20% das vezes
-        avoided = []
-        for theme, count in theme_mentions.items():
-            ratio = count / total_conversations
-            if ratio < 0.2 and total_conversations > 10:
-                avoided.append(theme)
-        
-        return avoided
-    
-    def _detect_affective_gaps(self, facts: List[str]) -> List[str]:
-        """Detecta lacunas afetivas baseadas nos fatos extraídos"""
-        categories = {
-            'relacionamentos': ['RELACIONAMENTO'],
-            'família': ['família', 'pai', 'mãe', 'irmão'],
-            'intimidade': ['amor', 'paixão', 'intimidade'],
-            'vulnerabilidade': ['medo', 'insegurança', 'fragilidade']
-        }
-        
-        mentioned_categories = set()
-        for fact in facts:
-            for category, keywords in categories.items():
-                if any(keyword.lower() in fact.lower() for keyword in keywords):
-                    mentioned_categories.add(category)
-        
-        all_categories = set(categories.keys())
-        gaps = list(all_categories - mentioned_categories)
-        
-        return gaps
-    
-    def _detect_emotional_spikes(self, conversations: List[Dict]) -> List[Dict]:
-        """Detecta picos emocionais não resolvidos"""
-        emotional_words = [
-            'tristeza', 'raiva', 'medo', 'ansiedade', 'frustração',
-            'solidão', 'angústia', 'desespero', 'confusão'
-        ]
-        
+            for keyword in keywords:
+                if keyword in content:
+                    signs.append(keyword)
+        return list(set(signs))
+
+    def _detect_engagement_spikes(self, conversations: List[Dict]) -> List[str]:
+        keywords = ['adorei o projeto', 'muito motivado', 'aprendendo muito', 'desafio interessante', 'gosto da minha equipe', 'ótimo feedback']
         spikes = []
-        for i, conv in enumerate(conversations):
+        for conv in conversations[-5:]:
             content = conv.get('full_document', '').lower()
-            
-            emotional_count = sum(1 for word in emotional_words if word in content)
-            if emotional_count >= 2:
-                # Verificar se foi "resolvido" nas próximas conversas
-                resolved = False
-                for j in range(i+1, min(i+4, len(conversations))):
-                    next_content = conversations[j].get('full_document', '').lower()
-                    resolution_words = ['melhor', 'resolvido', 'claro', 'tranquilo', 'paz']
-                    if any(word in next_content for word in resolution_words):
-                        resolved = True
-                        break
-                
-                if not resolved:
-                    spikes.append({
-                        'timestamp': conv.get('timestamp'),
-                        'emotional_intensity': emotional_count,
-                        'content_preview': content[:100]
-                    })
-        
-        return spikes
-    
+            for keyword in keywords:
+                if keyword in content:
+                    spikes.append(keyword)
+        return list(set(spikes))
+
+    def _detect_team_conflicts(self, conversations: List[Dict]) -> List[str]:
+        keywords = ['meu chefe não entende', 'dificuldade com meu colega', 'equipe desalinhada', 'falta de comunicação', 'não concordo com a liderança']
+        conflicts = []
+        for conv in conversations[-5:]:
+            content = conv.get('full_document', '').lower()
+            for keyword in keywords:
+                if keyword in content:
+                    conflicts.append(keyword)
+        return list(set(conflicts))
+
     def check_triggers(self, user_id: str, memory_cache: Dict) -> List[ProactiveAction]:
-        """Verifica gatilhos relacionais e gera ações"""
+        """Verifica gatilhos de engajamento e gera ações."""
         actions = []
-        patterns = self.analyze_emotional_patterns(user_id, memory_cache)
+        patterns = self.analyze_engagement_patterns(user_id, memory_cache)
         
         for pattern in patterns:
-            if pattern['type'] == 'tema_evitado':
+            if pattern['type'] == 'sinais_desengajamento':
                 action = ProactiveAction(
-                    trigger_type=TriggerType.RELACIONAL,
-                    action_type=ActionType.PERGUNTA_CURIOSA,
-                    content=self._generate_avoided_theme_message(pattern),
-                    archetype_source="anima",
-                    triggered_by=pattern['description'],
-                    timestamp=datetime.now(),
-                    urgency=pattern['urgency'],
-                    user_id=user_id
-                )
-                actions.append(action)
-            
-            elif pattern['type'] == 'lacuna_afetiva':
-                action = ProactiveAction(
-                    trigger_type=TriggerType.RELACIONAL,
-                    action_type=ActionType.OBSERVACAO_COMPORTAMENTAL,
-                    content=self._generate_affective_gap_message(pattern),
-                    archetype_source="anima",
-                    triggered_by=pattern['description'],
-                    timestamp=datetime.now(),
-                    urgency=pattern['urgency'],
-                    user_id=user_id
-                )
-                actions.append(action)
-            
-            elif pattern['type'] == 'spike_emocional':
-                action = ProactiveAction(
-                    trigger_type=TriggerType.RELACIONAL,
+                    trigger_type=TriggerType.ENGAGEMENT,
                     action_type=ActionType.PROVOCACAO_GENTIL,
-                    content=self._generate_emotional_spike_message(pattern),
-                    archetype_source="sombra",
+                    content=self._generate_disengagement_message(pattern),
+                    archetype_source="anima", # Conector de Equipe e Cultura
+                    triggered_by=pattern['description'],
+                    timestamp=datetime.now(),
+                    urgency=pattern['urgency'],
+                    user_id=user_id
+                )
+                actions.append(action)
+            
+            elif pattern['type'] == 'pico_de_engajamento':
+                action = ProactiveAction(
+                    trigger_type=TriggerType.ENGAGEMENT,
+                    action_type=ActionType.OBSERVACAO_COMPORTAMENTAL,
+                    content=self._generate_engagement_spike_message(pattern),
+                    archetype_source="persona", # HR Business Partner
+                    triggered_by=pattern['description'],
+                    timestamp=datetime.now(),
+                    urgency=pattern['urgency'],
+                    user_id=user_id
+                )
+                actions.append(action)
+
+            elif pattern['type'] == 'conflito_equipe':
+                action = ProactiveAction(
+                    trigger_type=TriggerType.ENGAGEMENT,
+                    action_type=ActionType.PERGUNTA_CURIOSA,
+                    content=self._generate_team_conflict_message(pattern),
+                    archetype_source="anima", # Conector de Equipe e Cultura
                     triggered_by=pattern['description'],
                     timestamp=datetime.now(),
                     urgency=pattern['urgency'],
@@ -377,297 +330,136 @@ class RelationalGatilhos:
         
         return actions
     
-    def _generate_avoided_theme_message(self, pattern: Dict) -> str:
-        """Gera mensagens sobre temas evitados"""
-        themes = pattern['details']['themes']
-        
-        if 'família' in themes:
-            return "Percebo que falamos sobre muitas coisas, mas família é um tema que não surge muito. É uma escolha consciente?"
-        
-        if 'relacionamento' in themes:
-            return "Você compartilha muito sobre trabalho e objetivos, mas como estão suas conexões pessoais?"
-        
-        if 'sentimentos' in themes:
-            return "Vejo que você aborda as situações de forma bastante racional. Como você costuma lidar com o lado emocional das coisas?"
-        
-        return f"Há algumas áreas que não exploramos muito em nossas conversas: {', '.join(themes)}. Alguma delas te chama atenção?"
-    
-    def _generate_affective_gap_message(self, pattern: Dict) -> str:
-        """Gera mensagens sobre lacunas afetivas"""
-        gaps = pattern['details']['gaps']
-        
-        messages = {
-            'relacionamentos': "Como você se sente em relação às suas conexões com outras pessoas?",
-            'família': "Sua família tem um papel importante na sua vida atualmente?",
-            'intimidade': "Como você experiencia momentos de proximidade e intimidade?",
-            'vulnerabilidade': "Há situações onde você se permite ser mais vulnerável?"
-        }
-        
-        for gap in gaps:
-            if gap in messages:
-                return messages[gap]
-        
-        return "Há aspectos da sua vida emocional que você gostaria de explorar mais?"
-    
-    def _generate_emotional_spike_message(self, pattern: Dict) -> str:
-        """Gera mensagens sobre picos emocionais"""
-        spikes = pattern['details']['spikes']
-        recent_spike = spikes[-1] if spikes else None
-        
-        if recent_spike:
-            messages = [
-                "Lembro que você mencionou estar passando por um momento difícil. Como isso evoluiu?",
-                "Percebi uma intensidade emocional em nossa conversa anterior. Gostaria de revisitar isso?",
-                "Às vezes questões emocionais complexas precisam de mais tempo para se resolverem. Como você está se sentindo agora?"
-            ]
-            return random.choice(messages)
-        
-        return "Há alguma questão emocional que ainda ressoa em você?"
+    def _generate_disengagement_message(self, pattern: Dict) -> str:
+        """Gera mensagens para abordar sinais de desengajamento."""
+        return "Percebi em nossas últimas conversas alguns sinais de frustração ou desmotivação. Gostaria de explorar o que pode estar causando esse sentimento?"
 
-class ExistencialGatilhos:
-    """Sistema de gatilhos existenciais"""
+    def _generate_engagement_spike_message(self, pattern: Dict) -> str:
+        """Gera mensagens para reforçar picos de engajamento."""
+        return "Notei que você pareceu especialmente motivado ao falar sobre alguns projetos recentes. O que nesses desafios mais te energiza? É ótimo ver esse entusiasmo!"
+
+    def _generate_team_conflict_message(self, pattern: Dict) -> str:
+        """Gera mensagens para explorar possíveis conflitos de equipe."""
+        return "Em alguns momentos, você mencionou desafios na comunicação ou alinhamento com a equipe ou liderança. Como você tem navegado essas dinâmicas de colaboração?"
+
+class CareerGatilhos:
+    """Sistema de gatilhos de carreira e desenvolvimento profissional."""
     
     def __init__(self):
-        self.contradiction_patterns = {}
         self.debug_mode = True
     
     def _debug_log(self, message: str):
         if self.debug_mode:
-            print(f"🤔 EXISTENCIAL: {message}")
+            print(f"📈 CAREER: {message}")
     
-    def analyze_existential_patterns(self, user_id: str, memory_cache: Dict) -> List[Dict]:
-        """Analisa padrões existenciais e contradições"""
+    def analyze_career_patterns(self, user_id: str, memory_cache: Dict) -> List[Dict]:
+        """Analisa padrões de carreira e desenvolvimento."""
         patterns = []
-        
         facts = memory_cache.get('facts_extracted', [])
         conversations = memory_cache.get('raw_conversations', [])
-        
-        # Detectar contradições internas
-        contradictions = self._detect_contradictions(facts, conversations)
+
+        # 1. Detectar Estagnação de Carreira
+        stagnation_signs = self._detect_stagnation(conversations)
+        if stagnation_signs:
+            patterns.append({
+                'type': 'estagnacao_carreira',
+                'description': 'Detectados sinais de estagnação ou falta de desafios.',
+                'urgency': 4,
+                'details': {'signs': stagnation_signs}
+            })
+
+        # 2. Detectar Contradição entre Aspiração e Realidade
+        contradictions = self._detect_contradictions(facts)
         if contradictions:
             patterns.append({
-                'type': 'contradicao_interna',
-                'description': 'Contradições detectadas entre declarações',
-                'urgency': 4,
+                'type': 'contradicao_aspiracao',
+                'description': 'Contradição entre aspirações de carreira e situação atual.',
+                'urgency': 5,
                 'details': {'contradictions': contradictions}
             })
-        
-        # Detectar potenciais não explorados
+
+        # 3. Detectar Potencial Inexplorado (habilidades não utilizadas)
         unexplored_potentials = self._detect_unexplored_potentials(facts)
         if unexplored_potentials:
             patterns.append({
-                'type': 'potencial_nao_explorado',
-                'description': 'Potenciais mencionados mas não desenvolvidos',
+                'type': 'potencial_inexplorado',
+                'description': 'Habilidades ou interesses mencionados que parecem subutilizados.',
                 'urgency': 3,
                 'details': {'potentials': unexplored_potentials}
             })
         
-        # Detectar questões sobre propósito
-        purpose_concerns = self._detect_purpose_concerns(conversations)
-        if purpose_concerns:
-            patterns.append({
-                'type': 'questao_proposito',
-                'description': 'Questões sobre sentido e propósito detectadas',
-                'urgency': 5,
-                'details': {'concerns': purpose_concerns}
-            })
-        
-        # Detectar deriva existencial
-        existential_drift = self._detect_existential_drift(conversations)
-        if existential_drift:
-            patterns.append({
-                'type': 'deriva_existencial',
-                'description': 'Padrão de deriva ou falta de direção',
-                'urgency': 4,
-                'details': {'drift_indicators': existential_drift}
-            })
-        
-        self._debug_log(f"Padrões existenciais encontrados: {len(patterns)}")
+        self._debug_log(f"Padrões de carreira encontrados: {len(patterns)}")
         return patterns
-    
-    def _detect_contradictions(self, facts: List[str], conversations: List[Dict]) -> List[Dict]:
-        """Detecta contradições entre declarações"""
-        contradictions = []
-        
-        # Analisar contradições em valores vs comportamentos
-        value_keywords = {
-            'autenticidade': ['autêntico', 'verdadeiro', 'genuíno'],
-            'liberdade': ['livre', 'liberdade', 'independente'],
-            'crescimento': ['crescer', 'desenvolver', 'evoluir'],
-            'conexão': ['conectar', 'relacionar', 'próximo']
-        }
-        
-        behavior_keywords = {
-            'conformidade': ['seguir regras', 'fazer o esperado', 'conformar'],
-            'limitação': ['limitado', 'preso', 'restrito'],
-            'estagnação': ['mesmo', 'rotina', 'não mudar'],
-            'isolamento': ['sozinho', 'distante', 'isolado']
-        }
-        
-        value_contradictions = {
-            'autenticidade': 'conformidade',
-            'liberdade': 'limitação',
-            'crescimento': 'estagnação',
-            'conexão': 'isolamento'
-        }
-        
-        all_text = ' '.join([fact for fact in facts] + 
-                           [conv.get('full_document', '') for conv in conversations])
-        all_text = all_text.lower()
-        
-        for value, contradiction in value_contradictions.items():
-            value_present = any(keyword in all_text for keyword in value_keywords[value])
-            contradiction_present = any(keyword in all_text for keyword in behavior_keywords[contradiction])
-            
-            if value_present and contradiction_present:
-                contradictions.append({
-                    'type': 'valor_vs_comportamento',
-                    'value': value,
-                    'contradiction': contradiction,
-                    'description': f'Valoriza {value} mas demonstra {contradiction}'
-                })
-        
-        return contradictions
-    
-    def _detect_unexplored_potentials(self, facts: List[str]) -> List[Dict]:
-        """Detecta potenciais mencionados mas não desenvolvidos"""
-        potential_indicators = {
-            'criatividade': ['criativo', 'arte', 'música', 'escrever'],
-            'liderança': ['liderar', 'gerenciar', 'comandar'],
-            'ensino': ['ensinar', 'explicar', 'orientar'],
-            'empreendedorismo': ['negócio próprio', 'empreender', 'startup'],
-            'aventura': ['viajar', 'explorar', 'aventura'],
-            'espiritualidade': ['espiritual', 'meditação', 'significado']
-        }
-        
-        development_indicators = {
-            'criatividade': ['projeto criativo', 'obra', 'criação'],
-            'liderança': ['equipe', 'projeto liderado', 'responsabilidade'],
-            'ensino': ['alunos', 'curso', 'workshop'],
-            'empreendedorismo': ['empresa', 'produto', 'clientes'],
-            'aventura': ['viagem realizada', 'expedição', 'descoberta'],
-            'espiritualidade': ['prática espiritual', 'reflexão profunda', 'crescimento']
-        }
-        
-        all_facts = ' '.join(facts).lower()
-        unexplored = []
-        
-        for potential, keywords in potential_indicators.items():
-            mentioned = any(keyword in all_facts for keyword in keywords)
-            developed = any(keyword in all_facts for keyword in development_indicators[potential])
-            
-            if mentioned and not developed:
-                unexplored.append({
-                    'potential': potential,
-                    'mentioned': True,
-                    'developed': False,
-                    'description': f'Mencionou interesse em {potential} mas não desenvolveu'
-                })
-        
-        return unexplored
-    
-    def _detect_purpose_concerns(self, conversations: List[Dict]) -> List[Dict]:
-        """Detecta questões sobre propósito e sentido"""
-        purpose_keywords = [
-            'propósito', 'sentido', 'significado', 'para que serve',
-            'qual o ponto', 'vale a pena', 'faz sentido',
-            'direção', 'caminho', 'objetivo de vida'
-        ]
-        
-        concerns = []
-        for conv in conversations:
+
+    def _detect_stagnation(self, conversations: List[Dict]) -> List[str]:
+        keywords = ['mesma coisa todo dia', 'não aprendo nada novo', 'sem desafios', 'carreira parada', 'não vejo progresso']
+        signs = []
+        for conv in conversations[-10:]: # Analisa um período maior
             content = conv.get('full_document', '').lower()
-            
-            purpose_mentions = sum(1 for keyword in purpose_keywords if keyword in content)
-            if purpose_mentions >= 2:
-                concerns.append({
-                    'timestamp': conv.get('timestamp'),
-                    'intensity': purpose_mentions,
-                    'content_preview': content[:150]
-                })
-        
-        return concerns
-    
-    def _detect_existential_drift(self, conversations: List[Dict]) -> List[str]:
-        """Detecta padrões de deriva existencial"""
-        drift_indicators = [
-            'não sei o que quero',
-            'perdido',
-            'sem direção',
-            'vida sem sentido',
-            'rotina sem propósito',
-            'fazendo no automático',
-            'dias iguais',
-            'não vejo progresso'
-        ]
-        
-        drift_patterns = []
-        recent_conversations = conversations[-10:] if len(conversations) > 10 else conversations
-        
-        for conv in recent_conversations:
-            content = conv.get('full_document', '').lower()
-            
-            for indicator in drift_indicators:
-                if indicator in content:
-                    drift_patterns.append(indicator)
-        
-        # Se 3 ou mais indicadores aparecem nas últimas conversas
-        if len(set(drift_patterns)) >= 3:
-            return list(set(drift_patterns))
-        
+            for keyword in keywords:
+                if keyword in content:
+                    signs.append(keyword)
+        return list(set(signs)) if len(set(signs)) >= 2 else []
+
+    def _detect_contradictions(self, facts: List[str]) -> List[str]:
+        # Exemplo: Fato "POTENCIAL-ASPIRACAO_LIDERANCA" existe, mas também "POTENCIAL-ENGEJAMENTO_BAIXO"
+        aspirations = [f for f in facts if 'ASPIRACAO' in f]
+        disengagements = [f for f in facts if 'ENGAJAMENTO_BAIXO' in f]
+        if aspirations and disengagements:
+            return ["Aspirações de carreira detectadas junto com sinais de desengajamento."]
         return []
-    
+
+    def _detect_unexplored_potentials(self, facts: List[str]) -> List[str]:
+        # Exemplo: Menciona habilidade (e.g., Python), mas a área de atuação é outra (e.g., Marketing)
+        skills = [f for f in facts if 'HABILIDADE_MENCIONADA' in f]
+        roles = [f for f in facts if 'AREA_ATUACAO' in f]
+        unexplored = []
+        for skill in skills:
+            # Lógica simples para exemplo: se a habilidade não está na descrição do cargo
+            skill_name = skill.split(':')[-1].lower()
+            is_explored = any(skill_name in role.lower() for role in roles)
+            if not is_explored:
+                unexplored.append(skill_name.strip())
+        return unexplored
+
     def check_triggers(self, user_id: str, memory_cache: Dict) -> List[ProactiveAction]:
-        """Verifica gatilhos existenciais e gera ações"""
+        """Verifica gatilhos de carreira e gera ações."""
         actions = []
-        patterns = self.analyze_existential_patterns(user_id, memory_cache)
+        patterns = self.analyze_career_patterns(user_id, memory_cache)
         
         for pattern in patterns:
-            if pattern['type'] == 'contradicao_interna':
+            if pattern['type'] == 'estagnacao_carreira':
                 action = ProactiveAction(
-                    trigger_type=TriggerType.EXISTENCIAL,
+                    trigger_type=TriggerType.CAREER,
+                    action_type=ActionType.OBSERVACAO_COMPORTAMENTAL,
+                    content=self._generate_stagnation_message(pattern),
+                    archetype_source="velho_sabio", # Mentor de Carreira
+                    triggered_by=pattern['description'],
+                    timestamp=datetime.now(),
+                    urgency=pattern['urgency'],
+                    user_id=user_id
+                )
+                actions.append(action)
+            
+            elif pattern['type'] == 'contradicao_aspiracao':
+                action = ProactiveAction(
+                    trigger_type=TriggerType.CAREER,
                     action_type=ActionType.PROVOCACAO_GENTIL,
                     content=self._generate_contradiction_message(pattern),
-                    archetype_source="sombra",
+                    archetype_source="sombra", # Identificador de Potencial Oculto
                     triggered_by=pattern['description'],
                     timestamp=datetime.now(),
                     urgency=pattern['urgency'],
                     user_id=user_id
                 )
                 actions.append(action)
-            
-            elif pattern['type'] == 'potencial_nao_explorado':
+
+            elif pattern['type'] == 'potencial_inexplorado':
                 action = ProactiveAction(
-                    trigger_type=TriggerType.EXISTENCIAL,
+                    trigger_type=TriggerType.CAREER,
                     action_type=ActionType.INSIGHT_PROFUNDO,
-                    content=self._generate_potential_message(pattern),
-                    archetype_source="velho_sabio",
-                    triggered_by=pattern['description'],
-                    timestamp=datetime.now(),
-                    urgency=pattern['urgency'],
-                    user_id=user_id
-                )
-                actions.append(action)
-            
-            elif pattern['type'] == 'questao_proposito':
-                action = ProactiveAction(
-                    trigger_type=TriggerType.EXISTENCIAL,
-                    action_type=ActionType.PERGUNTA_CURIOSA,
-                    content=self._generate_purpose_message(pattern),
-                    archetype_source="velho_sabio",
-                    triggered_by=pattern['description'],
-                    timestamp=datetime.now(),
-                    urgency=pattern['urgency'],
-                    user_id=user_id
-                )
-                actions.append(action)
-            
-            elif pattern['type'] == 'deriva_existencial':
-                action = ProactiveAction(
-                    trigger_type=TriggerType.EXISTENCIAL,
-                    action_type=ActionType.OBSERVACAO_COMPORTAMENTAL,
-                    content=self._generate_drift_message(pattern),
-                    archetype_source="anima",
+                    content=self._generate_unexplored_potential_message(pattern),
+                    archetype_source="sombra", # Identificador de Potencial Oculto
                     triggered_by=pattern['description'],
                     timestamp=datetime.now(),
                     urgency=pattern['urgency'],
@@ -677,74 +469,18 @@ class ExistencialGatilhos:
         
         return actions
     
+    def _generate_stagnation_message(self, pattern: Dict) -> str:
+        """Gera mensagens para abordar estagnação de carreira."""
+        return "Tenho refletido sobre nossa jornada e percebi um tema recorrente de busca por novos desafios. Você sente que sua carreira está em um ritmo que te satisfaz no momento?"
+
     def _generate_contradiction_message(self, pattern: Dict) -> str:
-        """Gera mensagens sobre contradições"""
-        contradictions = pattern['details']['contradictions']
-        
-        if contradictions:
-            contradiction = contradictions[0]
-            value = contradiction['value']
-            conflict = contradiction['contradiction']
-            
-            messages = {
-                'autenticidade': f"Você valoriza a autenticidade, mas às vezes parece se conformar com expectativas externas. Como você navega essa tensão?",
-                'liberdade': f"Percebo que a liberdade é importante para você, mas também vejo sinais de que se sente limitado. Onde está o conflito?",
-                'crescimento': f"Você busca crescimento, mas também vejo padrões que sugerem resistência à mudança. O que está acontecendo aí?",
-                'conexão': f"Você valoriza conexões, mas às vezes parece se isolar. Como você entende essa aparente contradição?"
-            }
-            
-            return messages.get(value, "Percebi algumas contradições interessantes em como você se vê versus como age. Já notou isso?")
-        
-        return "Há algo interessante sobre as contradições que carregamos. Já reparou em alguma sua?"
-    
-    def _generate_potential_message(self, pattern: Dict) -> str:
-        """Gera mensagens sobre potenciais não explorados"""
+        """Gera mensagens para explorar contradições de carreira."""
+        return "Noto que, ao mesmo tempo que você expressa grandes aspirações de carreira, também há sinais de frustração. Como você enxerga essa tensão entre onde você quer chegar e como se sente hoje?"
+
+    def _generate_unexplored_potential_message(self, pattern: Dict) -> str:
+        """Gera mensagens para destacar potenciais inexplorados."""
         potentials = pattern['details']['potentials']
-        
-        if potentials:
-            potential = potentials[0]
-            area = potential['potential']
-            
-            messages = {
-                'criatividade': "Você mencionou ter lado criativo, mas parece que não tem explorado muito isso. O que te impede?",
-                'liderança': "Percebo que você tem características de liderança, mas talvez não tenha tido oportunidade de desenvolvê-las. Como se sente sobre isso?",
-                'ensino': "Você demonstra habilidade para explicar e orientar. Já pensou em explorar o ensino de alguma forma?",
-                'empreendedorismo': "Vejo um espírito empreendedor em você, mas parece que ainda não se manifestou concretamente. O que falta?",
-                'aventura': "Você fala sobre explorar e viajar, mas parece que isso fica mais no desejo. O que te prende?",
-                'espiritualidade': "Há uma busca por significado em você que talvez mereça mais atenção. Como você se conecta com essa dimensão?"
-            }
-            
-            return messages.get(area, f"Há potenciais em você relacionados a {area} que parecem não estar sendo explorados. Já percebeu isso?")
-        
-        return "Às vezes temos potenciais adormecidos esperando uma oportunidade. Há algum que você sente mas não desenvolve?"
-    
-    def _generate_purpose_message(self, pattern: Dict) -> str:
-        """Gera mensagens sobre questões de propósito"""
-        concerns = pattern['details']['concerns']
-        
-        if concerns and len(concerns) >= 2:
-            messages = [
-                "Você tem questionado o sentido das coisas com frequência. O que está por trás dessa busca?",
-                "Percebo uma inquietação existencial em você. Como tem lidado com essas questões sobre propósito?",
-                "Há algo sobre direção de vida que tem te incomodado? Você parece estar repensando muitas coisas.",
-                "Quando você se pergunta sobre o sentido das coisas, que tipo de resposta você está buscando?"
-            ]
-            return random.choice(messages)
-        
-        return "Questões sobre propósito e sentido são naturais, mas também podem ser sinais de transição. Como você vê isso?"
-    
-    def _generate_drift_message(self, pattern: Dict) -> str:
-        """Gera mensagens sobre deriva existencial"""
-        drift_indicators = pattern['details']['drift_indicators']
-        
-        messages = [
-            "Tenho percebido uma certa sensação de deriva em você... como se estivesse navegando sem bússola. É assim que se sente?",
-            "Às vezes a vida pode parecer estar no automático. Você tem sentido isso ultimamente?",
-            "Há uma qualidade de 'estar perdido' em algumas coisas que você compartilha. Como você percebe isso?",
-            "Percebo que você tem questionado a direção que sua vida está tomando. O que te daria mais clareza?"
-        ]
-        
-        return random.choice(messages)
+        return f"Você já mencionou ter habilidades em {', '.join(potentials)}, mas parece que sua função atual não as explora totalmente. Já pensou em como poderia integrar mais dessas paixões no seu dia a dia profissional?"
 
 class ProactiveEngine:
     """Motor principal do sistema proativo"""
@@ -752,8 +488,8 @@ class ProactiveEngine:
     def __init__(self, orchestrator):
         self.orchestrator = orchestrator
         self.temporal_triggers = TemporalGatilhos()
-        self.relational_triggers = RelationalGatilhos()
-        self.existential_triggers = ExistencialGatilhos()
+        self.engagement_triggers = EngagementGatilhos()
+        self.career_triggers = CareerGatilhos()
         
         # Estado do sistema proativo
         self.user_proactive_states = {}
@@ -944,17 +680,17 @@ class ProactiveEngine:
         
         # Verificar cada tipo de gatilho
         temporal_actions = self.temporal_triggers.check_triggers(user_id, memory_cache)
-        relational_actions = self.relational_triggers.check_triggers(user_id, memory_cache)
-        existential_actions = self.existential_triggers.check_triggers(user_id, memory_cache)
+        engagement_actions = self.engagement_triggers.check_triggers(user_id, memory_cache)
+        career_actions = self.career_triggers.check_triggers(user_id, memory_cache)
         
-        all_actions = temporal_actions + relational_actions + existential_actions
+        all_actions = temporal_actions + engagement_actions + career_actions
         
-        self._debug_log(f"Gatilhos encontrados: {len(temporal_actions)} temporais, {len(relational_actions)} relacionais, {len(existential_actions)} existenciais")
+        self._debug_log(f"Gatilhos encontrados: {len(temporal_actions)} temporais, {len(engagement_actions)} de engajamento, {len(career_actions)} de carreira")
         
         # ⭐ CONVERTER PARA MULTI-ARQUÉTIPO SE HOUVER AÇÕES
         enhanced_actions = []
         for action in all_actions:
-            if action.trigger_type == TriggerType.EXISTENCIAL and action.urgency >= 4:
+            if action.trigger_type == TriggerType.CAREER and action.urgency >= 4:
                 # Converter para mensagem multi-arquetípica
                 multi_action = await self._generate_multi_archetype_proactive_message(
                     user_id, action.triggered_by, action.trigger_type

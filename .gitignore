@@ -23,3 +23,6 @@ memorias.py
 
 # Pasta com históricos de chat dos usuários
 /chat_histories/
+
+# Arquivos de log do Streamlit
+streamlit.log
