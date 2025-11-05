@@ -1,26 +1,134 @@
-# Arquivo de ambiente com chaves de API - NUNCA ENVIAR!
+# ============================================
+# DADOS SENSÍVEIS - NUNCA COMMITAR
+# ============================================
+# Environment variables
 .env
+*.env
+.env.local
+.env.production
+.env.development
 
-# Pasta do ambiente virtual do Python
-venv/
-.venv/
+# API Keys e secrets
+secrets.toml
+.streamlit/secrets.toml
 
-# Arquivos de cache e compilados do Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# ============================================
+# DATABASES - NÃO VERSIONAR DADOS
+# ============================================
+# SQLite databases (dados de desenvolvimento)
+*.db
+*.sqlite
+*.sqlite3
+agent_development.db
+development.db
 
-# Pastas de banco de dados e IDE
-.vscode/
+# ChromaDB (vetores e embeddings)
 chroma_db/
 data/chroma_db/
+*.chroma
+
+# Backups de banco
+*.db.backup
+*.sqlite.backup
+
+# ============================================
+# PYTHON
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+venv.bak/
+
+# ============================================
+# LOGS E CACHE
+# ============================================
+*.log
 logs/
-Docs-Teoricos/
+*.log.*
+streamlit.log
 
-# Arquivos para testes
-memorias.py
-gemma_memories.json
+# Cache
+.cache/
+*.cache
 
-# Pasta com históricos de chat dos usuários
-/chat_histories/
+# ============================================
+# IDEs E EDITORES
+# ============================================
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+
+# Outros editores
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+
+# ============================================
+# SISTEMA OPERACIONAL
+# ============================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+.directory
+
+# ============================================
+# TESTES E COVERAGE
+# ============================================
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# ============================================
+# BUILD E DISTRIBUIÇÃO
+# ============================================
+build/
+dist/
+*.egg-info/
+*.egg
+
+# ============================================
+# ARQUIVOS TEMPORÁRIOS
+# ============================================
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+
+# ============================================
+# OPCIONAL - AJUSTE CONFORME NECESSÁRIO
+# ============================================
+# Archive (descomente se não quiser versionar)
+# archive/
+
+# Jupyter Notebooks (checkpoints)
+.ipynb_checkpoints/
+
+# Documentação gerada
+docs/_build/
+site/
