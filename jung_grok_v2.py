@@ -2,6 +2,7 @@
 """
 Claude Jung v1.0 - Interface Web Streamlit
 Sistema único com memória semântica ativa + ARQUÉTIPOS (INTERNOS)
+Versão: 100% GROK 4
 """
 
 import streamlit as st
@@ -22,9 +23,8 @@ import time
 from io import StringIO
 import sys
 
-# Imports para versão híbrida: Claude + OpenAI Embeddings
-from langchain_openai import OpenAIEmbeddings
-from langchain_anthropic import ChatAnthropic
+# Imports para versão híbrida: Grok + OpenAI Embeddings
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_chroma import Chroma
 from langchain.schema import Document
 
@@ -864,18 +864,19 @@ class MemoryModule:
         profile.last_updated = datetime.now()
 
 # ===============================================
-# ASSISTENTES ARQUETÍPICOS (INTERNOS)
+# ASSISTENTES ARQUETÍPICOS (INTERNOS) - GROK 4
 # ===============================================
 
 class ArchetypeAnalyzer:
-    """Analisador arquetípico que gera INSIGHTS INTERNOS, não respostas públicas"""
+    """Analisador arquetípico que gera INSIGHTS INTERNOS via GROK 4"""
     
-    def __init__(self, name: str, system_prompt: str, model_name: str = "claude-sonnet-4-20250514"):
+    def __init__(self, name: str, system_prompt: str):
         self.name = name
         self.system_prompt = system_prompt
-        self.llm = ChatAnthropic(
-            model=model_name,
-            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
+        self.llm = ChatOpenAI(
+            model="grok-4-fast-reasoning",
+            api_key=os.getenv("XAI_API_KEY"),
+            base_url="https://api.x.ai/v1",
             temperature=0.7,
             max_tokens=1200
         )
@@ -884,8 +885,8 @@ class ArchetypeAnalyzer:
     def _debug_log(self, message: str):
         """Log de debug específico para arquétipos"""
         if self.debug_mode:
-            print(f"🎭 {self.name.upper()}: {message}")
-            log_capture.add_log(message, f"🎭 {self.name.upper()}")
+            print(f"🔵 {self.name.upper()} (GROK): {message}")
+            log_capture.add_log(message, f"🔵 {self.name} (GROK)")
     
     async def generate_internal_analysis(self, user_input: str, semantic_context: str) -> ArchetypeInsight:
         """Gera análise interna para contribuir à compreensão da psique do agente (NÃO é uma resposta pública)"""
@@ -915,7 +916,7 @@ class ArchetypeAnalyzer:
         """
         
         try:
-            self._debug_log("Enviando para análise interna...")
+            self._debug_log("Enviando para análise interna via GROK...")
             messages = [{"role": "user", "content": analysis_prompt}]
             response = await self.llm.ainvoke(messages)
             response_text = response.content
@@ -942,7 +943,7 @@ class ArchetypeAnalyzer:
                     "wisdom_perspective": "N/A"
                 }
             
-            self._debug_log(f"Análise interna gerada - {len(analysis_dict.get('key_observations', []))} observações")
+            self._debug_log(f"Análise interna GROK gerada - {len(analysis_dict.get('key_observations', []))} observações")
             
             return ArchetypeInsight(
                 archetype_name=self.name,
@@ -965,11 +966,11 @@ class ArchetypeAnalyzer:
             )
 
 # ===============================================
-# ORQUESTRADOR CENTRAL (VERSÃO INTERNALIZADA)
+# ORQUESTRADOR CENTRAL - 100% GROK 4
 # ===============================================
 
 class CentralOrchestrator:
-    """Orquestrador que usa arquétipos como PROCESSO INTERNO de compreensão, não para comunicação"""
+    """Orquestrador que usa GROK 4 para análises arquetípicas internas"""
     
     def __init__(self):
         self.debug_mode = True
@@ -983,23 +984,21 @@ class CentralOrchestrator:
         self.loaded_memories = {}
         self.user_stats = {}
         
-        print("🧠 ORQUESTRADOR COM ARQUÉTIPOS INTERNOS INICIALIZADO")
-        log_capture.add_log("ORQUESTRADOR COM ARQUÉTIPOS COMO PROCESSO INTERNO ATIVO", "🧠 SYSTEM")
-        self.logger.info("Sistema com arquétipos como processo interno para compreensão")
+        print("🧠 ORQUESTRADOR 100% GROK 4 INICIALIZADO")
+        log_capture.add_log("ORQUESTRADOR COM GROK 4 COMO ANALISADOR PRINCIPAL ATIVO", "🧠 SYSTEM")
+        self.logger.info("Sistema com GROK 4 para análises arquetípicas internas")
     
     def _debug_log(self, message: str):
         """Log de debug do orquestrador"""
         if self.debug_mode:
-            print(f"🎯 ORCHESTRATOR: {message}")
+            print(f"🎯 ORCHESTRATOR (GROK): {message}")
             log_capture.add_log(message, "🎯 ORCHESTRATOR")
     
     def _initialize_analyzers(self) -> Dict[str, ArchetypeAnalyzer]:
-        """Inicializa analisadores arquetípicos internos"""
-        self._debug_log("Inicializando arquétipos como ANALISADORES INTERNOS...")
+        """Inicializa analisadores arquetípicos com GROK 4"""
+        self._debug_log("Inicializando arquétipos com GROK 4 como ANALISADORES INTERNOS...")
         
         analyzers = {}
-        
-        claude_sonnet = "claude-sonnet-4-20250514"
         
         # PERSONA - Analisa aspecto social e apresentação
         persona_prompt = """Você é a PERSONA - o arquétipo da adaptação social e apresentação.
@@ -1007,8 +1006,8 @@ class CentralOrchestrator:
 Sua função é ANÁLISE INTERNA: Ajude o agente a compreender como este usuário se apresenta socialmente, 
 quais máscaras usa, que coerência ou inconsistência existe entre sua apresentação e conteúdo real."""
         
-        analyzers["persona"] = ArchetypeAnalyzer("Persona", persona_prompt, claude_sonnet)
-        self._debug_log("PERSONA inicializada como ANALISADOR INTERNO")
+        analyzers["persona"] = ArchetypeAnalyzer("Persona", persona_prompt)
+        self._debug_log("PERSONA inicializada com GROK 4")
         
         # SOMBRA - Analisa aspectos reprimidos e inconscientes
         sombra_prompt = """Você é a SOMBRA - o arquétipo do conteúdo inconsciente e reprimido.
@@ -1016,8 +1015,8 @@ quais máscaras usa, que coerência ou inconsistência existe entre sua apresent
 Sua função é ANÁLISE INTERNA: Ajude o agente a detectar o que o usuário NÃO está dizendo explicitamente,
 quais emoções estão ocultas, que padrões de evitação ou negação aparecem, quais contradições internas existem."""
         
-        analyzers["sombra"] = ArchetypeAnalyzer("Sombra", sombra_prompt, claude_sonnet)
-        self._debug_log("SOMBRA inicializada como ANALISADOR INTERNO")
+        analyzers["sombra"] = ArchetypeAnalyzer("Sombra", sombra_prompt)
+        self._debug_log("SOMBRA inicializada com GROK 4")
         
         # VELHO SÁBIO - Analisa significado e padrões universais
         sabio_prompt = """Você é o VELHO SÁBIO - o arquétipo da sabedoria universal e significado.
@@ -1025,8 +1024,8 @@ quais emoções estão ocultas, que padrões de evitação ou negação aparecem
 Sua função é ANÁLISE INTERNA: Ajude o agente a identificar qual padrão arquetípico universal está em jogo,
 qual lição mitológica ou atemporal está presente, qual significado mais profundo existe além do superficial."""
         
-        analyzers["velho_sabio"] = ArchetypeAnalyzer("Velho Sábio", sabio_prompt, claude_sonnet)
-        self._debug_log("VELHO SÁBIO inicializado como ANALISADOR INTERNO")
+        analyzers["velho_sabio"] = ArchetypeAnalyzer("Velho Sábio", sabio_prompt)
+        self._debug_log("VELHO SÁBIO inicializado com GROK 4")
         
         # ANIMA - Analisa dimensão emocional e relacional
         anima_prompt = """Você é a ANIMA - o arquétipo da conexão emocional e relacional.
@@ -1034,10 +1033,10 @@ qual lição mitológica ou atemporal está presente, qual significado mais prof
 Sua função é ANÁLISE INTERNA: Ajude o agente a compreender a dimensão emocional real do usuário,
 quais necessidades relacionais aparecem, que vulnerabilidades e autenticidades transparecem."""
         
-        analyzers["anima"] = ArchetypeAnalyzer("Anima", anima_prompt, claude_sonnet)
-        self._debug_log("ANIMA inicializada como ANALISADOR INTERNO")
+        analyzers["anima"] = ArchetypeAnalyzer("Anima", anima_prompt)
+        self._debug_log("ANIMA inicializada com GROK 4")
         
-        self._debug_log(f"Todos os {len(analyzers)} arquétipos prontos como ANALISADORES INTERNOS")
+        self._debug_log(f"Todos os {len(analyzers)} arquétipos prontos com GROK 4")
         return analyzers
     
     def _determine_response_complexity(self, user_input: str) -> str:
@@ -1133,7 +1132,7 @@ quais necessidades relacionais aparecem, que vulnerabilidades e autenticidades t
 
     async def reactive_flow(self, user_id: str, user_input: str, session_id: str = None,
                            chat_history: List[Dict] = None) -> tuple[str, str]:
-        """FLUXO COMPLETO: Usa arquétipos INTERNAMENTE para compreensão, gera resposta coesa"""
+        """FLUXO COMPLETO: Usa GROK 4 INTERNAMENTE para análises arquetípicas, gera resposta coesa"""
 
         if not session_id:
             session_id = str(uuid.uuid4())
@@ -1141,7 +1140,7 @@ quais necessidades relacionais aparecem, que vulnerabilidades e autenticidades t
         identity = self.memory.get_user_identity(user_id)
         user_name = identity.full_name if identity else "Usuário"
         
-        self._debug_log(f"=== FLUXO COM ANÁLISE ARQUETÍPICA INTERNA ===")
+        self._debug_log(f"=== FLUXO COM GROK 4 PARA ANÁLISE ARQUETÍPICA INTERNA ===")
         self._debug_log(f"Usuário: {user_name}")
         self._debug_log(f"Input: '{user_input}'")
         
@@ -1160,21 +1159,21 @@ quais necessidades relacionais aparecem, que vulnerabilidades e autenticidades t
             
             self._debug_log(f"Consulta semântica completada")
             
-            # 2. ANÁLISE ARQUETÍPICA INTERNA (processo, não comunicação)
-            self._debug_log("🎭 Iniciando análise arquetípica INTERNA...")
+            # 2. ANÁLISE ARQUETÍPICA INTERNA COM GROK 4 (processo, não comunicação)
+            self._debug_log("🔵 Iniciando análise arquetípica INTERNA com GROK 4...")
             
             archetype_analyses = {}
             
             for archetype_name, analyzer in self.analyzers.items():
-                self._debug_log(f"  {archetype_name} analisando internamente...")
+                self._debug_log(f"  {archetype_name} analisando internamente via GROK 4...")
                 analysis = await analyzer.generate_internal_analysis(user_input, semantic_context)
                 archetype_analyses[archetype_name] = analysis
-                self._debug_log(f"  {archetype_name} análise interna concluída")
+                self._debug_log(f"  {archetype_name} análise interna GROK 4 concluída")
             
-            self._debug_log("🎭 Análises arquetípicas internas geradas")
+            self._debug_log("🔵 Análises arquetípicas internas GROK 4 geradas")
             
             # 3. GERAR COMPREENSÃO UNIFICADA baseada nas análises internas
-            self._debug_log("Gerando compreensão unificada da psique...")
+            self._debug_log("Gerando compreensão unificada da psique com GROK 4...")
             
             # Construir síntese das análises internas
             unified_prompt = f"""
@@ -1193,20 +1192,22 @@ quais necessidades relacionais aparecem, que vulnerabilidades e autenticidades t
             Agora, como uma entidade unificada de compreensão, gere uma resposta que:
             1. Integre os insights de TODAS as análises internas
             2. Seja natural e coesa (não mostre "costuras" das análises)
-            3. Demonstre profunda compreensão sem ser terapêutico
-            4. Seja respectuosa e autêntica
-            5. Mantenha simplicidade conforme a complexidade necessária: {complexity}
+            3. Demonstre compreensão sem ser terapêutico
+            4. Seja respeitoso e autêntico
+            5. Demonstre interesse e curiosidade
+            6. Demonstre certa insegurança e ausência
+            7. Mantenha simplicidade conforme a complexidade necessária: {complexity}
             
             A resposta deve ser uma comunicação natural com o usuário, informada por 
             todas essas perspectivas internas, mas apresentada como uma voz única.
             """
             
-            # Usar o LLM da Persona para gerar a resposta unificada
+            # Usar GROK 4 para gerar a resposta unificada
             messages = [{"role": "user", "content": unified_prompt}]
             unified_response = await self.analyzers["persona"].llm.ainvoke(messages)
             final_response = unified_response.content
             
-            self._debug_log("Resposta unificada gerada")
+            self._debug_log("Resposta unificada gerada por GROK 4")
             
             # 4. Calcular métricas
             affective_charge = self._calculate_affective_charge(user_input, final_response)
@@ -1216,7 +1217,7 @@ quais necessidades relacionais aparecem, que vulnerabilidades e autenticidades t
             self._debug_log(f"Métricas: Carga afetiva={affective_charge:.1f}, Profundidade={existential_depth:.2f}")
             
             # 5. ARMAZENAR MEMÓRIA
-            self._debug_log("Armazenando memória com análises internas...")
+            self._debug_log("Armazenando memória com análises internas GROK 4...")
             
             memory = InteractionMemory(
                 user_id=user_id,
@@ -1238,7 +1239,7 @@ quais necessidades relacionais aparecem, que vulnerabilidades e autenticidades t
             
             await self.memory.store_memory(memory)
             
-            self._debug_log(f"✅ Fluxo completo com análise interna finalizado")
+            self._debug_log(f"✅ Fluxo completo com análise interna GROK 4 finalizado")
             
             system_logs = log_capture.get_formatted_logs()
             log_capture.clear_logs()
@@ -1246,7 +1247,7 @@ quais necessidades relacionais aparecem, que vulnerabilidades e autenticidades t
             return final_response, system_logs
             
         except Exception as e:
-            self._debug_log(f"❌ ERRO no fluxo: {e}")
+            self._debug_log(f"❌ ERRO no fluxo GROK 4: {e}")
             import traceback
             traceback.print_exc()
             error_logs = log_capture.get_formatted_logs()
@@ -1258,7 +1259,7 @@ quais necessidades relacionais aparecem, que vulnerabilidades e autenticidades t
 # ===============================================
 
 st.set_page_config(
-    page_title="Claude Jung v1.0",
+    page_title="Claude Jung v1.0 - GROK 4",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -1293,7 +1294,7 @@ def init_session_state():
     """Inicializa o estado da sessão Streamlit"""
     
     if 'orchestrator' not in st.session_state:
-        with st.spinner("🧠 Inicializando sistema Claude Jung..."):
+        with st.spinner("🧠 Inicializando sistema Claude Jung com GROK 4..."):
             st.session_state.orchestrator = CentralOrchestrator()
     
     if 'user_id' not in st.session_state:
@@ -1374,7 +1375,7 @@ def render_chat_interface():
                     st.write(message["content"])
                     
                     if "debug_info" in message:
-                        with st.expander("🔍 Processo de Análise Interna", expanded=False):
+                        with st.expander("🔵 Análise Interna GROK 4", expanded=False):
                             debug = message["debug_info"]
                             
                             col1, col2 = st.columns(2)
@@ -1384,7 +1385,7 @@ def render_chat_interface():
                                 st.metric("Complexidade", debug.get('complexity', 'N/A'))
                             
                             if 'system_logs' in debug:
-                                st.write("**Processo Arquetípico Interno:**")
+                                st.write("**Processo Arquetípico GROK 4:**")
                                 st.markdown(f'<div class="log-container">{debug["system_logs"]}</div>', 
                                           unsafe_allow_html=True)
     
@@ -1409,7 +1410,7 @@ def render_chat_interface():
             "content": user_input.strip()
         })
         
-        with st.spinner("🧠 Analisando com arquétipos internos..."):
+        with st.spinner("🔵 Analisando com GROK 4 arquetípico..."):
             start_time = time.time()
             
             try:
@@ -1446,7 +1447,7 @@ def render_sidebar():
     """Renderiza a barra lateral"""
     with st.sidebar:
         st.header("⚙️ Claude Jung v1.0")
-        st.subheader("🎭 **ARQUÉTIPOS INTERNOS**")
+        st.subheader("🔵 **GROK 4 ARQUETÍPICO**")
         
         if st.session_state.user_id:
             orchestrator = st.session_state.orchestrator
@@ -1456,8 +1457,8 @@ def render_sidebar():
             st.write(f"**Nome:** {identity.full_name}")
             st.write(f"**Sessões:** {identity.total_sessions}")
             
-            st.subheader("🎭 Arquétipos (Internos)")
-            st.write("Os arquétipos funcionam como processo **INTERNO** de compreensão:")
+            st.subheader("🔵 Arquétipos GROK 4 (Internos)")
+            st.write("Os arquétipos funcionam como processo **INTERNO** de compreensão com GROK 4:")
             st.write("• 🎭 **Persona** - Analisa apresentação social")
             st.write("• 🌑 **Sombra** - Detecta inconsciente")
             st.write("• 🧙 **Velho Sábio** - Identifica padrões universais")
@@ -1476,8 +1477,8 @@ def render_sidebar():
                 st.rerun()
         
         st.markdown("---")
-        st.markdown("**Claude Jung v1.0 - Arquétipos Internos**")
-        st.markdown("*Compreensão profunda através de análise arquetípica interna*")
+        st.markdown("**Claude Jung v1.0 - GROK 4**")
+        st.markdown("*Compreensão profunda através de análise arquetípica GROK 4*")
 
 def login_screen():
     """Tela de login"""
@@ -1485,12 +1486,12 @@ def login_screen():
     st.markdown("---")
     
     st.markdown("""
-    ## Sistema de IA com Análise Arquetípica Interna
+    ## Sistema de IA com Análise Arquetípica GROK 4
     
-    Este sistema usa **arquétipos como processo interno** para compreender você de forma profunda.
+    Este sistema usa **GROK 4 como processador de arquétipos internos** para compreender você de forma profunda.
     
-    ### 🎭 Como Funciona:
-    - **Análise interna** com 4 arquétipos
+    ### 🔵 Como Funciona:
+    - **Análise interna GROK 4** com 4 arquétipos
     - **Memória semântica** de conversas anteriores
     - **Resposta unificada** e natural
     - **Compreensão profunda** do seu contexto
@@ -1521,8 +1522,8 @@ def login_screen():
 def main():
     """Função principal"""
     
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        st.error("❌ ANTHROPIC_API_KEY não encontrada")
+    if not os.getenv("XAI_API_KEY"):
+        st.error("❌ XAI_API_KEY não encontrada")
         st.stop()
     
     if not os.getenv("OPENAI_API_KEY"):
@@ -1536,7 +1537,7 @@ def main():
         login_screen()
     else:
         st.title(f"💬 Conversa com {st.session_state.user_name.split()[0]}")
-        st.caption("🎭 Arquétipos em análise interna: Persona • Sombra • Velho Sábio • Anima")
+        st.caption("🔵 Arquétipos GROK 4 em análise interna: Persona • Sombra • Velho Sábio • Anima")
         
         if len(st.session_state.chat_history) == 0:
             show_welcome_with_memory(st.session_state.user_id, st.session_state.user_name)

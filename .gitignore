@@ -20,6 +20,7 @@ Docs-Teoricos/
 
 # Arquivos para testes
 memorias.py
+gemma_memories.json
 
 # Pasta com históricos de chat dos usuários
 /chat_histories/
