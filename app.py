@@ -38,6 +38,96 @@ load_dotenv()
 dev_db.init_database()
 
 # ===============================================
+# SISTEMA DE AUTENTICAÇÃO COM SENHA
+# ===============================================
+
+class AuthenticationManager:
+    """Gerencia autenticação de usuários com senhas"""
+    
+    def __init__(self):
+        self.users_file = "users_auth.json"
+        self.users = self._load_users()
+    
+    def _load_users(self) -> Dict:
+        """Carrega usuários cadastrados"""
+        if os.path.exists(self.users_file):
+            try:
+                with open(self.users_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except:
+                return {}
+        return {}
+    
+    def _save_users(self):
+        """Salva usuários cadastrados"""
+        with open(self.users_file, 'w', encoding='utf-8') as f:
+            json.dump(self.users, f, indent=2, ensure_ascii=False)
+    
+    def _hash_password(self, password: str) -> str:
+        """Cria hash da senha"""
+        return hashlib.sha256(password.encode()).hexdigest()
+    
+    def register_user(self, full_name: str, password: str) -> Tuple[bool, str]:
+        """Registra novo usuário"""
+        name_normalized = full_name.lower().strip()
+        
+        if name_normalized in self.users:
+            return False, "Usuário já cadastrado. Faça login."
+        
+        if len(password) < 6:
+            return False, "Senha deve ter no mínimo 6 caracteres."
+        
+        self.users[name_normalized] = {
+            'full_name': full_name.title(),
+            'password_hash': self._hash_password(password),
+            'created_at': datetime.now().isoformat(),
+            'last_login': None
+        }
+        
+        self._save_users()
+        return True, "Usuário cadastrado com sucesso!"
+    
+    def authenticate(self, full_name: str, password: str) -> Tuple[bool, str]:
+        """Autentica usuário"""
+        name_normalized = full_name.lower().strip()
+        
+        if name_normalized not in self.users:
+            return False, "Usuário não encontrado. Cadastre-se primeiro."
+        
+        user_data = self.users[name_normalized]
+        password_hash = self._hash_password(password)
+        
+        if password_hash != user_data['password_hash']:
+            return False, "Senha incorreta."
+        
+        # Atualizar último login
+        self.users[name_normalized]['last_login'] = datetime.now().isoformat()
+        self._save_users()
+        
+        return True, user_data['full_name']
+    
+    def change_password(self, full_name: str, old_password: str, new_password: str) -> Tuple[bool, str]:
+        """Altera senha do usuário"""
+        name_normalized = full_name.lower().strip()
+        
+        if name_normalized not in self.users:
+            return False, "Usuário não encontrado."
+        
+        # Verificar senha antiga
+        old_hash = self._hash_password(old_password)
+        if old_hash != self.users[name_normalized]['password_hash']:
+            return False, "Senha antiga incorreta."
+        
+        if len(new_password) < 6:
+            return False, "Nova senha deve ter no mínimo 6 caracteres."
+        
+        # Atualizar senha
+        self.users[name_normalized]['password_hash'] = self._hash_password(new_password)
+        self._save_users()
+        
+        return True, "Senha alterada com sucesso!"
+
+# ===============================================
 # SISTEMA DE CAPTURA DE LOGS
 # ===============================================
 
@@ -81,6 +171,9 @@ class LogCapture:
 
 # Instância global do capturador de logs
 log_capture = LogCapture()
+
+# Instância global do gerenciador de autenticação
+auth_manager = AuthenticationManager()
 
 # ===============================================
 # DATACLASSES E ESTRUTURAS DE DADOS
@@ -778,7 +871,12 @@ class MemoryModule:
             })
         
         # ========================================
-        # ✅ NOVO: Armazenar conflitos no SQLite
+        # ✅ CORREÇÃO: Gerar hash do user_id
+        # ========================================
+        user_id_hash = hashlib.md5(memory.user_id.encode()).hexdigest()
+        
+        # ========================================
+        # ✅ NOVO: Armazenar conflitos no SQLite COM user_id_hash
         # ========================================
         if memory.detected_conflicts:
             for conflict in memory.detected_conflicts:
@@ -787,13 +885,15 @@ class MemoryModule:
                     loser=conflict.archetype_2,
                     intensity=conflict.tension_level,
                     user_message=memory.user_input[:200],
-                    resolution=conflict.description
+                    resolution=conflict.description,
+                    user_id_hash=user_id_hash  # ✅ PASSAR user_id_hash
                 )
         
         # ========================================
-        # ✅ NOVO: Atualizar métricas de desenvolvimento
+        # ✅ NOVO: Atualizar métricas de desenvolvimento COM user_id_hash
         # ========================================
         dev_db.update_agent_state(
+            user_id_hash=user_id_hash,  # ✅ PASSAR user_id_hash
             interactions_delta=1,
             self_awareness_delta=0.01,
             moral_delta=0.008,
@@ -802,7 +902,7 @@ class MemoryModule:
         )
         
         # Verificar milestones
-        agent_state = dev_db.get_agent_state()
+        agent_state = dev_db.get_agent_state(user_id_hash)  # ✅ PASSAR user_id_hash
         total_interactions = agent_state['total_interactions']
         
         if total_interactions in [10, 50, 100, 250, 500, 1000]:
@@ -810,7 +910,8 @@ class MemoryModule:
                 milestone_type="interaction_milestone",
                 description=f"{total_interactions} interações completadas",
                 phase=agent_state['phase'],
-                interaction_count=total_interactions
+                interaction_count=total_interactions,
+                user_id_hash=user_id_hash  # ✅ PASSAR user_id_hash
             )
         
         self._debug_log(f"Memória ChromaDB + Desenvolvimento SQLite armazenados para {memory.user_name}")
@@ -1565,6 +1666,12 @@ def init_session_state():
     
     if 'show_dev_history' not in st.session_state:
         st.session_state.show_dev_history = False
+    
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    
+    if 'show_register' not in st.session_state:
+        st.session_state.show_register = False
 
 def show_welcome_with_memory(user_id: str, user_name: str):
     """Mostra boas-vindas baseadas na memória do usuário"""
@@ -1720,13 +1827,16 @@ def render_chat_interface():
 def show_development_history():
     """Mostra histórico de desenvolvimento em modal"""
     
+    # ✅ CORREÇÃO: Gerar hash do user_id
+    user_id_hash = hashlib.md5(st.session_state.user_id.encode()).hexdigest()
+    
     st.title("📊 Histórico de Desenvolvimento do Agente")
     
     tab1, tab2, tab3 = st.tabs(["🏆 Milestones", "⚡ Conflitos", "📈 Estatísticas"])
     
     with tab1:
         st.subheader("Marcos de Desenvolvimento")
-        milestones = dev_db.get_milestones()
+        milestones = dev_db.get_milestones(user_id_hash)  # ✅ PASSAR user_id_hash
         
         if milestones:
             for m in milestones:
@@ -1744,7 +1854,7 @@ def show_development_history():
     
     with tab2:
         st.subheader("Conflitos Arquetípicos Registrados")
-        conflicts = dev_db.get_recent_conflicts(limit=30)
+        conflicts = dev_db.get_recent_conflicts(user_id_hash, limit=30)  # ✅ PASSAR user_id_hash
         
         if conflicts:
             for c in conflicts:
@@ -1765,8 +1875,8 @@ def show_development_history():
     
     with tab3:
         st.subheader("Estatísticas Globais")
-        agent_state = dev_db.get_agent_state()
-        stats = dev_db.get_development_stats()
+        agent_state = dev_db.get_agent_state(user_id_hash)  # ✅ PASSAR user_id_hash
+        stats = dev_db.get_development_stats(user_id_hash)  # ✅ PASSAR user_id_hash
         
         # Métricas principais
         col1, col2, col3 = st.columns(3)
@@ -1832,12 +1942,13 @@ def render_sidebar():
             st.write(f"**Fatos:** {len(cache.get('facts_extracted', []))}")
             
             # ========================================
-            # ✅ NOVO: Painel de desenvolvimento do agente
+            # ✅ CORREÇÃO: Gerar hash e passar nas funções
             # ========================================
             st.markdown("---")
             st.subheader("🧠 Desenvolvimento do Agente")
             
-            agent_state = dev_db.get_agent_state()
+            user_id_hash = hashlib.md5(st.session_state.user_id.encode()).hexdigest()
+            agent_state = dev_db.get_agent_state(user_id_hash)  # ✅ PASSAR user_id_hash
             
             phase_names = {
                 1: "Reativo",
@@ -1854,7 +1965,7 @@ def render_sidebar():
             st.progress(agent_state['emotional_depth_score'], text=f"Profundidade Emocional: {agent_state['emotional_depth_score']:.0%}")
             st.progress(agent_state['autonomy_score'], text=f"Autonomia: {agent_state['autonomy_score']:.0%}")
             
-            stats = dev_db.get_development_stats()
+            stats = dev_db.get_development_stats(user_id_hash)  # ✅ PASSAR user_id_hash
             
             col1, col2 = st.columns(2)
             with col1:
@@ -1872,6 +1983,7 @@ def render_sidebar():
                 st.session_state.user_id = None
                 st.session_state.user_name = None
                 st.session_state.chat_history = []
+                st.session_state.authenticated = False
                 log_capture.clear_logs()
                 st.rerun()
         
@@ -1881,51 +1993,127 @@ def render_sidebar():
         st.caption("Memória Semântica + Desenvolvimento Estruturado")
 
 def login_screen():
-    """Tela de login"""
+    """Tela de login com autenticação"""
     st.title("🧠 Claude Jung v2.0")
     st.markdown("---")
     
-    st.markdown("""
-    ## Sistema Híbrido: ChromaDB + SQLite
-    
-    ### ⚡ Capacidades Avançadas:
-    
-    **Conflito Psíquico Interno:**
-    - Detecta quando arquétipos internos discordam
-    - Expressa contradições sem resolvê-las artificialmente
-    - Reflete tensões internas que podem espelhar as suas
-    
-    **Desenvolvimento do Agente:**
-    - Rastreia evolução através de 5 fases
-    - Registra milestones de crescimento
-    - Monitora integração arquetípica
-    
-    ### 🗄️ Arquitetura de Dados:
-    - **ChromaDB**: Memórias conversacionais (busca semântica)
-    - **SQLite**: Desenvolvimento estruturado (conflitos, milestones, fases)
-    """)
-    
-    with st.form("user_login_form"):
-        st.subheader("👤 Identificação")
+    # Alternar entre login e cadastro
+    if st.session_state.show_register:
+        st.subheader("📝 Cadastro de Novo Usuário")
         
-        full_name = st.text_input(
-            "Nome Completo:",
-            placeholder="Digite seu nome e sobrenome"
-        )
-        
-        submit_button = st.form_submit_button("🌟 Iniciar", use_container_width=True)
-        
-        if submit_button:
-            if full_name and len(full_name.split()) >= 2:
-                with st.spinner("🧠 Carregando sistema híbrido..."):
-                    orchestrator = st.session_state.orchestrator
-                    user_id = orchestrator.memory.register_user(full_name.strip())
-                    st.session_state.user_id = user_id
-                    st.session_state.user_name = full_name.strip().title()
-                    time.sleep(0.5)
+        with st.form("register_form"):
+            full_name = st.text_input(
+                "Nome Completo:",
+                placeholder="Digite seu nome e sobrenome"
+            )
+            
+            password = st.text_input(
+                "Senha:",
+                type="password",
+                placeholder="Mínimo 6 caracteres"
+            )
+            
+            password_confirm = st.text_input(
+                "Confirmar Senha:",
+                type="password",
+                placeholder="Digite a senha novamente"
+            )
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                register_button = st.form_submit_button("✅ Cadastrar", use_container_width=True)
+            
+            with col2:
+                if st.form_submit_button("⬅️ Voltar", use_container_width=True):
+                    st.session_state.show_register = False
                     st.rerun()
-            else:
-                st.error("Digite seu nome e sobrenome completos")
+            
+            if register_button:
+                if not full_name or len(full_name.split()) < 2:
+                    st.error("Digite seu nome e sobrenome completos")
+                elif password != password_confirm:
+                    st.error("As senhas não conferem")
+                else:
+                    success, message = auth_manager.register_user(full_name.strip(), password)
+                    
+                    if success:
+                        st.success(message)
+                        time.sleep(1)
+                        st.session_state.show_register = False
+                        st.rerun()
+                    else:
+                        st.error(message)
+    
+    else:
+        st.markdown("""
+        ## Sistema Híbrido: ChromaDB + SQLite
+        
+        ### ⚡ Capacidades Avançadas:
+        
+        **Conflito Psíquico Interno:**
+        - Detecta quando arquétipos internos discordam
+        - Expressa contradições sem resolvê-las artificialmente
+        - Reflete tensões internas que podem espelhar as suas
+        
+        **Desenvolvimento do Agente:**
+        - Rastreia evolução através de 5 fases
+        - Registra milestones de crescimento
+        - Monitora integração arquetípica
+        
+        ### 🗄️ Arquitetura de Dados:
+        - **ChromaDB**: Memórias conversacionais (busca semântica)
+        - **SQLite**: Desenvolvimento estruturado (conflitos, milestones, fases)
+        
+        ### 🔐 Sistema de Autenticação:
+        - Cada usuário tem login e senha
+        - Memórias e desenvolvimento são individuais
+        - Dados protegidos e isolados por usuário
+        """)
+        
+        st.markdown("---")
+        
+        with st.form("login_form"):
+            st.subheader("🔐 Login")
+            
+            full_name = st.text_input(
+                "Nome Completo:",
+                placeholder="Digite seu nome cadastrado"
+            )
+            
+            password = st.text_input(
+                "Senha:",
+                type="password",
+                placeholder="Digite sua senha"
+            )
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                login_button = st.form_submit_button("🚀 Entrar", use_container_width=True)
+            
+            with col2:
+                if st.form_submit_button("📝 Cadastrar", use_container_width=True):
+                    st.session_state.show_register = True
+                    st.rerun()
+            
+            if login_button:
+                if not full_name or not password:
+                    st.error("Preencha todos os campos")
+                else:
+                    success, result = auth_manager.authenticate(full_name.strip(), password)
+                    
+                    if success:
+                        with st.spinner("🧠 Carregando sistema híbrido..."):
+                            orchestrator = st.session_state.orchestrator
+                            user_id = orchestrator.memory.register_user(result)
+                            st.session_state.user_id = user_id
+                            st.session_state.user_name = result
+                            st.session_state.authenticated = True
+                            time.sleep(0.5)
+                            st.rerun()
+                    else:
+                        st.error(result)
 
 def main():
     """Função principal"""
@@ -1941,7 +2129,7 @@ def main():
     init_session_state()
     render_sidebar()
     
-    if st.session_state.user_id is None:
+    if not st.session_state.authenticated:
         login_screen()
     else:
         # Verificar se deve mostrar histórico de desenvolvimento
