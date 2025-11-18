@@ -1,6 +1,6 @@
 """
-jung_core.py - Motor Junguiano Unificado
-========================================
+jung_core.py - Motor Junguiano Unificado (Railway Edition)
+===========================================================
 
 Contém TODA a lógica compartilhada entre Streamlit e Telegram:
 - Configurações (Config)
@@ -9,7 +9,7 @@ Contém TODA a lógica compartilhada entre Streamlit e Telegram:
 - Funções auxiliares
 
 Autor: Sistema Jung Claude
-Versão: 2.0 - Ultra-Simplificada
+Versão: 2.1 - Otimizado para Railway
 """
 
 import os
@@ -45,9 +45,16 @@ class Config:
         if id.strip()
     ]
     
-    # ========== Database ==========
-    SQLITE_PATH = "jung_conversations.db"
-    CHROMA_PATH = "./chroma_jung_db"
+    # ========== Database - RAILWAY COMPATIBLE ==========
+    # Railway automaticamente monta volumes em /data
+    DATA_DIR = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", "./data")
+
+    # Garante que diretório existe localmente também
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR, exist_ok=True)
+
+    SQLITE_PATH = os.path.join(DATA_DIR, "jung_conversations.db")
+    CHROMA_PATH = os.path.join(DATA_DIR, "chroma_jung_db")
     
     # ========== Sistema Junguiano ==========
     MIN_MEMORIES_FOR_ANALYSIS = 10
@@ -221,6 +228,17 @@ Seja profundo mas acessível. Use exemplos concretos das conversas."""
         
         if not cls.TELEGRAM_BOT_TOKEN:
             print("⚠️  TELEGRAM_BOT_TOKEN ausente (Bot Telegram não funcionará)")
+    
+    @classmethod
+    def ensure_directories(cls):
+        """Garante que os diretórios de dados existem (Railway)"""
+        os.makedirs(cls.DATA_DIR, exist_ok=True)
+        os.makedirs(os.path.dirname(cls.SQLITE_PATH), exist_ok=True)
+        os.makedirs(cls.CHROMA_PATH, exist_ok=True)
+        print(f"✅ Diretórios criados/verificados:")
+        print(f"   - DATA_DIR: {cls.DATA_DIR}")
+        print(f"   - SQLITE: {cls.SQLITE_PATH}")
+        print(f"   - CHROMA: {cls.CHROMA_PATH}")
 
 
 # ============================================================
@@ -228,29 +246,61 @@ Seja profundo mas acessível. Use exemplos concretos das conversas."""
 # ============================================================
 
 class DatabaseManager:
-    """Gerenciador unificado de SQLite + ChromaDB"""
+    """Gerenciador unificado de SQLite + ChromaDB (Railway Compatible)"""
     
     def __init__(self):
         """Inicializa conexões com bancos de dados"""
         
+        # Garantir que diretórios existem
+        Config.ensure_directories()
+        
         # ========== SQLite ==========
+        print(f"📂 Conectando ao SQLite: {Config.SQLITE_PATH}")
         self.sqlite_conn = sqlite3.connect(
             Config.SQLITE_PATH,
             check_same_thread=False
         )
         self.sqlite_conn.row_factory = sqlite3.Row
         self._init_sqlite_tables()
+        print("✅ SQLite inicializado")
         
         # ========== ChromaDB ==========
-        self.chroma_client = chromadb.PersistentClient(
-            path=Config.CHROMA_PATH,
-            settings=Settings(anonymized_telemetry=False)
-        )
+        print(f"📂 Conectando ao ChromaDB: {Config.CHROMA_PATH}")
+        try:
+            self.chroma_client = chromadb.PersistentClient(
+                path=Config.CHROMA_PATH,
+                settings=Settings(
+                    anonymized_telemetry=False,
+                    allow_reset=True
+                )
+            )
+            
+            self.collection = self.chroma_client.get_or_create_collection(
+                name="jung_memories",
+                metadata={"hnsw:space": "cosine"}
+            )
+            print("✅ ChromaDB inicializado")
         
-        self.collection = self.chroma_client.get_or_create_collection(
-            name="jung_memories",
-            metadata={"hnsw:space": "cosine"}
-        )
+        except Exception as e:
+            print(f"⚠️  Erro ao inicializar ChromaDB: {e}")
+            print("🔄 Tentando resetar ChromaDB...")
+            
+            # Fallback: tentar criar do zero
+            import shutil
+            if os.path.exists(Config.CHROMA_PATH):
+                shutil.rmtree(Config.CHROMA_PATH)
+            os.makedirs(Config.CHROMA_PATH, exist_ok=True)
+            
+            self.chroma_client = chromadb.PersistentClient(
+                path=Config.CHROMA_PATH,
+                settings=Settings(anonymized_telemetry=False)
+            )
+            
+            self.collection = self.chroma_client.get_or_create_collection(
+                name="jung_memories",
+                metadata={"hnsw:space": "cosine"}
+            )
+            print("✅ ChromaDB recriado com sucesso")
     
     def _init_sqlite_tables(self):
         """Cria tabelas SQLite"""
@@ -324,11 +374,14 @@ class DatabaseManager:
             "has_conflict": conflict is not None
         }
         
-        self.collection.add(
-            documents=[document],
-            metadatas=[metadata],
-            ids=[doc_id]
-        )
+        try:
+            self.collection.add(
+                documents=[document],
+                metadatas=[metadata],
+                ids=[doc_id]
+            )
+        except Exception as e:
+            print(f"⚠️  Erro ao salvar memória no ChromaDB: {e}")
         
         if conflict:
             self.save_conflict(user_hash, user_name, conflict, platform)
@@ -782,8 +835,8 @@ except ValueError as e:
 
 # Exemplo de uso (pode ser comentado em produção)
 if __name__ == "__main__":
-    print("🧠 Jung Core - Motor Junguiano Unificado")
-    print("=" * 50)
+    print("🧠 Jung Core - Motor Junguiano Unificado (Railway Edition)")
+    print("=" * 60)
     
     # Testar conexões
     db = DatabaseManager()
@@ -795,6 +848,8 @@ if __name__ == "__main__":
     print("\n📊 Estatísticas:")
     print(f"  - Arquétipos disponíveis: {len(Config.ARCHETYPES)}")
     print(f"  - Usuários cadastrados: {len(db.get_all_users())}")
+    print(f"  - Caminho SQLite: {Config.SQLITE_PATH}")
+    print(f"  - Caminho ChromaDB: {Config.CHROMA_PATH}")
     
     db.close()
     print("\n✅ Teste concluído!")
