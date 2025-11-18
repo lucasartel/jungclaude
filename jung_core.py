@@ -46,15 +46,19 @@ class Config:
     ]
     
     # ========== Database - RAILWAY COMPATIBLE ==========
-    # Railway automaticamente monta volumes em /data
+    # Railway monta volume em /data automaticamente
     DATA_DIR = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", "./data")
 
-    # Garante que diretório existe localmente também
-    if not os.path.exists(DATA_DIR):
-        os.makedirs(DATA_DIR, exist_ok=True)
+    # Criar diretório se não existir (para desenvolvimento local)
+    os.makedirs(DATA_DIR, exist_ok=True)
 
     SQLITE_PATH = os.path.join(DATA_DIR, "jung_conversations.db")
     CHROMA_PATH = os.path.join(DATA_DIR, "chroma_jung_db")
+
+    print(f"✅ Diretórios configurados:")
+    print(f"   - DATA_DIR: {DATA_DIR}")
+    print(f"   - SQLITE: {SQLITE_PATH}")
+    print(f"   - CHROMA: {CHROMA_PATH}")
     
     # ========== Sistema Junguiano ==========
     MIN_MEMORIES_FOR_ANALYSIS = 10
