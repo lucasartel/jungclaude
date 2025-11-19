@@ -418,7 +418,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_name,          # user_name (posicional)
                 user_message,       # message (posicional)
                 "telegram",         # platform (posicional)
-                "grok-2-1212"      # model (posicional)
+                "grok-4-fast-reasoning"      # model (posicional)
             )
             
             processing_time = time.time() - start_time
