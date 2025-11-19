@@ -474,7 +474,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_name=user_name,
             message=user_message,
             platform="telegram",
-            model="grok-2-1212"  # ✅ GROK-2 (NOME CORRETO)
+            model="grok-4-fast-reasoning"  # ✅ GROK-2 (NOME CORRETO)
         )
         
         logger.info(f"✅ GROK-2 processou em {result.get('processing_time', 'N/A')}s")
@@ -539,7 +539,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         model = query.data.replace("analise_", "")
         
         model_names = {
-            "grok-2-1212": "GROK-2 (1212)",  # ✅ CORRETO
+            "grok-4-fast-reasoning": "GROK-2 (1212)",  # ✅ CORRETO
             "gpt-4o": "GPT-4o",
             "gpt-4o-mini": "GPT-4o-mini"
         }
