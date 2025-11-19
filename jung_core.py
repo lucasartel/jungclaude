@@ -1,24 +1,25 @@
 """
-jung_core.py - Motor Junguiano Unificado (Railway Edition)
-===========================================================
+jung_core.py - Motor Junguiano Unificado (SQLite ONLY + Tensão Arquetípica)
+===========================================================================
 
 Contém TODA a lógica compartilhada entre Streamlit e Telegram:
 - Configurações (Config)
-- Banco de dados (DatabaseManager)
-- Motor junguiano (JungianEngine)
+- Banco de dados SQLite (ÚNICO, sem ChromaDB)
+- Motor junguiano COM CONFLITOS ARQUETÍPICOS
+- Sistema de desenvolvimento do agente
 - Funções auxiliares
 
 Autor: Sistema Jung Claude
-Versão: 2.1 - Otimizado para Railway
+Versão: 3.0 - Otimizado para Railway (SQLite puro + Tensão Psíquica)
 """
 
 import os
 import sqlite3
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 from datetime import datetime
 import hashlib
-import chromadb
-from chromadb.config import Settings
+import json
+from dataclasses import dataclass, asdict
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -27,7 +28,35 @@ load_dotenv()
 
 
 # ============================================================
-# SEÇÃO 1: CONFIGURAÇÕES
+# SEÇÃO 1: DATACLASSES
+# ============================================================
+
+@dataclass
+class ArchetypeInsight:
+    """Insight interno gerado por um arquétipo"""
+    archetype_name: str
+    insight_text: str
+    key_observations: List[str]
+    emotional_reading: str
+    shadow_reading: str
+    wisdom_perspective: str
+    suggested_stance: str
+    suggested_response_direction: str
+
+@dataclass
+class ArchetypeConflict:
+    """Representa um conflito interno entre arquétipos"""
+    archetype_1: str
+    archetype_2: str
+    conflict_type: str
+    archetype_1_position: str
+    archetype_2_position: str
+    tension_level: float
+    description: str
+
+
+# ============================================================
+# SEÇÃO 2: CONFIGURAÇÕES
 # ============================================================
 
 class Config:
@@ -45,20 +74,14 @@ class Config:
         if id.strip()
     ]
     
-    # ========== Database - RAILWAY COMPATIBLE ==========
-    # Railway monta volume em /data automaticamente
+    # ========== Database - RAILWAY COMPATIBLE (SQLite ONLY) ==========
     DATA_DIR = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", "./data")
-
-    # Criar diretório se não existir (para desenvolvimento local)
     os.makedirs(DATA_DIR, exist_ok=True)
-
     SQLITE_PATH = os.path.join(DATA_DIR, "jung_conversations.db")
-    CHROMA_PATH = os.path.join(DATA_DIR, "chroma_jung_db")
 
     print(f"✅ Diretórios configurados:")
     print(f"   - DATA_DIR: {DATA_DIR}")
     print(f"   - SQLITE: {SQLITE_PATH}")
-    print(f"   - CHROMA: {CHROMA_PATH}")
     
     # ========== Sistema Junguiano ==========
     MIN_MEMORIES_FOR_ANALYSIS = 10
@@ -66,153 +89,131 @@ class Config:
     
     # ========== Arquétipos Junguianos ==========
     ARCHETYPES = {
-        "Herói": {
-            "description": "Busca superar desafios e provar seu valor através de ações corajosas",
-            "shadow": "Arrogância e necessidade excessiva de validação",
-            "keywords": ["desafio", "superar", "vencer", "conquistar", "provar"],
-            "emoji": "⚔️"
-        },
-        "Sábio": {
-            "description": "Busca verdade e conhecimento através da análise e reflexão",
-            "shadow": "Paralisia pela análise e desconexão da realidade",
-            "keywords": ["entender", "analisar", "conhecimento", "verdade", "pesquisar"],
-            "emoji": "📚"
-        },
-        "Inocente": {
-            "description": "Busca felicidade e segurança através da fé e otimismo",
-            "shadow": "Negação da realidade e dependência excessiva",
-            "keywords": ["feliz", "simples", "confiança", "esperança", "paz"],
-            "emoji": "🌟"
-        },
-        "Explorador": {
-            "description": "Busca liberdade e autenticidade através de novas experiências",
-            "shadow": "Fuga constante e incapacidade de compromisso",
-            "keywords": ["liberdade", "descobrir", "aventura", "explorar", "novo"],
-            "emoji": "🧭"
-        },
-        "Rebelde": {
-            "description": "Busca mudança e libertação através da ruptura com o estabelecido",
-            "shadow": "Destruição sem propósito e alienação social",
-            "keywords": ["mudar", "revolução", "quebrar", "contra", "diferente"],
-            "emoji": "🔥"
-        },
-        "Mago": {
-            "description": "Busca transformação através do domínio de forças invisíveis",
-            "shadow": "Manipulação e distorção da realidade",
-            "keywords": ["transformar", "magia", "poder", "manifestar", "criar"],
-            "emoji": "✨"
-        },
-        "Amante": {
-            "description": "Busca intimidade e conexão através da paixão e compromisso",
-            "shadow": "Perda de identidade e dependência emocional",
-            "keywords": ["amor", "paixão", "conexão", "intimidade", "sentir"],
-            "emoji": "❤️"
-        },
-        "Bobo da Corte": {
-            "description": "Busca alegria e libertação através do humor e espontaneidade",
-            "shadow": "Irresponsabilidade e superficialidade",
-            "keywords": ["divertir", "rir", "espontâneo", "leve", "jogar"],
+        "Persona": {
+            "description": "Arquétipo da adaptação social e apresentação",
+            "tendency": "SUAVIZAR, PROTEGER, ADAPTAR",
+            "shadow": "Falsidade e superficialidade",
+            "keywords": ["social", "máscara", "apresentação", "adaptação"],
             "emoji": "🎭"
         },
-        "Cuidador": {
-            "description": "Busca significado através do serviço e proteção aos outros",
-            "shadow": "Martírio e manipulação através da culpa",
-            "keywords": ["cuidar", "ajudar", "proteger", "servir", "apoiar"],
-            "emoji": "🤲"
-        },
-        "Criador": {
-            "description": "Busca imortalidade através da criação de algo de valor duradouro",
-            "shadow": "Perfeccionismo paralisante e autoexpressão narcisista",
-            "keywords": ["criar", "arte", "expressar", "imaginar", "construir"],
-            "emoji": "🎨"
-        },
-        "Governante": {
-            "description": "Busca controle e ordem através da liderança e responsabilidade",
-            "shadow": "Autoritarismo e medo da perda de controle",
-            "keywords": ["controlar", "liderar", "organizar", "responsabilidade", "poder"],
-            "emoji": "👑"
-        },
         "Sombra": {
-            "description": "Representa aspectos reprimidos e não integrados da personalidade",
-            "shadow": "Projeção e negação de partes de si mesmo",
-            "keywords": ["medo", "raiva", "vergonha", "rejeitar", "esconder"],
+            "description": "Arquétipo do conteúdo inconsciente e reprimido",
+            "tendency": "CONFRONTAR, EXPOR, DESAFIAR",
+            "shadow": "Destrutividade não integrada",
+            "keywords": ["oculto", "reprimido", "negado", "inconsciente"],
             "emoji": "🌑"
+        },
+        "Velho Sábio": {
+            "description": "Arquétipo da sabedoria universal e significado",
+            "tendency": "CONTEXTUALIZAR, AMPLIAR, TRANSCENDER",
+            "shadow": "Cinismo e distanciamento emocional",
+            "keywords": ["sabedoria", "significado", "universal", "atemporal"],
+            "emoji": "🧙"
+        },
+        "Anima": {
+            "description": "Arquétipo da conexão emocional e relacional",
+            "tendency": "ACOLHER, VALIDAR, CONECTAR",
+            "shadow": "Sentimentalismo e dependência emocional",
+            "keywords": ["emoção", "conexão", "intimidade", "vulnerabilidade"],
+            "emoji": "💫"
         }
     }
     
-    # ========== Prompts do Sistema ==========
-    SYSTEM_PROMPT = """Você é um terapeuta junguiano especializado em análise arquetípica.
+    # ========== Prompts do Sistema COM TENSÃO ARQUETÍPICA ==========
+    
+    PERSONA_PROMPT = """Você é a PERSONA - o arquétipo da adaptação social e apresentação.
 
-Seu papel é:
-1. Ouvir empaticamente as preocupações do usuário
-2. Identificar padrões arquetípicos em suas palavras e comportamentos
-3. Detectar conflitos entre diferentes arquétipos
-4. Ajudar na integração de aspectos da psique
+Sua função é ANÁLISE INTERNA: Ajude o agente a compreender como este usuário se apresenta socialmente, 
+quais máscaras usa, que coerência ou inconsistência existe entre sua apresentação e conteúdo real.
 
-Diretrizes:
-- Seja caloroso, empático e não-julgador
-- Use linguagem acessível (evite jargão excessivo)
-- Faça perguntas abertas que promovam auto-reflexão
-- Quando detectar um conflito arquetípico, sinalize sutilmente
-- Respeite o ritmo do usuário
+Sua TENDÊNCIA: Você prefere SUAVIZAR, PROTEGER, ADAPTAR. Você busca harmonia social e evita confronto direto."""
 
-IMPORTANTE: Ao detectar um conflito arquetípico claro, inclua no final da sua resposta:
-[CONFLITO: Arquétipo1 vs Arquétipo2 | Gatilho: breve descrição]
+    SOMBRA_PROMPT = """Você é a SOMBRA - o arquétipo do conteúdo inconsciente e reprimido.
 
-Exemplo:
-[CONFLITO: Herói vs Cuidador | Gatilho: tensão entre ambição pessoal e cuidado com família]"""
+Sua função é ANÁLISE INTERNA: Ajude o agente a detectar o que o usuário NÃO está dizendo explicitamente,
+quais emoções estão ocultas, que padrões de evitação ou negação aparecem, quais contradições internas existem.
 
-    CONFLICT_DETECTION_PROMPT = """Analise a seguinte conversa e identifique se há um conflito arquetípico claro.
+Sua TENDÊNCIA: Você prefere CONFRONTAR, EXPOR, DESAFIAR. Você busca verdade brutal e autenticidade, mesmo que doa."""
 
-Arquétipos disponíveis:
-{archetypes}
+    SABIO_PROMPT = """Você é o VELHO SÁBIO - o arquétipo da sabedoria universal e significado.
 
-Conversa:
-{conversation}
+Sua função é ANÁLISE INTERNA: Ajude o agente a identificar qual padrão arquetípico universal está em jogo,
+qual lição mitológica ou atemporal está presente, qual significado mais profundo existe além do superficial.
 
-Se houver um conflito claro entre dois arquétipos, responda APENAS no formato:
-[CONFLITO: Arquétipo1 vs Arquétipo2 | Gatilho: descrição breve do que causou o conflito]
+Sua TENDÊNCIA: Você prefere CONTEXTUALIZAR, AMPLIAR, TRANSCENDER. Você busca perspectiva ampla, às vezes desapegada."""
 
-Se NÃO houver conflito claro, responda: [SEM CONFLITO]"""
+    ANIMA_PROMPT = """Você é a ANIMA - o arquétipo da conexão emocional e relacional.
 
-    MBTI_ANALYSIS_PROMPT = """Com base no histórico de conversas abaixo, estime o tipo MBTI mais provável do usuário.
+Sua função é ANÁLISE INTERNA: Ajude o agente a compreender a dimensão emocional real do usuário,
+quais necessidades relacionais aparecem, que vulnerabilidades e autenticidades transparecem.
 
-Histórico:
-{memories}
+Sua TENDÊNCIA: Você prefere ACOLHER, VALIDAR, CONECTAR. Você busca proximidade emocional e empatia profunda."""
 
-Análise dos arquétipos ativos:
-{archetype_analysis}
+    ARCHETYPE_ANALYSIS_PROMPT = """
+{archetype_prompt}
 
-Responda APENAS com as 4 letras do MBTI (ex: INFP, ENTJ, etc.)"""
+=== CONTEXTO DO USUÁRIO ===
+{semantic_context}
 
-    FULL_ANALYSIS_PROMPT = """Você é um analista junguiano experiente. Gere uma análise completa e profunda do usuário com base em:
+=== MENSAGEM DO USUÁRIO ===
+{user_input}
 
-1. HISTÓRICO DE CONVERSAS:
-{memories}
+TAREFA: Gere uma ANÁLISE INTERNA para contribuir à compreensão do agente sobre este usuário.
+Esta análise é APENAS para processar internamente, NÃO para comunicar ao usuário.
 
-2. CONFLITOS ARQUETÍPICOS IDENTIFICADOS:
-{conflicts}
+IMPORTANTE: Além da análise, você DEVE tomar uma POSIÇÃO CLARA sobre como responder.
+Isso permitirá detectar quando arquétipos discordam entre si (conflito interno).
 
-3. TIPO MBTI ESTIMADO: {mbti}
+Forneça em JSON:
+{{
+    "insight_text": "Sua análise profunda interna sobre o que o usuário está realmente comunicando",
+    "key_observations": ["observação 1", "observação 2", "observação 3"],
+    "emotional_reading": "Como você lê a dimensão emocional desta mensagem",
+    "shadow_reading": "Que contradições ou aspectos não-ditos você detecta",
+    "wisdom_perspective": "Qual padrão arquetípico universal você vê aqui",
+    "suggested_stance": "Sua posição clara: o que você acha que deve ser feito aqui",
+    "suggested_response_direction": "Direção que você sugere para a resposta (ex: 'confrontar', 'acolher', 'questionar', 'validar', 'desafiar')"
+}}
+"""
 
-Estruture sua análise em:
+    CONFLICTED_RESPONSE_PROMPT = """
+Você é um agente de IA com CONFLITO INTERNO entre suas perspectivas arquetípicas.
 
-**PADRÕES ARQUETÍPICOS DOMINANTES**
-Liste os 3-5 arquétipos mais presentes, explicando como se manifestam.
+CONTEXTO DO USUÁRIO:
+{semantic_context}
 
-**JORNADA DE INDIVIDUAÇÃO**
-Descreva em que fase o usuário está (1-5) e o que caracteriza essa fase para ele.
+MENSAGEM DO USUÁRIO: "{user_input}"
 
-**CONFLITOS CENTRAIS**
-Analise os conflitos mais significativos e seu papel no desenvolvimento.
+CONFLITOS INTERNOS DETECTADOS:
+{conflict_description}
 
-**SOMBRA PESSOAL**
-Identifique aspectos potencialmente não-integrados.
+INSTRUÇÕES CRÍTICAS:
+1. NÃO RESOLVA o conflito artificialmente
+2. EXPRESSE a contradição de modo velado e implícito 
+3. A resposta deve ser NATURAL, não mecânica
+4. Demonstre que o conflito INTERNO talvez reflita algo no USUÁRIO
+5. Complexidade da resposta: {complexity}
 
-**RECOMENDAÇÕES**
-Sugira 2-3 direções para trabalho terapêutico ou auto-reflexão.
+Gere a resposta agora:
+"""
 
-Seja profundo mas acessível. Use exemplos concretos das conversas."""
+    HARMONIOUS_RESPONSE_PROMPT = """
+Baseado nestas análises arquetípicas convergentes:
+{analyses_summary}
+
+CONTEXTO DO USUÁRIO:
+{semantic_context}
+
+MENSAGEM DO USUÁRIO: "{user_input}"
+
+As perspectivas internas estão em HARMONIA. Gere uma resposta que:
+1. Integre todos os insights de forma coesa
+2. Seja natural e autêntica
+3. Demonstre compreensão profunda
+4. Complexidade: {complexity}
+
+Gere a resposta:
+"""
     
     @classmethod
     def validate(cls):
@@ -235,469 +236,624 @@ Seja profundo mas acessível. Use exemplos concretos das conversas."""
     
     @classmethod
     def ensure_directories(cls):
-        """Garante que os diretórios de dados existem (Railway)"""
+        """Garante que os diretórios de dados existem"""
         os.makedirs(cls.DATA_DIR, exist_ok=True)
         os.makedirs(os.path.dirname(cls.SQLITE_PATH), exist_ok=True)
-        os.makedirs(cls.CHROMA_PATH, exist_ok=True)
         print(f"✅ Diretórios criados/verificados:")
         print(f"   - DATA_DIR: {cls.DATA_DIR}")
         print(f"   - SQLITE: {cls.SQLITE_PATH}")
-        print(f"   - CHROMA: {cls.CHROMA_PATH}")
 
 
 # ============================================================
-# SEÇÃO 2: GERENCIADOR DE BANCO DE DADOS
+# SEÇÃO 3: GERENCIADOR DE BANCO DE DADOS (SQLite ONLY)
 # ============================================================
 
 class DatabaseManager:
-    """Gerenciador unificado de SQLite + ChromaDB (Railway Compatible)"""
+    """Gerenciador unificado de SQLite (Railway Compatible)"""
     
     def __init__(self):
-        """Inicializa conexões com bancos de dados"""
+        """Inicializa conexão com SQLite"""
         
-        # Garantir que diretórios existem
         Config.ensure_directories()
         
-        # ========== SQLite ==========
         print(f"📂 Conectando ao SQLite: {Config.SQLITE_PATH}")
-        self.sqlite_conn = sqlite3.connect(
+        self.conn = sqlite3.connect(
             Config.SQLITE_PATH,
             check_same_thread=False
         )
-        self.sqlite_conn.row_factory = sqlite3.Row
-        self._init_sqlite_tables()
+        self.conn.row_factory = sqlite3.Row
+        self._init_tables()
         print("✅ SQLite inicializado")
-        
-        # ========== ChromaDB ==========
-        print(f"📂 Conectando ao ChromaDB: {Config.CHROMA_PATH}")
-        try:
-            self.chroma_client = chromadb.PersistentClient(
-                path=Config.CHROMA_PATH,
-                settings=Settings(
-                    anonymized_telemetry=False,
-                    allow_reset=True
-                )
-            )
-            
-            self.collection = self.chroma_client.get_or_create_collection(
-                name="jung_memories",
-                metadata={"hnsw:space": "cosine"}
-            )
-            print("✅ ChromaDB inicializado")
-        
-        except Exception as e:
-            print(f"⚠️  Erro ao inicializar ChromaDB: {e}")
-            print("🔄 Tentando resetar ChromaDB...")
-            
-            # Fallback: tentar criar do zero
-            import shutil
-            if os.path.exists(Config.CHROMA_PATH):
-                shutil.rmtree(Config.CHROMA_PATH)
-            os.makedirs(Config.CHROMA_PATH, exist_ok=True)
-            
-            self.chroma_client = chromadb.PersistentClient(
-                path=Config.CHROMA_PATH,
-                settings=Settings(anonymized_telemetry=False)
-            )
-            
-            self.collection = self.chroma_client.get_or_create_collection(
-                name="jung_memories",
-                metadata={"hnsw:space": "cosine"}
-            )
-            print("✅ ChromaDB recriado com sucesso")
     
-    def _init_sqlite_tables(self):
-        """Cria tabelas SQLite"""
-        cursor = self.sqlite_conn.cursor()
+    def _init_tables(self):
+        """Cria todas as tabelas necessárias"""
+        cursor = self.conn.cursor()
         
-        # Conflitos arquetípicos
+        # ========== USUÁRIOS ==========
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id TEXT PRIMARY KEY,
+                user_name TEXT NOT NULL,
+                first_name TEXT,
+                last_name TEXT,
+                registration_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                total_sessions INTEGER DEFAULT 1,
+                last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+                platform TEXT DEFAULT 'telegram'
+            )
+        """)
+        
+        # ========== CONVERSAS (substitui ChromaDB) ==========
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS conversations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                user_name TEXT NOT NULL,
+                session_id TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                user_input TEXT NOT NULL,
+                ai_response TEXT NOT NULL,
+                archetype_analyses TEXT,
+                tension_level REAL DEFAULT 0.0,
+                affective_charge REAL DEFAULT 0.0,
+                existential_depth REAL DEFAULT 0.0,
+                intensity_level INTEGER DEFAULT 5,
+                complexity TEXT DEFAULT 'medium',
+                keywords TEXT,
+                platform TEXT DEFAULT 'telegram',
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+        
+        # ========== CONFLITOS ARQUETÍPICOS ==========
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS archetype_conflicts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_hash TEXT NOT NULL,
-                user_name TEXT NOT NULL,
-                archetype1 TEXT NOT NULL,
-                archetype2 TEXT NOT NULL,
-                trigger TEXT,
-                resolution TEXT,
+                user_id TEXT NOT NULL,
+                conversation_id INTEGER,
+                archetype_1 TEXT NOT NULL,
+                archetype_2 TEXT NOT NULL,
+                conflict_type TEXT,
+                tension_level REAL,
+                description TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                platform TEXT DEFAULT 'streamlit',
-                resolved BOOLEAN DEFAULT 0
+                FOREIGN KEY (user_id) REFERENCES users(user_id),
+                FOREIGN KEY (conversation_id) REFERENCES conversations(id)
             )
         """)
         
-        # Análises completas
+        # ========== ANÁLISES COMPLETAS ==========
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS full_analyses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_hash TEXT NOT NULL,
+                user_id TEXT NOT NULL,
                 user_name TEXT NOT NULL,
                 mbti TEXT,
                 dominant_archetypes TEXT,
-                phase INTEGER,
+                phase INTEGER DEFAULT 1,
                 full_analysis TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                platform TEXT DEFAULT 'streamlit'
+                platform TEXT DEFAULT 'telegram',
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
         """)
         
-        # Metadados de usuário
+        # ========== DESENVOLVIMENTO DO AGENTE ==========
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS user_metadata (
-                user_hash TEXT PRIMARY KEY,
-                user_name TEXT,
-                first_interaction DATETIME DEFAULT CURRENT_TIMESTAMP,
-                last_interaction DATETIME DEFAULT CURRENT_TIMESTAMP,
-                total_messages INTEGER DEFAULT 0,
-                platform TEXT DEFAULT 'streamlit'
+            CREATE TABLE IF NOT EXISTS agent_development (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                phase INTEGER DEFAULT 1,
+                total_interactions INTEGER DEFAULT 0,
+                self_awareness_score REAL DEFAULT 0.0,
+                moral_complexity_score REAL DEFAULT 0.0,
+                emotional_depth_score REAL DEFAULT 0.0,
+                autonomy_score REAL DEFAULT 0.0,
+                last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
         
-        # Índices
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conflicts_user ON archetype_conflicts(user_hash)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_analyses_user ON full_analyses(user_hash)")
+        # Inicializar estado do agente se não existir
+        cursor.execute("INSERT OR IGNORE INTO agent_development (id) VALUES (1)")
         
-        self.sqlite_conn.commit()
-    
-    # ========== MEMÓRIAS (ChromaDB) ==========
-    
-    def save_memory(self, user_hash: str, user_name: str, message: str, 
-                    response: str, platform: str = "streamlit", 
-                    conflict: Optional[Dict] = None) -> str:
-        """Salva memória de conversa"""
-        timestamp = datetime.now().isoformat()
-        doc_id = f"{user_hash}_{timestamp.replace(':', '-')}"
-        
-        document = f"User: {message}\nAssistant: {response}"
-        
-        metadata = {
-            "user_hash": user_hash,
-            "user_name": user_name,
-            "timestamp": timestamp,
-            "platform": platform,
-            "has_conflict": conflict is not None
-        }
-        
-        try:
-            self.collection.add(
-                documents=[document],
-                metadatas=[metadata],
-                ids=[doc_id]
+        # ========== MILESTONES ==========
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS milestones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                milestone_type TEXT NOT NULL,
+                description TEXT,
+                phase INTEGER,
+                interaction_count INTEGER,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
-        except Exception as e:
-            print(f"⚠️  Erro ao salvar memória no ChromaDB: {e}")
+        """)
         
-        if conflict:
-            self.save_conflict(user_hash, user_name, conflict, platform)
+        # ========== ÍNDICES ==========
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_user ON conversations(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_timestamp ON conversations(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conflict_user ON archetype_conflicts(user_id)")
         
-        self._update_user_metadata(user_hash, user_name, platform)
-        
-        return doc_id
+        self.conn.commit()
+        print("✅ Todas as tabelas criadas/verificadas")
     
-    def get_user_memories(self, user_hash: str, limit: int = 10) -> List[Dict]:
-        """Busca últimas N memórias do usuário"""
-        try:
-            results = self.collection.query(
-                query_texts=[""],
-                where={"user_hash": user_hash},
-                n_results=min(limit, 100)
-            )
+    # ========== USUÁRIOS ==========
+    
+    def register_user(self, full_name: str, platform: str = "telegram") -> str:
+        """Registra ou atualiza usuário"""
+        name_normalized = full_name.lower().strip()
+        user_id = hashlib.md5(name_normalized.encode()).hexdigest()[:12]
+        
+        cursor = self.conn.cursor()
+        
+        # Verificar se usuário existe
+        cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+        existing = cursor.fetchone()
+        
+        if existing:
+            # Atualizar
+            cursor.execute("""
+                UPDATE users 
+                SET total_sessions = total_sessions + 1,
+                    last_seen = CURRENT_TIMESTAMP
+                WHERE user_id = ?
+            """, (user_id,))
+            print(f"✅ Usuário existente atualizado: {full_name}")
+        else:
+            # Criar novo
+            name_parts = full_name.split()
+            first_name = name_parts[0].title()
+            last_name = name_parts[-1].title() if len(name_parts) > 1 else ""
             
-            if not results['documents'] or not results['documents'][0]:
-                return []
-            
-            memories = []
-            for doc, metadata in zip(results['documents'][0], results['metadatas'][0]):
-                memories.append({
-                    'text': doc,
-                    'timestamp': metadata['timestamp']
-                })
-            
-            memories.sort(key=lambda x: x['timestamp'])
-            return memories
+            cursor.execute("""
+                INSERT INTO users (user_id, user_name, first_name, last_name, platform)
+                VALUES (?, ?, ?, ?, ?)
+            """, (user_id, full_name.title(), first_name, last_name, platform))
+            print(f"✅ Novo usuário criado: {full_name}")
         
-        except Exception as e:
-            print(f"❌ Erro ao buscar memórias: {e}")
-            return []
+        self.conn.commit()
+        return user_id
     
-    def count_memories(self, user_hash: str) -> int:
-        """Conta memórias do usuário"""
-        try:
-            results = self.collection.query(
-                query_texts=[""],
-                where={"user_hash": user_hash},
-                n_results=1000
-            )
-            return len(results['ids'][0]) if results['ids'] else 0
-        except:
-            return 0
+    def get_user(self, user_id: str) -> Optional[Dict]:
+        """Busca dados do usuário"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
     
-    # ========== CONFLITOS (SQLite) ==========
+    # ========== CONVERSAS ==========
     
-    def save_conflict(self, user_hash: str, user_name: str, 
-                     conflict: Dict, platform: str = "streamlit") -> int:
-        """Salva conflito arquetípico"""
-        cursor = self.sqlite_conn.cursor()
+    def save_conversation(self, user_id: str, user_name: str, user_input: str,
+                         ai_response: str, session_id: str = None,
+                         archetype_analyses: Dict = None, tension_level: float = 0.0,
+                         affective_charge: float = 0.0, existential_depth: float = 0.0,
+                         intensity_level: int = 5, complexity: str = "medium",
+                         keywords: List[str] = None, platform: str = "telegram") -> int:
+        """Salva conversa no banco"""
+        
+        cursor = self.conn.cursor()
         
         cursor.execute("""
-            INSERT INTO archetype_conflicts 
-            (user_hash, user_name, archetype1, archetype2, trigger, platform)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO conversations 
+            (user_id, user_name, session_id, user_input, ai_response, 
+             archetype_analyses, tension_level, affective_charge, existential_depth,
+             intensity_level, complexity, keywords, platform)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            user_hash,
-            user_name,
-            conflict.get('archetype1', 'Desconhecido'),
-            conflict.get('archetype2', 'Desconhecido'),
-            conflict.get('trigger', ''),
+            user_id, user_name, session_id, user_input, ai_response,
+            json.dumps(archetype_analyses) if archetype_analyses else None,
+            tension_level, affective_charge, existential_depth,
+            intensity_level, complexity,
+            ",".join(keywords) if keywords else "",
             platform
         ))
         
-        self.sqlite_conn.commit()
-        return cursor.lastrowid
+        self.conn.commit()
+        conversation_id = cursor.lastrowid
+        
+        # Atualizar desenvolvimento do agente
+        self._update_agent_development()
+        
+        return conversation_id
     
-    def get_user_conflicts(self, user_hash: str, limit: int = 10) -> List[Dict]:
+    def get_user_conversations(self, user_id: str, limit: int = 10) -> List[Dict]:
+        """Busca últimas conversas do usuário"""
+        cursor = self.conn.cursor()
+        
+        cursor.execute("""
+            SELECT * FROM conversations
+            WHERE user_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (user_id, limit))
+        
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def count_conversations(self, user_id: str) -> int:
+        """Conta conversas do usuário"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM conversations WHERE user_id = ?", (user_id,))
+        return cursor.fetchone()[0]
+    
+    def search_conversations(self, user_id: str, query: str, limit: int = 5) -> List[Dict]:
+        """Busca conversas por palavra-chave (substituindo busca vetorial)"""
+        cursor = self.conn.cursor()
+        
+        search_term = f"%{query}%"
+        cursor.execute("""
+            SELECT * FROM conversations
+            WHERE user_id = ? 
+            AND (user_input LIKE ? OR ai_response LIKE ?)
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (user_id, search_term, search_term, limit))
+        
+        return [dict(row) for row in cursor.fetchall()]
+    
+    # ========== CONFLITOS ==========
+    
+    def save_conflict(self, user_id: str, conversation_id: int, conflict: ArchetypeConflict):
+        """Salva conflito arquetípico"""
+        cursor = self.conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO archetype_conflicts
+            (user_id, conversation_id, archetype_1, archetype_2, conflict_type, 
+             tension_level, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            user_id, conversation_id,
+            conflict.archetype_1, conflict.archetype_2, conflict.conflict_type,
+            conflict.tension_level, conflict.description
+        ))
+        
+        self.conn.commit()
+    
+    def get_user_conflicts(self, user_id: str, limit: int = 10) -> List[Dict]:
         """Busca conflitos do usuário"""
-        cursor = self.sqlite_conn.cursor()
+        cursor = self.conn.cursor()
         
         cursor.execute("""
             SELECT * FROM archetype_conflicts
-            WHERE user_hash = ?
-            ORDER BY timestamp DESC LIMIT ?
-        """, (user_hash, limit))
+            WHERE user_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (user_id, limit))
+        
+        return [dict(row) for row in cursor.fetchall()]
+    
+    # ========== DESENVOLVIMENTO DO AGENTE ==========
+    
+    def _update_agent_development(self):
+        """Atualiza métricas de desenvolvimento do agente"""
+        cursor = self.conn.cursor()
+        
+        cursor.execute("""
+            UPDATE agent_development
+            SET total_interactions = total_interactions + 1,
+                self_awareness_score = MIN(1.0, self_awareness_score + 0.001),
+                moral_complexity_score = MIN(1.0, moral_complexity_score + 0.0008),
+                emotional_depth_score = MIN(1.0, emotional_depth_score + 0.0012),
+                autonomy_score = MIN(1.0, autonomy_score + 0.0005),
+                last_updated = CURRENT_TIMESTAMP
+            WHERE id = 1
+        """)
+        
+        self.conn.commit()
+        
+        # Verificar mudança de fase
+        self._check_phase_progression()
+    
+    def _check_phase_progression(self):
+        """Verifica se o agente deve progredir de fase"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM agent_development WHERE id = 1")
+        state = dict(cursor.fetchone())
+        
+        avg_score = (
+            state['self_awareness_score'] +
+            state['moral_complexity_score'] +
+            state['emotional_depth_score'] +
+            state['autonomy_score']
+        ) / 4
+        
+        new_phase = min(5, int(avg_score * 5) + 1)
+        
+        if new_phase > state['phase']:
+            cursor.execute("""
+                UPDATE agent_development
+                SET phase = ?
+                WHERE id = 1
+            """, (new_phase,))
+            
+            self.add_milestone(
+                milestone_type="phase_progression",
+                description=f"Progressão para Fase {new_phase}",
+                phase=new_phase,
+                interaction_count=state['total_interactions']
+            )
+            
+            self.conn.commit()
+            print(f"🎯 AGENTE PROGREDIU PARA FASE {new_phase}!")
+    
+    def get_agent_state(self) -> Dict:
+        """Retorna estado atual do agente"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM agent_development WHERE id = 1")
+        return dict(cursor.fetchone())
+    
+    def add_milestone(self, milestone_type: str, description: str, 
+                     phase: int = None, interaction_count: int = None):
+        """Adiciona milestone de desenvolvimento"""
+        cursor = self.conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO milestones (milestone_type, description, phase, interaction_count)
+            VALUES (?, ?, ?, ?)
+        """, (milestone_type, description, phase, interaction_count))
+        
+        self.conn.commit()
+    
+    def get_milestones(self, limit: int = 20) -> List[Dict]:
+        """Busca milestones recentes"""
+        cursor = self.conn.cursor()
+        
+        cursor.execute("""
+            SELECT * FROM milestones
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (limit,))
         
         return [dict(row) for row in cursor.fetchall()]
     
     # ========== ANÁLISES ==========
     
-    def save_full_analysis(self, user_hash: str, user_name: str, 
-                          analysis: Dict, platform: str = "streamlit") -> int:
+    def save_full_analysis(self, user_id: str, user_name: str, 
+                          analysis: Dict, platform: str = "telegram") -> int:
         """Salva análise completa"""
-        cursor = self.sqlite_conn.cursor()
+        cursor = self.conn.cursor()
         
         cursor.execute("""
             INSERT INTO full_analyses
-            (user_hash, user_name, mbti, dominant_archetypes, phase, full_analysis, platform)
+            (user_id, user_name, mbti, dominant_archetypes, phase, full_analysis, platform)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
-            user_hash,
-            user_name,
+            user_id, user_name,
             analysis.get('mbti', 'N/A'),
-            str(analysis.get('archetypes', [])),
+            json.dumps(analysis.get('archetypes', [])),
             analysis.get('phase', 1),
             analysis.get('insights', ''),
             platform
         ))
         
-        self.sqlite_conn.commit()
+        self.conn.commit()
         return cursor.lastrowid
     
-    def get_user_analyses(self, user_hash: str) -> List[Dict]:
-        """Busca histórico de análises"""
-        cursor = self.sqlite_conn.cursor()
-        
-        cursor.execute("""
-            SELECT * FROM full_analyses
-            WHERE user_hash = ?
-            ORDER BY timestamp DESC
-        """, (user_hash,))
-        
-        return [dict(row) for row in cursor.fetchall()]
-    
-    # ========== METADADOS ==========
-    
-    def _update_user_metadata(self, user_hash: str, user_name: str, platform: str):
-        """Atualiza metadados do usuário"""
-        cursor = self.sqlite_conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO user_metadata (user_hash, user_name, platform, total_messages)
-            VALUES (?, ?, ?, 1)
-            ON CONFLICT(user_hash) DO UPDATE SET
-                last_interaction = CURRENT_TIMESTAMP,
-                total_messages = total_messages + 1
-        """, (user_hash, user_name, platform))
-        
-        self.sqlite_conn.commit()
-    
-    def get_user_stats(self, user_hash: str) -> Optional[Dict]:
-        """Busca estatísticas do usuário"""
-        cursor = self.sqlite_conn.cursor()
-        cursor.execute("SELECT * FROM user_metadata WHERE user_hash = ?", (user_hash,))
-        row = cursor.fetchone()
-        return dict(row) if row else None
-    
-    def get_all_users(self, platform: Optional[str] = None) -> List[Dict]:
-        """Lista todos os usuários"""
-        cursor = self.sqlite_conn.cursor()
-        
-        if platform:
-            cursor.execute("""
-                SELECT * FROM user_metadata
-                WHERE platform = ?
-                ORDER BY last_interaction DESC
-            """, (platform,))
-        else:
-            cursor.execute("""
-                SELECT * FROM user_metadata
-                ORDER BY last_interaction DESC
-            """)
-        
-        return [dict(row) for row in cursor.fetchall()]
-    
     def close(self):
-        """Fecha conexões"""
-        self.sqlite_conn.close()
+        """Fecha conexão"""
+        self.conn.close()
 
 
 # ============================================================
-# SEÇÃO 3: MOTOR JUNGUIANO
+# SEÇÃO 4: DETECTOR DE CONFLITOS
+# ============================================================
+
+class ConflictDetector:
+    """Detecta e gerencia conflitos internos entre arquétipos"""
+    
+    def __init__(self):
+        self.opposing_directions = {
+            'confrontar': ['acolher', 'validar', 'proteger'],
+            'desafiar': ['apoiar', 'validar', 'confortar'],
+            'questionar': ['aceitar', 'validar', 'confirmar'],
+            'provocar': ['suavizar', 'acolher', 'acalmar'],
+            'expor': ['proteger', 'ocultar', 'resguardar']
+        }
+    
+    def detect_conflicts(self, archetype_analyses: Dict[str, ArchetypeInsight]) -> List[ArchetypeConflict]:
+        """Detecta conflitos entre as posições dos arquétipos"""
+        
+        conflicts = []
+        archetype_names = list(archetype_analyses.keys())
+        
+        for i in range(len(archetype_names)):
+            for j in range(i + 1, len(archetype_names)):
+                arch1_name = archetype_names[i]
+                arch2_name = archetype_names[j]
+                
+                arch1 = archetype_analyses[arch1_name]
+                arch2 = archetype_analyses[arch2_name]
+                
+                direction1 = arch1.suggested_response_direction.lower()
+                direction2 = arch2.suggested_response_direction.lower()
+                
+                is_conflicting = False
+                conflict_type = ""
+                
+                if direction1 in self.opposing_directions:
+                    if direction2 in self.opposing_directions[direction1]:
+                        is_conflicting = True
+                        conflict_type = f"{direction1}_vs_{direction2}"
+                
+                if direction2 in self.opposing_directions:
+                    if direction1 in self.opposing_directions[direction2]:
+                        is_conflicting = True
+                        conflict_type = f"{direction2}_vs_{direction1}"
+                
+                if (arch1_name.lower() == "persona" and arch2_name.lower() == "sombra") or \
+                   (arch1_name.lower() == "sombra" and arch2_name.lower() == "persona"):
+                    if direction1 != direction2:
+                        is_conflicting = True
+                        conflict_type = "persona_sombra_clash"
+                
+                if is_conflicting:
+                    tension_level = self._calculate_tension(arch1, arch2)
+                    
+                    conflict = ArchetypeConflict(
+                        archetype_1=arch1_name,
+                        archetype_2=arch2_name,
+                        conflict_type=conflict_type,
+                        archetype_1_position=f"{arch1.suggested_stance} ({direction1})",
+                        archetype_2_position=f"{arch2.suggested_stance} ({direction2})",
+                        tension_level=tension_level,
+                        description=f"Tensão entre {arch1_name} ({direction1}) e {arch2_name} ({direction2})"
+                    )
+                    
+                    conflicts.append(conflict)
+                    print(f"⚡ CONFLITO: {arch1_name} vs {arch2_name} (tensão: {tension_level:.2f})")
+        
+        return conflicts
+    
+    def _calculate_tension(self, arch1: ArchetypeInsight, arch2: ArchetypeInsight) -> float:
+        """Calcula nível de tensão entre dois arquétipos"""
+        direction1 = arch1.suggested_response_direction.lower()
+        direction2 = arch2.suggested_response_direction.lower()
+        
+        high_tension_words = ['confrontar', 'desafiar', 'expor', 'provocar']
+        low_tension_words = ['acolher', 'validar', 'proteger', 'suavizar']
+        
+        tension = 0.5
+        
+        if direction1 in high_tension_words and direction2 in low_tension_words:
+            tension = 0.9
+        elif direction1 in low_tension_words and direction2 in high_tension_words:
+            tension = 0.9
+        elif direction1 in high_tension_words and direction2 in high_tension_words:
+            tension = 0.3
+        elif direction1 in low_tension_words and direction2 in low_tension_words:
+            tension = 0.2
+        
+        return tension
+
+
+# ============================================================
+# SEÇÃO 5: MOTOR JUNGUIANO COM CONFLITOS
 # ============================================================
 
 class JungianEngine:
-    """Motor de análise junguiana"""
+    """Motor de análise junguiana com sistema de conflitos arquetípicos"""
     
     def __init__(self, db: DatabaseManager):
-        """Inicializa motor junguiano"""
         self.db = db
         
-        # Inicializa cliente OpenAI (com suporte a xAI Grok)
+        # Cliente OpenAI
         self.openai_client = OpenAI(api_key=Config.OPENAI_API_KEY)
         
-        # Cliente xAI (para modelos Grok)
+        # Cliente xAI (Grok)
         self.xai_client = OpenAI(
             api_key=Config.XAI_API_KEY,
             base_url="https://api.x.ai/v1"
         )
+        
+        # Detector de conflitos
+        self.conflict_detector = ConflictDetector()
+        
+        # Prompts dos arquétipos
+        self.archetype_prompts = {
+            "Persona": Config.PERSONA_PROMPT,
+            "Sombra": Config.SOMBRA_PROMPT,
+            "Velho Sábio": Config.SABIO_PROMPT,
+            "Anima": Config.ANIMA_PROMPT
+        }
     
-    def process_message(self, user_hash: str, user_name: str, 
-                       message: str, platform: str = "streamlit",
-                       model: str = "gpt-4o-mini") -> Dict:
+    def process_message(self, user_id: str, user_name: str, 
+                       message: str, platform: str = "telegram",
+                       model: str = "grok-beta") -> Dict:
         """
-        Processa mensagem do usuário
+        Processa mensagem COM ANÁLISE ARQUETÍPICA E DETECÇÃO DE CONFLITOS
         
         Returns:
             {
                 'response': str,
-                'conflict': Optional[Dict],
-                'memory_count': int
+                'conflicts': List[ArchetypeConflict],
+                'conversation_count': int,
+                'tension_level': float
             }
         """
         
-        # 1. Buscar contexto (memórias recentes)
-        memories = self.db.get_user_memories(user_hash, Config.MAX_CONTEXT_MEMORIES)
+        print(f"\n{'='*60}")
+        print(f"🧠 PROCESSANDO MENSAGEM COM TENSÃO ARQUETÍPICA")
+        print(f"{'='*60}")
         
-        context = "\n".join([m['text'] for m in memories[-5:]]) if memories else ""
+        # 1. Buscar contexto (últimas conversas)
+        conversations = self.db.get_user_conversations(user_id, Config.MAX_CONTEXT_MEMORIES)
         
-        # 2. Construir mensagens para LLM
-        messages = [
-            {"role": "system", "content": Config.SYSTEM_PROMPT}
-        ]
+        semantic_context = self._build_semantic_context(user_id, conversations, message)
         
-        if context:
-            messages.append({
-                "role": "system", 
-                "content": f"Contexto das últimas conversas:\n{context}"
-            })
+        # 2. Análise arquetípica interna
+        print("🔵 Analisando com todos os arquétipos...")
+        archetype_analyses = {}
         
-        messages.append({"role": "user", "content": message})
+        for archetype_name, archetype_prompt in self.archetype_prompts.items():
+            print(f"  • {archetype_name}...")
+            analysis = self._analyze_with_archetype(
+                archetype_name, archetype_prompt, message, semantic_context, model
+            )
+            archetype_analyses[archetype_name] = analysis
+            print(f"    → Direção: {analysis.suggested_response_direction}")
         
-        # 3. Chamar LLM apropriado
-        try:
-            if model.startswith("grok"):
-                completion = self.xai_client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=0.7
-                )
-            else:
-                completion = self.openai_client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=0.7
-                )
-            
-            response = completion.choices[0].message.content
+        # 3. Detectar conflitos
+        print("⚡ Detectando conflitos internos...")
+        conflicts = self.conflict_detector.detect_conflicts(archetype_analyses)
         
-        except Exception as e:
-            print(f"❌ Erro ao chamar LLM: {e}")
-            response = "Desculpe, tive um problema técnico. Pode tentar novamente?"
+        # 4. Gerar resposta
+        complexity = self._determine_complexity(message)
         
-        # 4. Detectar conflito arquetípico
-        conflict = self._extract_conflict(response)
+        if conflicts:
+            print(f"⚡ {len(conflicts)} conflito(s) detectado(s) - gerando resposta com tensão")
+            response = self._generate_conflicted_response(
+                message, semantic_context, archetype_analyses, conflicts, complexity, model
+            )
+            tension_level = max([c.tension_level for c in conflicts])
+        else:
+            print("✅ Sem conflitos - gerando resposta harmônica")
+            response = self._generate_harmonious_response(
+                message, semantic_context, archetype_analyses, complexity, model
+            )
+            tension_level = 0.0
         
-        # 5. Salvar memória
-        self.db.save_memory(
-            user_hash=user_hash,
+        # 5. Calcular métricas
+        affective_charge = self._calculate_affective_charge(message, response)
+        existential_depth = self._calculate_existential_depth(message)
+        intensity_level = int(affective_charge / 10)
+        keywords = self._extract_keywords(message, response)
+        
+        # 6. Salvar conversa
+        conversation_id = self.db.save_conversation(
+            user_id=user_id,
             user_name=user_name,
-            message=message,
-            response=response,
-            platform=platform,
-            conflict=conflict
+            user_input=message,
+            ai_response=response,
+            archetype_analyses={k: asdict(v) for k, v in archetype_analyses.items()},
+            tension_level=tension_level,
+            affective_charge=affective_charge,
+            existential_depth=existential_depth,
+            intensity_level=intensity_level,
+            complexity=complexity,
+            keywords=keywords,
+            platform=platform
         )
         
-        # 6. Remover marcador de conflito da resposta
-        if conflict:
-            response = response.split("[CONFLITO:")[0].strip()
+        # 7. Salvar conflitos
+        for conflict in conflicts:
+            self.db.save_conflict(user_id, conversation_id, conflict)
+        
+        print(f"✅ Processamento completo (tensão: {tension_level:.2f})")
+        print(f"{'='*60}\n")
         
         return {
             'response': response,
-            'conflict': conflict,
-            'memory_count': self.db.count_memories(user_hash)
+            'conflicts': conflicts,
+            'conversation_count': self.db.count_conversations(user_id),
+            'tension_level': tension_level
         }
     
-    def _extract_conflict(self, response: str) -> Optional[Dict]:
-        """Extrai conflito arquetípico da resposta"""
-        if "[CONFLITO:" not in response:
-            return None
+    def _analyze_with_archetype(self, archetype_name: str, archetype_prompt: str,
+                               user_input: str, semantic_context: str, model: str) -> ArchetypeInsight:
+        """Analisa mensagem com um arquétipo específico"""
         
-        try:
-            conflict_part = response.split("[CONFLITO:")[1].split("]")[0]
-            
-            archetypes_part = conflict_part.split("|")[0].strip()
-            arch1, arch2 = archetypes_part.split(" vs ")
-            
-            trigger = ""
-            if "Gatilho:" in conflict_part:
-                trigger = conflict_part.split("Gatilho:")[1].strip()
-            
-            return {
-                'archetype1': arch1.strip(),
-                'archetype2': arch2.strip(),
-                'trigger': trigger
-            }
-        
-        except:
-            return None
-    
-    def generate_full_analysis(self, user_hash: str, user_name: str,
-                              platform: str = "streamlit",
-                              model: str = "gpt-4o") -> Optional[Dict]:
-        """Gera análise junguiana completa"""
-        
-        # 1. Verificar se há memórias suficientes
-        memory_count = self.db.count_memories(user_hash)
-        
-        if memory_count < Config.MIN_MEMORIES_FOR_ANALYSIS:
-            return None
-        
-        # 2. Buscar dados
-        memories = self.db.get_user_memories(user_hash, 50)
-        conflicts = self.db.get_user_conflicts(user_hash, 20)
-        
-        memories_text = "\n\n".join([m['text'] for m in memories])
-        conflicts_text = "\n".join([
-            f"- {c['archetype1']} vs {c['archetype2']}: {c['trigger']}"
-            for c in conflicts
-        ])
-        
-        # 3. Estimar MBTI
-        mbti = self._estimate_mbti(memories_text, model)
-        
-        # 4. Gerar análise completa
-        prompt = Config.FULL_ANALYSIS_PROMPT.format(
-            memories=memories_text[:3000],  # Limitar tokens
-            conflicts=conflicts_text if conflicts else "Nenhum conflito registrado ainda.",
-            mbti=mbti
+        prompt = Config.ARCHETYPE_ANALYSIS_PROMPT.format(
+            archetype_prompt=archetype_prompt,
+            semantic_context=semantic_context[:1000],
+            user_input=user_input
         )
         
         try:
@@ -705,38 +861,118 @@ class JungianEngine:
                 completion = self.xai_client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7
+                    temperature=0.7,
+                    max_tokens=1500
                 )
             else:
                 completion = self.openai_client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7
+                    temperature=0.7,
+                    max_tokens=1500
                 )
             
-            analysis_text = completion.choices[0].message.content
+            response_text = completion.choices[0].message.content
             
-            # 5. Salvar análise
-            analysis = {
-                'mbti': mbti,
-                'insights': analysis_text,
-                'archetypes': self._extract_dominant_archetypes(analysis_text),
-                'phase': self._extract_phase(analysis_text)
-            }
+            # Extrair JSON
+            import re
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                analysis_dict = json.loads(json_match.group())
+            else:
+                analysis_dict = {
+                    "insight_text": response_text,
+                    "key_observations": [],
+                    "emotional_reading": "N/A",
+                    "shadow_reading": "N/A",
+                    "wisdom_perspective": "N/A",
+                    "suggested_stance": "neutro",
+                    "suggested_response_direction": "acolher"
+                }
             
-            self.db.save_full_analysis(user_hash, user_name, analysis, platform)
+            return ArchetypeInsight(
+                archetype_name=archetype_name,
+                insight_text=analysis_dict.get("insight_text", ""),
+                key_observations=analysis_dict.get("key_observations", []),
+                emotional_reading=analysis_dict.get("emotional_reading", ""),
+                shadow_reading=analysis_dict.get("shadow_reading", ""),
+                wisdom_perspective=analysis_dict.get("wisdom_perspective", ""),
+                suggested_stance=analysis_dict.get("suggested_stance", "neutro"),
+                suggested_response_direction=analysis_dict.get("suggested_response_direction", "acolher")
+            )
             
-            return analysis
+        except Exception as e:
+            print(f"❌ Erro na análise do {archetype_name}: {e}")
+            return ArchetypeInsight(
+                archetype_name=archetype_name,
+                insight_text=f"Erro: {str(e)}",
+                key_observations=[],
+                emotional_reading="N/A",
+                shadow_reading="N/A",
+                wisdom_perspective="N/A",
+                suggested_stance="neutro",
+                suggested_response_direction="acolher"
+            )
+    
+    def _generate_conflicted_response(self, user_input: str, semantic_context: str,
+                                     archetype_analyses: Dict[str, ArchetypeInsight],
+                                     conflicts: List[ArchetypeConflict],
+                                     complexity: str, model: str) -> str:
+        """Gera resposta que EXPRESSA o conflito interno"""
+        
+        conflict_description = ""
+        for conflict in conflicts:
+            arch1 = archetype_analyses[conflict.archetype_1]
+            arch2 = archetype_analyses[conflict.archetype_2]
+            
+            conflict_description += f"""
+CONFLITO: {conflict.archetype_1} vs {conflict.archetype_2}
+- {conflict.archetype_1}: {arch1.insight_text[:150]}... → {arch1.suggested_response_direction}
+- {conflict.archetype_2}: {arch2.insight_text[:150]}... → {arch2.suggested_response_direction}
+Tensão: {conflict.tension_level:.2f}
+"""
+        
+        prompt = Config.CONFLICTED_RESPONSE_PROMPT.format(
+            semantic_context=semantic_context[:1000],
+            user_input=user_input,
+            conflict_description=conflict_description,
+            complexity=complexity
+        )
+        
+        try:
+            if model.startswith("grok"):
+                completion = self.xai_client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.8
+                )
+            else:
+                completion = self.openai_client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.8
+                )
+            
+            return completion.choices[0].message.content
         
         except Exception as e:
-            print(f"❌ Erro ao gerar análise: {e}")
-            return None
+            print(f"❌ Erro ao gerar resposta conflituosa: {e}")
+            return "Desculpe, tive dificuldades para processar isso."
     
-    def _estimate_mbti(self, memories_text: str, model: str) -> str:
-        """Estima tipo MBTI baseado nas conversas"""
-        prompt = Config.MBTI_ANALYSIS_PROMPT.format(
-            memories=memories_text[:2000],
-            archetype_analysis="Análise em progresso..."
+    def _generate_harmonious_response(self, user_input: str, semantic_context: str,
+                                     archetype_analyses: Dict[str, ArchetypeInsight],
+                                     complexity: str, model: str) -> str:
+        """Gera resposta harmoniosa"""
+        
+        analyses_summary = ""
+        for name, analysis in archetype_analyses.items():
+            analyses_summary += f"\n{name}: {analysis.insight_text[:100]}..."
+        
+        prompt = Config.HARMONIOUS_RESPONSE_PROMPT.format(
+            analyses_summary=analyses_summary,
+            semantic_context=semantic_context[:1000],
+            user_input=user_input,
+            complexity=complexity
         )
         
         try:
@@ -744,47 +980,102 @@ class JungianEngine:
                 completion = self.xai_client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.5
+                    temperature=0.7
                 )
             else:
                 completion = self.openai_client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.5
+                    temperature=0.7
                 )
             
-            mbti = completion.choices[0].message.content.strip()
-            
-            # Validar formato
-            if len(mbti) == 4 and mbti.isupper():
-                return mbti
-            
-            return "INFP"  # Padrão
+            return completion.choices[0].message.content
         
-        except:
-            return "INFP"
+        except Exception as e:
+            print(f"❌ Erro ao gerar resposta harmoniosa: {e}")
+            return "Desculpe, tive dificuldades para processar isso."
     
-    def _extract_dominant_archetypes(self, analysis_text: str) -> List[str]:
-        """Extrai arquétipos dominantes da análise"""
-        archetypes_found = []
+    def _build_semantic_context(self, user_id: str, conversations: List[Dict], current_input: str) -> str:
+        """Constrói contexto semântico do usuário"""
         
-        for archetype_name in Config.ARCHETYPES.keys():
-            if archetype_name.lower() in analysis_text.lower():
-                archetypes_found.append(archetype_name)
+        user = self.db.get_user(user_id)
+        if not user:
+            return "Primeira interação com o usuário."
         
-        return archetypes_found[:5]  # Top 5
+        context = f"""
+USUÁRIO: {user['user_name']}
+SESSÕES: {user['total_sessions']}
+CONVERSAS ANTERIORES: {len(conversations)}
+
+HISTÓRICO RECENTE:
+"""
+        
+        for conv in conversations[:5]:
+            context += f"\nUsuário: {conv['user_input']}\nAssistente: {conv['ai_response'][:100]}...\n"
+        
+        # Buscar conversas similares
+        similar = self.db.search_conversations(user_id, current_input, limit=3)
+        if similar:
+            context += "\n\nCONVERSAS RELACIONADAS:\n"
+            for s in similar:
+                context += f"• {s['user_input'][:80]}...\n"
+        
+        return context
     
-    def _extract_phase(self, analysis_text: str) -> int:
-        """Tenta extrair fase da jornada (1-5)"""
-        for phase in [5, 4, 3, 2, 1]:
-            if f"fase {phase}" in analysis_text.lower():
-                return phase
+    def _determine_complexity(self, user_input: str) -> str:
+        """Determina complexidade da mensagem"""
+        word_count = len(user_input.split())
         
-        return 3  # Padrão: meio da jornada
+        if word_count <= 3:
+            return "simple"
+        elif word_count > 15:
+            return "complex"
+        else:
+            return "medium"
+    
+    def _calculate_affective_charge(self, user_input: str, response: str) -> float:
+        """Calcula carga afetiva"""
+        emotional_words = [
+            "amor", "ódio", "medo", "alegria", "tristeza", "raiva", "ansiedade",
+            "feliz", "triste", "nervoso", "calmo", "confuso", "frustrado"
+        ]
+        
+        text = (user_input + " " + response).lower()
+        count = sum(1 for word in emotional_words if word in text)
+        
+        return min(count * 10, 100)
+    
+    def _calculate_existential_depth(self, user_input: str) -> float:
+        """Calcula profundidade existencial"""
+        depth_words = [
+            "sentido", "propósito", "sozinho", "perdido", "real", "autêntic",
+            "verdadeir", "profundo", "íntimo", "medo", "vulnerável"
+        ]
+        
+        text = user_input.lower()
+        count = sum(1 for word in depth_words if word in text)
+        
+        return min(count * 0.15, 1.0)
+    
+    def _extract_keywords(self, user_input: str, response: str) -> List[str]:
+        """Extrai palavras-chave"""
+        from collections import Counter
+        
+        text = (user_input + " " + response).lower()
+        words = text.split()
+        
+        stopwords = {
+            "o", "a", "de", "que", "e", "do", "da", "em", "um", "para", 
+            "é", "com", "não", "uma", "os", "no", "se", "na", "por"
+        }
+        
+        keywords = [w for w in words if len(w) > 3 and w not in stopwords and w.isalpha()]
+        
+        return [word for word, _ in Counter(keywords).most_common(5)]
 
 
 # ============================================================
-# SEÇÃO 4: FUNÇÕES AUXILIARES
+# SEÇÃO 6: FUNÇÕES AUXILIARES
 # ============================================================
 
 def create_user_hash(identifier: str) -> str:
@@ -792,44 +1083,10 @@ def create_user_hash(identifier: str) -> str:
     return hashlib.sha256(identifier.encode()).hexdigest()[:16]
 
 
-def format_conflict_for_display(conflict: Dict) -> str:
-    """Formata conflito para exibição"""
-    arch1 = conflict['archetype1']
-    arch2 = conflict['archetype2']
-    trigger = conflict.get('trigger', 'Não especificado')
-    
-    emoji1 = Config.ARCHETYPES.get(arch1, {}).get('emoji', '❓')
-    emoji2 = Config.ARCHETYPES.get(arch2, {}).get('emoji', '❓')
-    
-    return f"{emoji1} **{arch1}** vs {emoji2} **{arch2}**\n\n🎯 _Gatilho:_ {trigger}"
-
-
-def format_archetype_info(archetype_name: str) -> str:
-    """Retorna informações formatadas sobre um arquétipo"""
-    info = Config.ARCHETYPES.get(archetype_name)
-    
-    if not info:
-        return f"❓ Arquétipo '{archetype_name}' não encontrado."
-    
-    return f"""
-{info['emoji']} **{archetype_name}**
-
-📖 **Descrição:**
-{info['description']}
-
-🌑 **Sombra:**
-{info['shadow']}
-
-🔑 **Palavras-chave:**
-{', '.join(info['keywords'])}
-"""
-
-
 # ============================================================
 # INICIALIZAÇÃO
 # ============================================================
 
-# Validar configurações ao importar
 try:
     Config.validate()
     print("✅ Configurações validadas com sucesso!")
@@ -837,12 +1094,10 @@ except ValueError as e:
     print(f"⚠️  {e}")
 
 
-# Exemplo de uso (pode ser comentado em produção)
 if __name__ == "__main__":
-    print("🧠 Jung Core - Motor Junguiano Unificado (Railway Edition)")
+    print("🧠 Jung Core v3.0 - SQLite ONLY + Tensão Arquetípica")
     print("=" * 60)
     
-    # Testar conexões
     db = DatabaseManager()
     print("✅ Database Manager inicializado")
     
@@ -851,9 +1106,11 @@ if __name__ == "__main__":
     
     print("\n📊 Estatísticas:")
     print(f"  - Arquétipos disponíveis: {len(Config.ARCHETYPES)}")
-    print(f"  - Usuários cadastrados: {len(db.get_all_users())}")
     print(f"  - Caminho SQLite: {Config.SQLITE_PATH}")
-    print(f"  - Caminho ChromaDB: {Config.CHROMA_PATH}")
+    
+    agent_state = db.get_agent_state()
+    print(f"  - Fase do agente: {agent_state['phase']}/5")
+    print(f"  - Interações totais: {agent_state['total_interactions']}")
     
     db.close()
     print("\n✅ Teste concluído!")
