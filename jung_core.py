@@ -4,14 +4,13 @@ jung_core.py - Motor Junguiano Unificado (SQLite ONLY + Tensão Arquetípica)
 
 ✅ VERSÃO CORRIGIDA PARA INTEGRAÇÃO COM TELEGRAM_BOT.PY
 
-Mudanças:
-- Adicionado campo platform_id (STRING) na tabela users
-- Método create_user() adicionado
-- Assinatura process_message() compatível com telegram_bot.py
-- Todos os métodos GET agora funcionam com platform_id
+Mudanças v3.3:
+- Adicionada função send_to_xai() para compatibilidade com jung_proactive.py
+- Modelo padrão alterado para grok-4-fast-reasoning
+- Função send_to_xai exportada corretamente
 
 Autor: Sistema Jung Claude
-Versão: 3.2 - CORRIGIDO PARA TELEGRAM
+Versão: 3.3 - COM send_to_xai
 """
 
 import os
@@ -25,6 +24,48 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 load_dotenv()
+
+# ============================================================
+# FUNÇÃO AUXILIAR PARA X.AI API
+# ============================================================
+
+def send_to_xai(prompt: str, model: str = "grok-4-fast-reasoning", 
+                temperature: float = 0.7, max_tokens: int = 2000) -> str:
+    """
+    Envia prompt para API X.AI e retorna resposta
+    
+    Args:
+        prompt: Texto do prompt
+        model: Modelo a usar (padrão: grok-4-fast-reasoning)
+        temperature: Criatividade (0.0-1.0)
+        max_tokens: Máximo de tokens na resposta
+    
+    Returns:
+        str: Resposta da API
+    """
+    
+    xai_api_key = os.getenv("XAI_API_KEY")
+    
+    if not xai_api_key:
+        raise ValueError("XAI_API_KEY não encontrado no ambiente")
+    
+    try:
+        client = OpenAI(
+            api_key=xai_api_key,
+            base_url="https://api.x.ai/v1"
+        )
+        
+        completion = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+        
+        return completion.choices[0].message.content
+        
+    except Exception as e:
+        raise Exception(f"Erro ao chamar X.AI API: {e}")
 
 # ============================================================
 # SEÇÃO 1: DATACLASSES
@@ -833,7 +874,7 @@ class JungianEngine:
         """
         
         print(f"\n{'='*60}")
-        print(f"🧠 PROCESSANDO MENSAGEM (ENGINE CORRIGIDO)")
+        print(f"🧠 PROCESSANDO MENSAGEM (ENGINE v3.3)")
         print(f"{'='*60}")
         
         # Buscar user_name do banco
@@ -1216,12 +1257,12 @@ def format_archetype_info(archetype_name: str) -> str:
 
 try:
     Config.validate()
-    print("✅ jung_core.py v3.2 - CORRIGIDO PARA TELEGRAM!")
+    print("✅ jung_core.py v3.3 - COM send_to_xai!")
 except ValueError as e:
     print(f"⚠️  {e}")
 
 if __name__ == "__main__":
-    print("🧠 Jung Core v3.2 - CORRIGIDO")
+    print("🧠 Jung Core v3.3 - COM send_to_xai")
     print("=" * 60)
     
     db = DatabaseManager()
@@ -1237,6 +1278,14 @@ if __name__ == "__main__":
     agent_state = db.get_agent_state()
     print(f"  - Fase: {agent_state['phase']}/5")
     print(f"  - Interações: {agent_state['total_interactions']}")
+    
+    # Teste da função send_to_xai
+    print("\n🧪 Testando send_to_xai...")
+    try:
+        test_response = send_to_xai("Diga apenas 'OK' se você está funcionando.", max_tokens=10)
+        print(f"✅ send_to_xai funcionando: {test_response[:50]}...")
+    except Exception as e:
+        print(f"❌ Erro ao testar send_to_xai: {e}")
     
     db.close()
     print("\n✅ Teste concluído!")
