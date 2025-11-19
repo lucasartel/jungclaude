@@ -10,7 +10,7 @@ Contém TODA a lógica compartilhada entre Streamlit e Telegram:
 - Funções auxiliares
 
 Autor: Sistema Jung Claude
-Versão: 3.0 - Otimizado para Railway (SQLite puro + Tensão Psíquica)
+Versão: 3.1 - Otimizado para Railway (SQLite puro + Tensão Psíquica + Telegram)
 """
 
 import os
@@ -311,11 +311,12 @@ class DatabaseManager:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT NOT NULL,
                 conversation_id INTEGER,
-                archetype_1 TEXT NOT NULL,
-                archetype_2 TEXT NOT NULL,
+                archetype1 TEXT NOT NULL,
+                archetype2 TEXT NOT NULL,
                 conflict_type TEXT,
                 tension_level REAL,
                 description TEXT,
+                trigger TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(user_id),
                 FOREIGN KEY (conversation_id) REFERENCES conversations(id)
@@ -419,6 +420,68 @@ class DatabaseManager:
         row = cursor.fetchone()
         return dict(row) if row else None
     
+    def get_user_stats(self, user_id: str) -> Optional[Dict]:
+        """Retorna estatísticas do usuário (compatível com telegram_bot.py)"""
+        cursor = self.conn.cursor()
+        
+        # Buscar dados do usuário
+        cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+        user_row = cursor.fetchone()
+        
+        if not user_row:
+            return None
+        
+        user = dict(user_row)
+        
+        # Contar mensagens
+        cursor.execute("SELECT COUNT(*) FROM conversations WHERE user_id = ?", (user_id,))
+        total_messages = cursor.fetchone()[0]
+        
+        return {
+            'total_messages': total_messages,
+            'first_interaction': user['registration_date']
+        }
+    
+    def count_memories(self, user_id: str) -> int:
+        """Conta memórias/conversas do usuário (alias para count_conversations)"""
+        return self.count_conversations(user_id)
+    
+    def get_user_analyses(self, user_id: str) -> List[Dict]:
+        """Retorna análises completas do usuário"""
+        cursor = self.conn.cursor()
+        
+        cursor.execute("""
+            SELECT * FROM full_analyses
+            WHERE user_id = ?
+            ORDER BY timestamp DESC
+        """, (user_id,))
+        
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def get_all_users(self, platform: str = None) -> List[Dict]:
+        """Retorna todos os usuários (opcionalmente filtrados por plataforma)"""
+        cursor = self.conn.cursor()
+        
+        if platform:
+            cursor.execute("""
+                SELECT u.*, COUNT(c.id) as total_messages
+                FROM users u
+                LEFT JOIN conversations c ON u.user_id = c.user_id
+                WHERE u.platform = ?
+                GROUP BY u.user_id
+                ORDER BY u.last_seen DESC
+            """, (platform,))
+        else:
+            cursor.execute("""
+                SELECT u.*, COUNT(c.id) as total_messages
+                FROM users u
+                LEFT JOIN conversations c ON u.user_id = c.user_id
+                GROUP BY u.user_id
+                ORDER BY u.last_seen DESC
+            """)
+        
+        return [dict(row) for row in cursor.fetchall()]
+    
     # ========== CONVERSAS ==========
     
     def save_conversation(self, user_id: str, user_name: str, user_input: str,
@@ -496,13 +559,14 @@ class DatabaseManager:
         
         cursor.execute("""
             INSERT INTO archetype_conflicts
-            (user_id, conversation_id, archetype_1, archetype_2, conflict_type, 
-             tension_level, description)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (user_id, conversation_id, archetype1, archetype2, conflict_type, 
+             tension_level, description, trigger)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             user_id, conversation_id,
             conflict.archetype_1, conflict.archetype_2, conflict.conflict_type,
-            conflict.tension_level, conflict.description
+            conflict.tension_level, conflict.description,
+            f"Tensão: {conflict.conflict_type}"
         ))
         
         self.conn.commit()
@@ -765,7 +829,8 @@ class JungianEngine:
                 'response': str,
                 'conflicts': List[ArchetypeConflict],
                 'conversation_count': int,
-                'tension_level': float
+                'tension_level': float,
+                'conflict': Dict or None  # Para compatibilidade com telegram_bot.py
             }
         """
         
@@ -839,12 +904,25 @@ class JungianEngine:
         print(f"✅ Processamento completo (tensão: {tension_level:.2f})")
         print(f"{'='*60}\n")
         
-        return {
+        # 8. Preparar resultado (compatível com telegram_bot.py)
+        result = {
             'response': response,
             'conflicts': conflicts,
             'conversation_count': self.db.count_conversations(user_id),
-            'tension_level': tension_level
+            'tension_level': tension_level,
+            'conflict': None  # Será preenchido abaixo se houver conflito
         }
+        
+        # Se houver conflito, adicionar o primeiro no formato esperado
+        if conflicts:
+            first_conflict = conflicts[0]
+            result['conflict'] = {
+                'archetype1': first_conflict.archetype_1,
+                'archetype2': first_conflict.archetype_2,
+                'trigger': first_conflict.description
+            }
+        
+        return result
     
     def _analyze_with_archetype(self, archetype_name: str, archetype_prompt: str,
                                user_input: str, semantic_context: str, model: str) -> ArchetypeInsight:
@@ -1083,6 +1161,75 @@ def create_user_hash(identifier: str) -> str:
     return hashlib.sha256(identifier.encode()).hexdigest()[:16]
 
 
+def format_conflict_for_display(conflict: Dict) -> str:
+    """
+    Formata conflito para exibição no Telegram
+    
+    Args:
+        conflict: Dict com chaves 'archetype1', 'archetype2', 'trigger'
+    
+    Returns:
+        String formatada para exibição
+    """
+    arch1 = conflict.get('archetype1', 'Arquétipo 1')
+    arch2 = conflict.get('archetype2', 'Arquétipo 2')
+    trigger = conflict.get('trigger', 'Não especificado')
+    
+    # Emojis dos arquétipos
+    emoji_map = {
+        'persona': '🎭',
+        'sombra': '🌑',
+        'velho sábio': '🧙',
+        'velho_sabio': '🧙',
+        'anima': '💫'
+    }
+    
+    emoji1 = emoji_map.get(arch1.lower(), '❓')
+    emoji2 = emoji_map.get(arch2.lower(), '❓')
+    
+    return f"{emoji1} **{arch1.title()}** vs {emoji2} **{arch2.title()}**\n🎯 _{trigger}_"
+
+
+def format_archetype_info(archetype_name: str) -> str:
+    """
+    Formata informações de um arquétipo para exibição
+    
+    Args:
+        archetype_name: Nome do arquétipo (ex: "Persona", "Sombra")
+    
+    Returns:
+        String formatada com informações do arquétipo
+    """
+    archetype = Config.ARCHETYPES.get(archetype_name)
+    
+    if not archetype:
+        return f"❓ Arquétipo '{archetype_name}' não encontrado."
+    
+    emoji = archetype.get('emoji', '❓')
+    description = archetype.get('description', 'Sem descrição')
+    tendency = archetype.get('tendency', 'N/A')
+    shadow = archetype.get('shadow', 'N/A')
+    keywords = archetype.get('keywords', [])
+    
+    info = f"""
+{emoji} **{archetype_name.upper()}**
+
+📖 **Descrição:**
+{description}
+
+⚡ **Tendência:**
+{tendency}
+
+🌑 **Sombra:**
+{shadow}
+
+🔑 **Palavras-chave:**
+{', '.join(keywords)}
+"""
+    
+    return info.strip()
+
+
 # ============================================================
 # INICIALIZAÇÃO
 # ============================================================
@@ -1095,7 +1242,7 @@ except ValueError as e:
 
 
 if __name__ == "__main__":
-    print("🧠 Jung Core v3.0 - SQLite ONLY + Tensão Arquetípica")
+    print("🧠 Jung Core v3.1 - SQLite ONLY + Tensão Arquetípica + Telegram")
     print("=" * 60)
     
     db = DatabaseManager()
@@ -1111,6 +1258,18 @@ if __name__ == "__main__":
     agent_state = db.get_agent_state()
     print(f"  - Fase do agente: {agent_state['phase']}/5")
     print(f"  - Interações totais: {agent_state['total_interactions']}")
+    
+    # Testar funções auxiliares
+    print("\n🧪 Testando funções auxiliares:")
+    print(f"  - create_user_hash('123'): {create_user_hash('123')}")
+    print(f"  - format_archetype_info('Persona'): {format_archetype_info('Persona')[:50]}...")
+    
+    test_conflict = {
+        'archetype1': 'Persona',
+        'archetype2': 'Sombra',
+        'trigger': 'Teste de conflito'
+    }
+    print(f"  - format_conflict_for_display: {format_conflict_for_display(test_conflict)[:50]}...")
     
     db.close()
     print("\n✅ Teste concluído!")
