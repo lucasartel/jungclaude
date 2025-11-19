@@ -1,28 +1,20 @@
 """
-telegram_bot.py - Bot Telegram Jung Claude com GROK-2
-=====================================================
+telegram_bot.py - Bot Telegram Jung Claude com GROK-2 (FIXED v2)
+==============================================================
 
 Bot completo integrado com jung_core.py para análise junguiana via Telegram.
-VERSÃO ATUALIZADA: Usa GROK-2 para análises arquetípicas profundas.
-
-Comandos disponíveis:
-- /start - Iniciar conversa
-- /help - Ajuda
-- /stats - Ver suas estatísticas
-- /analise - Gerar análise completa
-- /conflitos - Ver conflitos arquetípicos
-- /reset - Reiniciar conversa
-- /admin - Dashboard admin (apenas admins)
-- /arquetipo - Ver info sobre arquétipos
+VERSÃO CORRIGIDA: Argumentos posicionais para process_message().
 
 Autor: Sistema Jung Claude
-Versão: 3.0 - GROK-2 + Arquétipos Profundos
+Versão: 3.2 - GROK-2 + Argumentos Posicionais Fix
 """
 
 import os
 import logging
+import traceback
 from typing import Optional
 from datetime import datetime
+import time
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -45,7 +37,7 @@ from jung_core import (
 )
 
 # ============================================================
-# CONFIGURAÇÃO DE LOGGING
+# CONFIGURAÇÃO DE LOGGING DETALHADO
 # ============================================================
 
 logging.basicConfig(
@@ -55,12 +47,31 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# INICIALIZAÇÃO GLOBAL
+# INICIALIZAÇÃO GLOBAL COM VALIDAÇÃO
 # ============================================================
 
-# Instâncias globais (serão usadas em todos os handlers)
-db = DatabaseManager()
-engine = JungianEngine(db)
+# Validar configurações antes de iniciar
+try:
+    Config.validate()
+    logger.info("✅ Configurações validadas")
+except Exception as e:
+    logger.error(f"❌ Erro ao validar configurações: {e}")
+    raise
+
+# Instâncias globais
+try:
+    db = DatabaseManager()
+    logger.info("✅ DatabaseManager inicializado")
+except Exception as e:
+    logger.error(f"❌ Erro ao inicializar DatabaseManager: {e}")
+    raise
+
+try:
+    engine = JungianEngine(db)
+    logger.info("✅ JungianEngine inicializado")
+except Exception as e:
+    logger.error(f"❌ Erro ao inicializar JungianEngine: {e}")
+    raise
 
 # ============================================================
 # FUNÇÕES AUXILIARES
@@ -99,9 +110,12 @@ def escape_markdown(text: str) -> str:
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler do comando /start"""
     
-    user_hash, user_name, telegram_id = get_user_info(update)
-    
-    welcome_message = f"""
+    try:
+        user_hash, user_name, telegram_id = get_user_info(update)
+        
+        logger.info(f"📨 /start de {user_name} ({telegram_id})")
+        
+        welcome_message = f"""
 👋 Olá, *{escape_markdown(user_name)}*\\!
 
 Sou o *Jung Claude*, um terapeuta junguiano especializado em análise arquetípica\\.
@@ -121,26 +135,34 @@ Agora uso GROK\\-2 para análises mais profundas e arquetípicas\\!
 📋 *Comandos disponíveis:*
 /help \\- Ver todos os comandos
 /stats \\- Ver suas estatísticas
-/analise \\- Gerar análise completa
 /conflitos \\- Ver conflitos identificados
 /arquetipo \\- Info sobre arquétipos
-/reset \\- Reiniciar conversa
 
 Vamos começar? 🌟
 """
-    
-    await update.message.reply_text(
-        welcome_message,
-        parse_mode='MarkdownV2'
-    )
-    
-    logger.info(f"✅ Usuário {user_name} ({telegram_id}) iniciou o bot")
+        
+        await update.message.reply_text(
+            welcome_message,
+            parse_mode='MarkdownV2'
+        )
+        
+        logger.info(f"✅ /start respondido para {user_name}")
+        
+    except Exception as e:
+        logger.error(f"❌ Erro em /start: {e}")
+        logger.error(traceback.format_exc())
+        await update.message.reply_text(
+            "❌ Erro ao processar comando /start. Por favor, tente novamente."
+        )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler do comando /help"""
     
-    help_text = """
+    try:
+        logger.info(f"📨 /help de {update.effective_user.id}")
+        
+        help_text = """
 📚 *COMANDOS DISPONÍVEIS*
 
 🎯 *Principais:*
@@ -149,7 +171,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 📊 *Estatísticas:*
 /stats \\- Ver suas estatísticas \\(mensagens, memórias, conflitos\\)
-/analise \\- Gerar análise junguiana completa
 /conflitos \\- Ver conflitos arquetípicos identificados
 
 🎭 *Arquétipos:*
@@ -157,47 +178,55 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /arquetipo \\[nome\\] \\- Ver info sobre um arquétipo específico
 
 Exemplos:
-• `/arquetipo Herói`
+• `/arquetipo Persona`
 • `/arquetipo Sombra`
-
-🔄 *Utilidades:*
-/reset \\- Limpar histórico e recomeçar
 
 ⚡ *SISTEMA GROK\\-2:*
 Este bot usa GROK\\-2 para análises arquetípicas profundas e detecção de conflitos internos\\.
 
 💡 *Dica:* Apenas converse naturalmente\\! O sistema identifica padrões automaticamente\\.
 """
-    
-    await update.message.reply_text(
-        help_text,
-        parse_mode='MarkdownV2'
-    )
+        
+        await update.message.reply_text(
+            help_text,
+            parse_mode='MarkdownV2'
+        )
+        
+        logger.info(f"✅ /help respondido")
+        
+    except Exception as e:
+        logger.error(f"❌ Erro em /help: {e}")
+        logger.error(traceback.format_exc())
+        await update.message.reply_text(
+            "❌ Erro ao processar comando /help. Por favor, tente novamente."
+        )
 
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler do comando /stats"""
     
-    user_hash, user_name, telegram_id = get_user_info(update)
-    
-    # Buscar estatísticas
-    stats = db.get_user_stats(user_hash)
-    memory_count = db.count_memories(user_hash)
-    conflicts = db.get_user_conflicts(user_hash, limit=1000)
-    analyses = db.get_user_analyses(user_hash)
-    
-    if not stats:
-        await update.message.reply_text(
-            "📊 Você ainda não tem estatísticas\\. Comece uma conversa comigo\\!",
-            parse_mode='MarkdownV2'
-        )
-        return
-    
-    # Formatar data
-    first_interaction = datetime.fromisoformat(stats['first_interaction'])
-    days_active = (datetime.now() - first_interaction).days
-    
-    stats_text = f"""
+    try:
+        user_hash, user_name, telegram_id = get_user_info(update)
+        
+        logger.info(f"📨 /stats de {user_name} ({telegram_id})")
+        
+        # Buscar estatísticas
+        stats = db.get_user_stats(user_hash)
+        memory_count = db.count_memories(user_hash)
+        conflicts = db.get_user_conflicts(user_hash, limit=1000)
+        
+        if not stats:
+            await update.message.reply_text(
+                "📊 Você ainda não tem estatísticas\\. Comece uma conversa comigo\\!",
+                parse_mode='MarkdownV2'
+            )
+            return
+        
+        # Formatar data
+        first_interaction = datetime.fromisoformat(stats['first_interaction'])
+        days_active = (datetime.now() - first_interaction).days
+        
+        stats_text = f"""
 📊 *SUAS ESTATÍSTICAS*
 
 👤 *Usuário:* {escape_markdown(user_name)}
@@ -210,430 +239,280 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ⚡ *Análise Arquetípica:*
 • Conflitos identificados: {len(conflicts)}
-• Análises completas: {len(analyses)}
 
 🤖 *Modelo:* GROK\\-2 \\(1212\\)
 
 📅 *Primeira interação:* {escape_markdown(first_interaction.strftime('%d/%m/%Y'))}
 """
-    
-    # Adicionar arquétipos mais frequentes
-    if conflicts:
-        archetype_count = {}
-        for c in conflicts:
-            arch1 = c['archetype1']
-            arch2 = c['archetype2']
-            archetype_count[arch1] = archetype_count.get(arch1, 0) + 1
-            archetype_count[arch2] = archetype_count.get(arch2, 0) + 1
         
-        top_3 = sorted(archetype_count.items(), key=lambda x: x[1], reverse=True)[:3]
+        # Adicionar arquétipos mais frequentes
+        if conflicts:
+            archetype_count = {}
+            for c in conflicts:
+                arch1 = c['archetype1']
+                arch2 = c['archetype2']
+                archetype_count[arch1] = archetype_count.get(arch1, 0) + 1
+                archetype_count[arch2] = archetype_count.get(arch2, 0) + 1
+            
+            top_3 = sorted(archetype_count.items(), key=lambda x: x[1], reverse=True)[:3]
+            
+            stats_text += "\n🎭 *Arquétipos mais ativos:*\n"
+            for arch, count in top_3:
+                emoji = Config.ARCHETYPES.get(arch, {}).get('emoji', '❓')
+                stats_text += f"• {emoji} {escape_markdown(arch)}: {count}x\n"
         
-        stats_text += "\n🎭 *Arquétipos mais ativos:*\n"
-        for arch, count in top_3:
-            emoji = Config.ARCHETYPES.get(arch, {}).get('emoji', '❓')
-            stats_text += f"• {emoji} {escape_markdown(arch)}: {count}x\n"
-    
-    await update.message.reply_text(
-        stats_text,
-        parse_mode='MarkdownV2'
-    )
-
-
-async def analise_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler do comando /analise"""
-    
-    user_hash, user_name, telegram_id = get_user_info(update)
-    
-    memory_count = db.count_memories(user_hash)
-    
-    # Verificar se tem memórias suficientes
-    if memory_count < Config.MIN_MEMORIES_FOR_ANALYSIS:
         await update.message.reply_text(
-            f"⚠️ Você precisa de pelo menos *{Config.MIN_MEMORIES_FOR_ANALYSIS} conversas* para gerar uma análise completa\\.\n\n"
-            f"Atualmente você tem *{memory_count} conversas*\\.\n\n"
-            f"Continue conversando comigo\\! 💬",
+            stats_text,
             parse_mode='MarkdownV2'
         )
-        return
-    
-    # Perguntar qual modelo usar
-    keyboard = [
-        [
-            InlineKeyboardButton("⚡ GROK-2 (Recomendado)", callback_data="analise_grok-2-1212"),
-        ],
-        [
-            InlineKeyboardButton("🚀 GPT-4o (Alternativo)", callback_data="analise_gpt-4o"),
-            InlineKeyboardButton("💨 GPT-4o-mini (Rápido)", callback_data="analise_gpt-4o-mini")
-        ]
-    ]
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text(
-        f"🔮 *GERAR ANÁLISE COMPLETA*\n\n"
-        f"Você tem *{memory_count} conversas* registradas\\.\n\n"
-        f"⚡ *GROK\\-2:* Análise arquetípica profunda \\(recomendado\\)\n"
-        f"🚀 *GPT\\-4o:* Análise detalhada tradicional\n"
-        f"💨 *GPT\\-4o\\-mini:* Análise rápida\n\n"
-        f"Escolha o modelo:",
-        reply_markup=reply_markup,
-        parse_mode='MarkdownV2'
-    )
+        
+        logger.info(f"✅ /stats respondido para {user_name}")
+        
+    except Exception as e:
+        logger.error(f"❌ Erro em /stats: {e}")
+        logger.error(traceback.format_exc())
+        await update.message.reply_text(
+            "❌ Erro ao processar comando /stats. Por favor, tente novamente."
+        )
 
 
 async def conflitos_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler do comando /conflitos"""
     
-    user_hash, user_name, telegram_id = get_user_info(update)
-    
-    conflicts = db.get_user_conflicts(user_hash, limit=10)
-    
-    if not conflicts:
+    try:
+        user_hash, user_name, telegram_id = get_user_info(update)
+        
+        logger.info(f"📨 /conflitos de {user_name} ({telegram_id})")
+        
+        conflicts = db.get_user_conflicts(user_hash, limit=10)
+        
+        if not conflicts:
+            await update.message.reply_text(
+                "ℹ️ Nenhum conflito arquetípico identificado ainda\\.\n\n"
+                "Continue conversando e o sistema GROK\\-2 detectará padrões automaticamente\\!",
+                parse_mode='MarkdownV2'
+            )
+            return
+        
+        # Formatar conflitos
+        conflicts_text = f"⚡ *CONFLITOS ARQUETÍPICOS* \\({len(conflicts)}\\)\n\n"
+        conflicts_text += f"_Detectados pelo sistema GROK\\-2_\n\n"
+        
+        for i, c in enumerate(conflicts[:5], 1):
+            arch1 = c['archetype1']
+            arch2 = c['archetype2']
+            trigger = c.get('trigger', 'Não especificado')
+            
+            emoji1 = Config.ARCHETYPES.get(arch1, {}).get('emoji', '❓')
+            emoji2 = Config.ARCHETYPES.get(arch2, {}).get('emoji', '❓')
+            
+            timestamp = datetime.fromisoformat(c['timestamp'])
+            date_str = timestamp.strftime('%d/%m/%Y')
+            
+            conflicts_text += f"{i}\\. {emoji1} *{escape_markdown(arch1)}* vs {emoji2} *{escape_markdown(arch2)}*\n"
+            conflicts_text += f"   📅 {escape_markdown(date_str)}\n"
+            conflicts_text += f"   🎯 _{escape_markdown(trigger)}_\n\n"
+        
+        if len(conflicts) > 5:
+            conflicts_text += f"_\\.\\.\\. e mais {len(conflicts) - 5} conflito\\(s\\)_\n\n"
+        
+        conflicts_text += "💡 Continue conversando para detectar novos padrões\\!"
+        
         await update.message.reply_text(
-            "ℹ️ Nenhum conflito arquetípico identificado ainda\\.\n\n"
-            "Continue conversando e o sistema GROK\\-2 detectará padrões automaticamente\\!",
+            conflicts_text,
             parse_mode='MarkdownV2'
         )
-        return
-    
-    # Formatar conflitos
-    conflicts_text = f"⚡ *CONFLITOS ARQUETÍPICOS* \\({len(conflicts)}\\)\n\n"
-    conflicts_text += f"_Detectados pelo sistema GROK\\-2_\n\n"
-    
-    for i, c in enumerate(conflicts[:5], 1):
-        arch1 = c['archetype1']
-        arch2 = c['archetype2']
-        trigger = c.get('trigger', 'Não especificado')
         
-        emoji1 = Config.ARCHETYPES.get(arch1, {}).get('emoji', '❓')
-        emoji2 = Config.ARCHETYPES.get(arch2, {}).get('emoji', '❓')
+        logger.info(f"✅ /conflitos respondido para {user_name}")
         
-        timestamp = datetime.fromisoformat(c['timestamp'])
-        date_str = timestamp.strftime('%d/%m/%Y')
-        
-        conflicts_text += f"{i}\\. {emoji1} *{escape_markdown(arch1)}* vs {emoji2} *{escape_markdown(arch2)}*\n"
-        conflicts_text += f"   📅 {escape_markdown(date_str)}\n"
-        conflicts_text += f"   🎯 _{escape_markdown(trigger)}_\n\n"
-    
-    if len(conflicts) > 5:
-        conflicts_text += f"_\\.\\.\\. e mais {len(conflicts) - 5} conflito\\(s\\)_\n\n"
-    
-    conflicts_text += "💡 Use /analise para uma visão completa\\!"
-    
-    await update.message.reply_text(
-        conflicts_text,
-        parse_mode='MarkdownV2'
-    )
-
-
-async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler do comando /reset"""
-    
-    user_hash, user_name, telegram_id = get_user_info(update)
-    
-    # Criar botões de confirmação
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Sim, limpar tudo", callback_data="reset_confirm"),
-            InlineKeyboardButton("❌ Cancelar", callback_data="reset_cancel")
-        ]
-    ]
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    memory_count = db.count_memories(user_hash)
-    
-    await update.message.reply_text(
-        f"⚠️ *ATENÇÃO*\n\n"
-        f"Você está prestes a *deletar TODAS* as suas conversas e análises\\.\n\n"
-        f"📊 Dados que serão perdidos:\n"
-        f"• {memory_count} memórias de conversas\n"
-        f"• Todos os conflitos identificados\n"
-        f"• Todas as análises geradas\n\n"
-        f"Esta ação *NÃO PODE SER DESFEITA*\\.\n\n"
-        f"Tem certeza?",
-        reply_markup=reply_markup,
-        parse_mode='MarkdownV2'
-    )
+    except Exception as e:
+        logger.error(f"❌ Erro em /conflitos: {e}")
+        logger.error(traceback.format_exc())
+        await update.message.reply_text(
+            "❌ Erro ao processar comando /conflitos. Por favor, tente novamente."
+        )
 
 
 async def arquetipo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler do comando /arquetipo [nome]"""
     
-    # Verificar se foi passado um nome
-    if not context.args:
-        # Listar todos os arquétipos
-        archetypes_list = "🎭 *ARQUÉTIPOS DISPONÍVEIS*\n\n"
+    try:
+        logger.info(f"📨 /arquetipo de {update.effective_user.id}")
         
-        for name, info in Config.ARCHETYPES.items():
-            emoji = info['emoji']
-            archetypes_list += f"{emoji} {escape_markdown(name)}\n"
+        # Verificar se foi passado um nome
+        if not context.args:
+            # Listar todos os arquétipos
+            archetypes_list = "🎭 *ARQUÉTIPOS DISPONÍVEIS*\n\n"
+            
+            for name, info in Config.ARCHETYPES.items():
+                emoji = info['emoji']
+                archetypes_list += f"{emoji} {escape_markdown(name)}\n"
+            
+            archetypes_list += f"\n💡 Use `/arquetipo [nome]` para ver detalhes\\.\n"
+            archetypes_list += f"Exemplo: `/arquetipo Persona`"
+            
+            await update.message.reply_text(
+                archetypes_list,
+                parse_mode='MarkdownV2'
+            )
+            return
         
-        archetypes_list += f"\n💡 Use `/arquetipo [nome]` para ver detalhes\\.\n"
-        archetypes_list += f"Exemplo: `/arquetipo Herói`"
+        # Buscar arquétipo específico
+        archetype_name = " ".join(context.args).title()
+        
+        if archetype_name not in Config.ARCHETYPES:
+            await update.message.reply_text(
+                f"❓ Arquétipo '{escape_markdown(archetype_name)}' não encontrado\\.\n\n"
+                f"Use `/arquetipo` sem argumentos para ver a lista completa\\.",
+                parse_mode='MarkdownV2'
+            )
+            return
+        
+        # Formatar informações
+        info = Config.ARCHETYPES[archetype_name]
+        
+        archetype_text = f"{info['emoji']} *{escape_markdown(archetype_name).upper()}*\n\n"
+        archetype_text += f"📖 *Descrição:*\n{escape_markdown(info['description'])}\n\n"
+        archetype_text += f"🌑 *Sombra:*\n{escape_markdown(info['shadow'])}\n\n"
+        archetype_text += f"🔑 *Palavras\\-chave:*\n{escape_markdown(', '.join(info['keywords']))}"
         
         await update.message.reply_text(
-            archetypes_list,
+            archetype_text,
             parse_mode='MarkdownV2'
         )
-        return
-    
-    # Buscar arquétipo específico
-    archetype_name = " ".join(context.args).title()
-    
-    if archetype_name not in Config.ARCHETYPES:
+        
+        logger.info(f"✅ /arquetipo respondido")
+        
+    except Exception as e:
+        logger.error(f"❌ Erro em /arquetipo: {e}")
+        logger.error(traceback.format_exc())
         await update.message.reply_text(
-            f"❓ Arquétipo '{escape_markdown(archetype_name)}' não encontrado\\.\n\n"
-            f"Use `/arquetipo` sem argumentos para ver a lista completa\\.",
-            parse_mode='MarkdownV2'
+            "❌ Erro ao processar comando /arquetipo. Por favor, tente novamente."
         )
-        return
-    
-    # Formatar informações
-    info = Config.ARCHETYPES[archetype_name]
-    
-    archetype_text = f"{info['emoji']} *{escape_markdown(archetype_name).upper()}*\n\n"
-    archetype_text += f"📖 *Descrição:*\n{escape_markdown(info['description'])}\n\n"
-    archetype_text += f"🌑 *Sombra:*\n{escape_markdown(info['shadow'])}\n\n"
-    archetype_text += f"🔑 *Palavras\\-chave:*\n{escape_markdown(', '.join(info['keywords']))}"
-    
-    await update.message.reply_text(
-        archetype_text,
-        parse_mode='MarkdownV2'
-    )
-
-
-async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler do comando /admin (apenas para admins)"""
-    
-    user_hash, user_name, telegram_id = get_user_info(update)
-    
-    if not is_admin(telegram_id):
-        await update.message.reply_text(
-            "🔒 Este comando é restrito a administradores\\.",
-            parse_mode='MarkdownV2'
-        )
-        return
-    
-    # Estatísticas gerais
-    all_users = db.get_all_users(platform="telegram")
-    total_messages = sum(u['total_messages'] for u in all_users)
-    
-    cursor = db.sqlite_conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM archetype_conflicts WHERE platform = 'telegram'")
-    total_conflicts = cursor.fetchone()[0]
-    
-    admin_text = f"""
-🔧 *PAINEL ADMINISTRATIVO*
-
-📊 *Estatísticas Gerais:*
-• Total de usuários: {len(all_users)}
-• Total de mensagens: {total_messages}
-• Total de conflitos: {total_conflicts}
-
-⚡ *Sistema:* GROK\\-2 \\(1212\\)
-
-👥 *Usuários Recentes:*
-"""
-    
-    for user in all_users[:5]:
-        admin_text += f"\n• {escape_markdown(user['user_name'])}"
-        admin_text += f"\n  💬 {user['total_messages']} mensagens"
-    
-    admin_text += f"\n\n💡 Acesse o dashboard completo em:\n`streamlit run admin_telegram.py`"
-    
-    await update.message.reply_text(
-        admin_text,
-        parse_mode='MarkdownV2'
-    )
 
 
 # ============================================================
-# HANDLER DE MENSAGENS (CONVERSAÇÃO COM GROK-2)
+# HANDLER DE MENSAGENS - CORRIGIDO
 # ============================================================
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler de mensagens de texto (conversação principal com GROK-2)"""
     
-    user_hash, user_name, telegram_id = get_user_info(update)
-    user_message = update.message.text
-    
-    logger.info(f"📨 Mensagem de {user_name}: {user_message[:50]}...")
-    
-    # Mostrar "digitando..."
-    await update.message.chat.send_action("typing")
-    
-    # ========================================
-    # ✅ MUDANÇA PRINCIPAL: Usar GROK-2-1212
-    # ========================================
     try:
+        user_hash, user_name, telegram_id = get_user_info(update)
+        user_message = update.message.text
+        
+        logger.info(f"📨 Mensagem de {user_name} ({telegram_id}): {user_message[:50]}...")
+        
+        # Mostrar "digitando..."
+        await update.message.chat.send_action("typing")
+        
+        # Processar com GROK-2
         logger.info(f"⚡ Processando com GROK-2...")
+        start_time = time.time()
         
-        result = engine.process_message(
-            user_hash=user_hash,
-            user_name=user_name,
-            message=user_message,
-            platform="telegram",
-            model="grok-4-fast-reasoning"  # ✅ GROK-2 (NOME CORRETO)
-        )
+        try:
+            # CORREÇÃO: Usar argumentos posicionais em vez de nomeados
+            result = engine.process_message(
+                user_hash,          # user_hash (posicional)
+                user_name,          # user_name (posicional)
+                user_message,       # message (posicional)
+                "telegram",         # platform (posicional)
+                "grok-2-1212"      # model (posicional)
+            )
+            
+            processing_time = time.time() - start_time
+            logger.info(f"✅ GROK-2 processou em {processing_time:.2f}s")
+            
+        except Exception as api_error:
+            logger.error(f"❌ Erro ao processar com GROK-2: {api_error}")
+            logger.error(traceback.format_exc())
+            
+            # Fallback para GPT-4o-mini
+            logger.info(f"🔄 Fallback para GPT-4o-mini...")
+            
+            try:
+                # CORREÇÃO: Usar argumentos posicionais também no fallback
+                result = engine.process_message(
+                    user_hash,          # user_hash (posicional)
+                    user_name,          # user_name (posicional)
+                    user_message,       # message (posicional)
+                    "telegram",         # platform (posicional)
+                    "gpt-4o-mini"      # model (posicional)
+                )
+                
+                logger.info(f"✅ Fallback bem-sucedido")
+                
+            except Exception as fallback_error:
+                logger.error(f"❌ Fallback também falhou: {fallback_error}")
+                logger.error(traceback.format_exc())
+                raise  # Re-lança para ser pego pelo except externo
         
-        logger.info(f"✅ GROK-2 processou em {result.get('processing_time', 'N/A')}s")
+        # Enviar resposta
+        await update.message.reply_text(result['response'])
+        logger.info(f"✅ Resposta enviada para {user_name}")
+        
+        # Se detectou conflito, notificar
+        if result.get('conflict'):
+            conflict = result['conflict']
+            
+            arch1 = conflict['archetype1']
+            arch2 = conflict['archetype2']
+            
+            emoji1 = Config.ARCHETYPES.get(arch1, {}).get('emoji', '❓')
+            emoji2 = Config.ARCHETYPES.get(arch2, {}).get('emoji', '❓')
+            
+            conflict_notification = (
+                f"⚡ *Conflito Arquetípico Detectado*\n\n"
+                f"{emoji1} *{escape_markdown(arch1)}* vs {emoji2} *{escape_markdown(arch2)}*\n\n"
+                f"🎯 _{escape_markdown(conflict.get('trigger', 'Tensão identificada'))}_\n\n"
+                f"💡 Este conflito foi registrado\\. Use /conflitos para ver o histórico\\.\n\n"
+                f"_Detectado por GROK\\-2_"
+            )
+            
+            await update.message.reply_text(
+                conflict_notification,
+                parse_mode='MarkdownV2'
+            )
+            
+            logger.info(f"⚡ Conflito notificado: {arch1} vs {arch2}")
         
     except Exception as e:
-        logger.error(f"❌ Erro ao processar com GROK-2: {e}")
+        logger.error(f"❌ ERRO CRÍTICO em handle_message: {e}")
+        logger.error(f"❌ Tipo do erro: {type(e).__name__}")
+        logger.error(f"❌ Traceback completo:")
+        logger.error(traceback.format_exc())
         
-        # Fallback para GPT-4o-mini
-        logger.info(f"🔄 Fallback para GPT-4o-mini...")
-        
-        result = engine.process_message(
-            user_hash=user_hash,
-            user_name=user_name,
-            message=user_message,
-            platform="telegram",
-            model="gpt-4o-mini"
-        )
-    
-    # Enviar resposta
-    await update.message.reply_text(result['response'])
-    
-    # Se detectou conflito, notificar
-    if result.get('conflict'):
-        conflict = result['conflict']
-        
-        arch1 = conflict['archetype1']
-        arch2 = conflict['archetype2']
-        
-        emoji1 = Config.ARCHETYPES.get(arch1, {}).get('emoji', '❓')
-        emoji2 = Config.ARCHETYPES.get(arch2, {}).get('emoji', '❓')
-        
-        conflict_notification = (
-            f"⚡ *Conflito Arquetípico Detectado*\n\n"
-            f"{emoji1} *{escape_markdown(arch1)}* vs {emoji2} *{escape_markdown(arch2)}*\n\n"
-            f"🎯 _{escape_markdown(conflict.get('trigger', 'Tensão identificada'))}_\n\n"
-            f"💡 Este conflito foi registrado\\. Use /conflitos para ver o histórico\\.\n\n"
-            f"_Detectado por GROK\\-2_"
-        )
-        
+        # Enviar mensagem de erro ao usuário
         await update.message.reply_text(
-            conflict_notification,
-            parse_mode='MarkdownV2'
-        )
-    
-    logger.info(f"✅ Resposta enviada para {user_name}")
-
-
-# ============================================================
-# HANDLER DE CALLBACKS (BOTÕES)
-# ============================================================
-
-async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler de botões inline (callbacks)"""
-    
-    query = update.callback_query
-    await query.answer()
-    
-    user_hash, user_name, telegram_id = get_user_info(update)
-    
-    # ========== ANÁLISE ==========
-    if query.data.startswith("analise_"):
-        model = query.data.replace("analise_", "")
-        
-        model_names = {
-            "grok-4-fast-reasoning": "GROK-2 (1212)",  # ✅ CORRETO
-            "gpt-4o": "GPT-4o",
-            "gpt-4o-mini": "GPT-4o-mini"
-        }
-        
-        model_display = model_names.get(model, model.upper())
-        
-        await query.edit_message_text(
-            f"🔮 Gerando análise com *{escape_markdown(model_display)}*\\.\\.\\.\n\n"
-            f"Isso pode levar 30\\-60 segundos\\. Aguarde\\!",
-            parse_mode='MarkdownV2'
-        )
-        
-        # Gerar análise
-        analysis = engine.generate_full_analysis(
-            user_hash=user_hash,
-            user_name=user_name,
-            platform="telegram",
-            model=model
-        )
-        
-        if analysis:
-            # Formatar e enviar análise
-            analysis_text = f"✅ *ANÁLISE JUNGUIANA COMPLETA*\n\n"
-            analysis_text += f"🤖 *Modelo:* {escape_markdown(model_display)}\n"
-            analysis_text += f"🧬 *MBTI:* `{analysis['mbti']}`\n"
-            analysis_text += f"🎭 *Fase:* {analysis['phase']}/5\n\n"
-            
-            if analysis.get('archetypes'):
-                archetypes_str = ', '.join(analysis['archetypes'])
-                analysis_text += f"⭐ *Arquétipos Dominantes:*\n{escape_markdown(archetypes_str)}\n\n"
-            
-            analysis_text += "━━━━━━━━━━━━━━━━\n\n"
-            
-            # Enviar primeira mensagem
-            await query.edit_message_text(
-                analysis_text,
-                parse_mode='MarkdownV2'
-            )
-            
-            # Enviar análise completa (pode ser longa, então dividir)
-            insights = analysis['insights']
-            
-            # Dividir em chunks de 4000 caracteres (limite do Telegram é 4096)
-            chunks = [insights[i:i+3500] for i in range(0, len(insights), 3500)]
-            
-            for chunk in chunks:
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=chunk
-                )
-            
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="✅ Análise concluída\\!\n\nUse /stats para ver suas estatísticas atualizadas\\.",
-                parse_mode='MarkdownV2'
-            )
-        
-        else:
-            await query.edit_message_text(
-                "❌ Erro ao gerar análise\\. Tente novamente mais tarde\\.",
-                parse_mode='MarkdownV2'
-            )
-    
-    # ========== RESET ==========
-    elif query.data == "reset_confirm":
-        await query.edit_message_text(
-            "⚠️ *FUNÇÃO DESABILITADA*\n\n"
-            "Por segurança, a função de reset completo está desabilitada\\.\n\n"
-            "Se realmente deseja limpar seus dados, entre em contato com o administrador\\.",
-            parse_mode='MarkdownV2'
-        )
-    
-    elif query.data == "reset_cancel":
-        await query.edit_message_text(
-            "✅ Operação cancelada\\. Seus dados estão seguros\\!",
+            "❌ Ocorreu um erro inesperado\\. Por favor, tente novamente\\.\n\n"
+            f"_Erro: {escape_markdown(str(e)[:100])}_\n\n"
+            "Se persistir, contate o administrador\\.",
             parse_mode='MarkdownV2'
         )
 
 
 # ============================================================
-# HANDLER DE ERROS
+# HANDLER DE ERROS GLOBAL
 # ============================================================
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler global de erros"""
     
-    logger.error(f"❌ Erro: {context.error}")
+    logger.error(f"❌ ERRO GLOBAL: {context.error}")
+    logger.error(f"❌ Tipo: {type(context.error).__name__}")
+    logger.error(traceback.format_exc())
     
     if update and update.effective_message:
-        await update.effective_message.reply_text(
-            "❌ Ocorreu um erro inesperado\\. Por favor, tente novamente\\.\n\n"
-            "_O sistema está usando GROK\\-2\\. Se persistir, contate o administrador\\._",
-            parse_mode='MarkdownV2'
-        )
+        try:
+            await update.effective_message.reply_text(
+                f"❌ Erro inesperado: {escape_markdown(str(context.error)[:100])}\n\n"
+                "Por favor, tente novamente\\.\n\n"
+                "_O sistema está usando GROK\\-2\\. Se persistir, contate o administrador\\._",
+                parse_mode='MarkdownV2'
+            )
+        except Exception as e:
+            logger.error(f"❌ Erro ao enviar mensagem de erro: {e}")
 
 
 # ============================================================
@@ -654,6 +533,10 @@ def main():
         return
     
     logger.info("🤖 Iniciando Jung Claude Bot com GROK-2...")
+    logger.info(f"📊 Configurações:")
+    logger.info(f"   - XAI_API_KEY: {'✅ Configurada' if Config.XAI_API_KEY else '❌ Faltando'}")
+    logger.info(f"   - OPENAI_API_KEY: {'✅ Configurada' if Config.OPENAI_API_KEY else '❌ Faltando'}")
+    logger.info(f"   - TELEGRAM_BOT_TOKEN: {'✅ Configurado' if Config.TELEGRAM_BOT_TOKEN else '❌ Faltando'}")
     
     # Criar aplicação
     application = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).build()
@@ -664,14 +547,8 @@ def main():
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("stats", stats_command))
-    application.add_handler(CommandHandler("analise", analise_command))
     application.add_handler(CommandHandler("conflitos", conflitos_command))
-    application.add_handler(CommandHandler("reset", reset_command))
     application.add_handler(CommandHandler("arquetipo", arquetipo_command))
-    application.add_handler(CommandHandler("admin", admin_command))
-    
-    # Callbacks (botões)
-    application.add_handler(CallbackQueryHandler(handle_callback))
     
     # Mensagens de texto (conversação)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
@@ -686,6 +563,7 @@ def main():
     logger.info(f"📊 Usuários cadastrados: {len(db.get_all_users(platform='telegram'))}")
     
     # Rodar bot (polling)
+    logger.info("🚀 Iniciando polling...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
@@ -700,6 +578,7 @@ if __name__ == "__main__":
         logger.info("🛑 Bot encerrado pelo usuário")
     except Exception as e:
         logger.error(f"❌ Erro fatal: {e}")
+        logger.error(traceback.format_exc())
     finally:
         db.close()
         logger.info("👋 Até logo!")
