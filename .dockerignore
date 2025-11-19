@@ -26,3 +26,6 @@ chroma_db/
 .pytest_cache/
 htmlcov/
 .coverage
+.env          # ← Importante!
+.env.local
+.env.production
