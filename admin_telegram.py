@@ -2,17 +2,18 @@
 admin_telegram.py - Dashboard Administrativo para Telegram
 ==========================================================
 
-Dashboard Streamlit para monitorar usuários do Bot Telegram.
-Compatível com jung_core.py (versão unificada).
+✅ VERSÃO 2.1 - CORRIGIDA PARA COMPATIBILIDADE COM jung_core.py v3.3
 
-Funcionalidades:
-- Visualizar todos os usuários do Telegram
-- Acompanhar conversas e conflitos
-- Gerar análises individuais
-- Estatísticas gerais do bot
+Correções aplicadas:
+- Usa get_user_conversations() ao invés de get_user_memories()
+- Corrige db.conn ao invés de db.sqlite_conn
+- Usa user_id ao invés de user_hash
+- Usa last_seen ao invés de last_interaction
+- Remove método generate_full_analysis (não implementado)
+- Ajusta formato de exibição de conversas
 
 Autor: Sistema Jung Claude
-Versão: 2.0 - Integrado com jung_core.py
+Versão: 2.1 - CORRIGIDA
 """
 
 import streamlit as st
@@ -70,16 +71,16 @@ def get_telegram_stats() -> Dict:
     yesterday = datetime.now() - timedelta(days=1)
     active_24h = sum(
         1 for u in all_users 
-        if datetime.fromisoformat(u['last_interaction']) > yesterday
+        if u.get('last_seen') and datetime.fromisoformat(u['last_seen']) > yesterday
     )
     
     # Total de conflitos
-    cursor = db.sqlite_conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM archetype_conflicts WHERE platform = 'telegram'")
+    cursor = db.conn.cursor()  # ✅ CORRIGIDO: db.conn
+    cursor.execute("SELECT COUNT(*) FROM archetype_conflicts")
     total_conflicts = cursor.fetchone()[0]
     
     # Total de análises
-    cursor.execute("SELECT COUNT(*) FROM full_analyses WHERE platform = 'telegram'")
+    cursor.execute("SELECT COUNT(*) FROM full_analyses")
     total_analyses = cursor.fetchone()[0]
     
     return {
@@ -117,9 +118,9 @@ def format_timestamp(iso_timestamp: str) -> str:
         return iso_timestamp
 
 
-def get_user_archetype_summary(user_hash: str) -> str:
+def get_user_archetype_summary(user_id: str) -> str:  # ✅ user_id
     """Retorna resumo dos arquétipos do usuário"""
-    conflicts = db.get_user_conflicts(user_hash, limit=100)
+    conflicts = db.get_user_conflicts(user_id, limit=100)
     
     if not conflicts:
         return "Nenhum arquétipo identificado ainda"
@@ -147,18 +148,18 @@ def get_user_archetype_summary(user_hash: str) -> str:
 def render_user_card(user: Dict):
     """Renderiza card de usuário"""
     
-    user_hash = user['user_hash']
+    user_id = user['user_id']  # ✅ CORRIGIDO
     user_name = user['user_name']
     
     # Estatísticas
     total_messages = user['total_messages']
-    last_interaction = format_timestamp(user['last_interaction'])
+    last_seen = format_timestamp(user.get('last_seen', user.get('registration_date', '')))  # ✅ CORRIGIDO
     
     # Arquétipos
-    archetypes = get_user_archetype_summary(user_hash)
+    archetypes = get_user_archetype_summary(user_id)
     
-    # Contar memórias
-    memory_count = db.count_memories(user_hash)
+    # Contar conversas
+    conv_count = db.count_conversations(user_id)  # ✅ CORRIGIDO
     
     # Card
     with st.container():
@@ -166,18 +167,18 @@ def render_user_card(user: Dict):
         
         with col1:
             st.markdown(f"### 👤 {user_name}")
-            st.caption(f"🆔 `{user_hash}`")
+            st.caption(f"🆔 `{user_id[:16]}...`")
         
         with col2:
             st.metric("💬 Mensagens", total_messages)
-            st.caption(f"📝 {memory_count} memórias")
+            st.caption(f"📝 {conv_count} conversas")
         
         with col3:
-            st.metric("⏰ Última interação", last_interaction)
+            st.metric("⏰ Última atividade", last_seen)
         
         with col4:
-            if st.button("🔍 Ver Detalhes", key=f"view_{user_hash}"):
-                st.session_state.selected_user = user_hash
+            if st.button("🔍 Ver Detalhes", key=f"view_{user_id}"):
+                st.session_state.selected_user = user_id
                 st.session_state.selected_user_name = user_name
                 st.rerun()
         
@@ -188,40 +189,39 @@ def render_user_card(user: Dict):
         st.divider()
 
 
-def render_conversation_history(user_hash: str, limit: int = 20):
+def render_conversation_history(user_id: str, limit: int = 20):  # ✅ user_id
     """Renderiza histórico de conversas"""
     
-    memories = db.get_user_memories(user_hash, limit)
+    conversations = db.get_user_conversations(user_id, limit)  # ✅ CORRIGIDO
     
-    if not memories:
+    if not conversations:
         st.warning("Nenhuma conversa registrada ainda.")
         return
     
-    st.subheader(f"💬 Últimas {len(memories)} conversas")
+    st.subheader(f"💬 Últimas {len(conversations)} conversas")
     
-    for i, memory in enumerate(reversed(memories)):
-        # Separar User e Assistant
-        parts = memory['text'].split('\nAssistant: ')
+    for i, conv in enumerate(reversed(conversations)):
+        # ✅ AJUSTADO para formato do banco
+        user_msg = conv['user_input']
+        assistant_msg = conv['ai_response']
+        timestamp = format_timestamp(conv['timestamp'])
         
-        if len(parts) == 2:
-            user_msg = parts[0].replace('User: ', '').strip()
-            assistant_msg = parts[1].strip()
+        with st.expander(f"📅 {timestamp} - {user_msg[:50]}..."):
+            st.markdown("**👤 Usuário:**")
+            st.info(user_msg)
             
-            # Timestamp
-            timestamp = format_timestamp(memory['timestamp'])
+            st.markdown("**🤖 Jung Claude:**")
+            st.success(assistant_msg)
             
-            with st.expander(f"📅 {timestamp} - {user_msg[:50]}..."):
-                st.markdown("**👤 Usuário:**")
-                st.info(user_msg)
-                
-                st.markdown("**🤖 Jung Claude:**")
-                st.success(assistant_msg)
+            # Mostrar métricas se houver
+            if conv.get('tension_level') and conv['tension_level'] > 0:
+                st.caption(f"⚡ Tensão: {conv['tension_level']:.0%}")
 
 
-def render_conflicts_history(user_hash: str, limit: int = 10):
+def render_conflicts_history(user_id: str, limit: int = 10):  # ✅ user_id
     """Renderiza histórico de conflitos"""
     
-    conflicts = db.get_user_conflicts(user_hash, limit)
+    conflicts = db.get_user_conflicts(user_id, limit)
     
     if not conflicts:
         st.info("Nenhum conflito arquetípico registrado ainda.")
@@ -233,18 +233,15 @@ def render_conflicts_history(user_hash: str, limit: int = 10):
         timestamp = format_timestamp(conflict['timestamp'])
         
         with st.expander(f"⚔️ {conflict['archetype1']} vs {conflict['archetype2']} - {timestamp}"):
-            st.markdown(format_conflict_for_display(conflict))
-            
-            # Mostrar resolução se houver
-            if conflict.get('resolution'):
-                st.markdown("**✅ Resolução:**")
-                st.success(conflict['resolution'])
+            st.markdown(f"**Tipo:** {conflict.get('conflict_type', 'N/A')}")
+            st.markdown(f"**Tensão:** {conflict.get('tension_level', 0):.0%}")
+            st.markdown(f"**Descrição:** {conflict.get('description', 'N/A')}")
 
 
-def render_analyses_history(user_hash: str):
+def render_analyses_history(user_id: str):  # ✅ user_id
     """Renderiza histórico de análises completas"""
     
-    analyses = db.get_user_analyses(user_hash)
+    analyses = db.get_user_analyses(user_id)
     
     if not analyses:
         st.info("Nenhuma análise completa gerada ainda.")
@@ -256,14 +253,14 @@ def render_analyses_history(user_hash: str):
         timestamp = format_timestamp(analysis['timestamp'])
         
         with st.expander(f"📖 Análise de {timestamp}"):
-            st.markdown(f"**🧬 MBTI:** `{analysis['mbti']}`")
-            st.markdown(f"**🎭 Fase:** {analysis['phase']}/5")
+            st.markdown(f"**🧬 MBTI:** `{analysis.get('mbti', 'N/A')}`")
+            st.markdown(f"**🎭 Fase:** {analysis.get('phase', 1)}/5")
             
-            if analysis['dominant_archetypes']:
+            if analysis.get('dominant_archetypes'):
                 st.markdown(f"**⭐ Arquétipos Dominantes:** {analysis['dominant_archetypes']}")
             
             st.divider()
-            st.markdown(analysis['full_analysis'])
+            st.markdown(analysis.get('full_analysis', 'Sem análise'))
 
 
 # ============================================================
@@ -302,7 +299,7 @@ st.sidebar.subheader("🔍 Filtros")
 
 order_by = st.sidebar.selectbox(
     "Ordenar por:",
-    ["Última interação", "Mais mensagens", "Nome"],
+    ["Última atividade", "Mais mensagens", "Nome"],
     index=0
 )
 
@@ -337,8 +334,8 @@ if 'selected_user' not in st.session_state:
         users = [u for u in users if u['total_messages'] >= min_messages]
     
     # Ordenar
-    if order_by == "Última interação":
-        users.sort(key=lambda x: x['last_interaction'], reverse=True)
+    if order_by == "Última atividade":
+        users.sort(key=lambda x: x.get('last_seen', ''), reverse=True)  # ✅ CORRIGIDO
     elif order_by == "Mais mensagens":
         users.sort(key=lambda x: x['total_messages'], reverse=True)
     else:  # Nome
@@ -356,15 +353,15 @@ if 'selected_user' not in st.session_state:
 
 # Se usuário selecionado → mostrar detalhes
 else:
-    user_hash = st.session_state.selected_user
+    user_id = st.session_state.selected_user  # ✅ CORRIGIDO
     user_name = st.session_state.selected_user_name
     
     # Header do usuário
     st.header(f"👤 {user_name}")
-    st.caption(f"🆔 `{user_hash}`")
+    st.caption(f"🆔 `{user_id}`")
     
     # Estatísticas do usuário
-    stats = db.get_user_stats(user_hash)
+    stats = db.get_user_stats(user_id)
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -372,39 +369,38 @@ else:
         st.metric("💬 Mensagens", stats['total_messages'])
     
     with col2:
-        memory_count = db.count_memories(user_hash)
-        st.metric("📝 Memórias", memory_count)
+        conv_count = db.count_conversations(user_id)  # ✅ CORRIGIDO
+        st.metric("📝 Conversas", conv_count)
     
     with col3:
-        conflicts_count = len(db.get_user_conflicts(user_hash, limit=1000))
+        conflicts_count = len(db.get_user_conflicts(user_id, limit=1000))
         st.metric("⚡ Conflitos", conflicts_count)
     
     with col4:
-        analyses_count = len(db.get_user_analyses(user_hash))
+        analyses_count = len(db.get_user_analyses(user_id))
         st.metric("📊 Análises", analyses_count)
     
     st.divider()
     
     # Tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([  # ✅ REMOVIDA TAB "Gerar Nova Análise"
         "💬 Conversas",
         "⚡ Conflitos",
         "📊 Análises",
-        "🎭 Arquétipos",
-        "🔮 Gerar Nova Análise"
+        "🎭 Arquétipos"
     ])
     
     # TAB 1: Conversas
     with tab1:
-        render_conversation_history(user_hash, limit=30)
+        render_conversation_history(user_id, limit=30)
     
     # TAB 2: Conflitos
     with tab2:
-        render_conflicts_history(user_hash, limit=20)
+        render_conflicts_history(user_id, limit=20)
     
     # TAB 3: Análises
     with tab3:
-        render_analyses_history(user_hash)
+        render_analyses_history(user_id)
     
     # TAB 4: Arquétipos
     with tab4:
@@ -415,91 +411,14 @@ else:
         Clique em um para ver detalhes.
         """)
         
-        # Organizar em grid 3 colunas
+        # Organizar em grid 2 colunas
         archetypes = list(Config.ARCHETYPES.keys())
-        cols = st.columns(3)
+        cols = st.columns(2)
         
         for i, archetype in enumerate(archetypes):
-            with cols[i % 3]:
+            with cols[i % 2]:
                 with st.expander(f"{Config.ARCHETYPES[archetype]['emoji']} {archetype}"):
                     st.markdown(format_archetype_info(archetype))
-    
-    # TAB 5: Gerar Nova Análise
-    with tab5:
-        st.subheader("🔮 Gerar Análise Junguiana Completa")
-        
-        memory_count = db.count_memories(user_hash)
-        
-        if memory_count < Config.MIN_MEMORIES_FOR_ANALYSIS:
-            st.warning(
-                f"⚠️ Este usuário precisa de pelo menos **{Config.MIN_MEMORIES_FOR_ANALYSIS} conversas** "
-                f"para gerar uma análise completa.\n\n"
-                f"Atualmente tem apenas **{memory_count} conversas**."
-            )
-        else:
-            st.success(
-                f"✅ Este usuário tem **{memory_count} conversas** registradas. "
-                f"Pronto para análise!"
-            )
-            
-            # Seletor de modelo
-            model = st.selectbox(
-                "🤖 Escolha o modelo para análise:",
-                ["gpt-4o", "gpt-4o-mini", "grok-beta"],
-                index=0,
-                help="GPT-4o oferece análises mais profundas, mas é mais caro."
-            )
-            
-            if st.button("🚀 Gerar Análise Completa", type="primary", use_container_width=True):
-                with st.spinner("🧠 Analisando psique do usuário... (pode levar 30-60 segundos)"):
-                    analysis = engine.generate_full_analysis(
-                        user_hash=user_hash,
-                        user_name=user_name,
-                        platform="telegram",
-                        model=model
-                    )
-                
-                if analysis:
-                    st.success("✅ Análise gerada com sucesso!")
-                    
-                    # Exibir análise
-                    st.markdown("---")
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.metric("🧬 MBTI", analysis['mbti'])
-                    
-                    with col2:
-                        st.metric("🎭 Fase da Jornada", f"{analysis['phase']}/5")
-                    
-                    if analysis.get('archetypes'):
-                        st.markdown(f"**⭐ Arquétipos Dominantes:** {', '.join(analysis['archetypes'])}")
-                    
-                    st.markdown("---")
-                    st.markdown("### 📖 Análise Completa")
-                    st.markdown(analysis['insights'])
-                    
-                    # Opção de baixar
-                    analysis_text = f"""
-# Análise Junguiana Completa
-**Usuário:** {user_name}
-**Data:** {datetime.now().strftime('%d/%m/%Y %H:%M')}
-**MBTI:** {analysis['mbti']}
-**Fase:** {analysis['phase']}/5
-
-{analysis['insights']}
-"""
-                    
-                    st.download_button(
-                        label="💾 Baixar Análise (TXT)",
-                        data=analysis_text,
-                        file_name=f"analise_jung_{user_name}_{datetime.now().strftime('%Y%m%d')}.txt",
-                        mime="text/plain"
-                    )
-                
-                else:
-                    st.error("❌ Erro ao gerar análise. Verifique os logs.")
 
 # ============================================================
 # FOOTER
@@ -510,7 +429,7 @@ st.divider()
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.caption("🧠 **Jung Bot Admin v2.0**")
+    st.caption("🧠 **Jung Bot Admin v2.1 - CORRIGIDO**")
 
 with col2:
     st.caption(f"🗄️ Database: `{Config.SQLITE_PATH}`")
