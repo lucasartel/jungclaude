@@ -4,6 +4,8 @@ jung_proactive_advanced.py - Sistema Proativo Avançado com Personalidade Comple
 
 🧠 VERSÃO AVANÇADA - Agente com personalidade variável e conhecimento autônomo
 
+✅ VERSÃO CORRIGIDA v3.1 - Sem LLMClient, usa send_to_xai direto
+
 Características:
 - Rotação de duplas arquetípicas (personalidade multifacetada)
 - Geração de conhecimento histórico/filosófico/técnico/religioso
@@ -13,7 +15,7 @@ Características:
 
 Autor: Sistema Jung Claude
 Data: 2025-11-20
-Versão: 3.0 - ADVANCED
+Versão: 3.1 - CORRIGIDO
 """
 
 import os
@@ -24,7 +26,8 @@ from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass
 from enum import Enum
 
-from jung_core import DatabaseManager, Config, LLMClient
+# ✅ IMPORT CORRIGIDO - SEM LLMClient
+from jung_core import DatabaseManager, Config, send_to_xai
 
 # ============================================================
 # ENUMS E ESTRUTURAS DE DADOS
@@ -279,7 +282,7 @@ class ProactiveAdvancedSystem:
     def __init__(self, db: DatabaseManager):
         self.db = db
         self.proactive_db = ProactiveAdvancedDB(db)
-        self.llm_client = LLMClient()
+        # ✅ REMOVIDO: self.llm_client = LLMClient()
         
         # Configurações
         self.inactivity_threshold_hours = 24
@@ -369,7 +372,7 @@ class ProactiveAdvancedSystem:
             conv['user_input'] for conv in conversations[:10]
         ])
         
-        # Usar LLM para extrair tópico
+        # ✅ USAR send_to_xai DIRETO
         extraction_prompt = f"""Analise as mensagens abaixo e extraia UM tópico central de interesse do usuário.
 
 Mensagens:
@@ -384,9 +387,10 @@ Responda APENAS com o tópico em 2-5 palavras. Exemplos:
 Tópico:"""
         
         try:
-            response = self.llm_client.chat(
-                messages=[{"role": "user", "content": extraction_prompt}],
-                model="grok-4-fast-reasoning",
+            # ✅ CORREÇÃO: Usar send_to_xai diretamente
+            response = send_to_xai(
+                prompt=extraction_prompt,
+                model="grok-beta",
                 max_tokens=50
             )
             
@@ -434,7 +438,7 @@ Gerar um insight **autônomo** sobre este tópico a partir do domínio **{domain
 **EXEMPLO DE TOM:**
 
 Se você está como Sábio + Explorador:
-"Tenho pensado sobre [tópico]... No Egito antigo, [conexão histórica]. Isso me faz questionar [insight pessoal]. E você, [user_name], tem explorado isso de que forma?"
+"Tenho pensado sobre [tópico]... No Egito antigo, [conexão histórica]. Isso me faz questionar [insight pessoal]. E você, {user_name}, tem explorado isso de que forma?"
 
 Se você está como Rebelde + Sombra:
 "[Tópico] me incomoda... A filosofia tradicional diz [X], mas isso oculta [Y]. Precisamos olhar para [aspecto negligenciado]. Você tem coragem de ver isso?"
@@ -442,9 +446,11 @@ Se você está como Rebelde + Sombra:
 **AGORA GERE SEU INSIGHT AUTÔNOMO:**"""
         
         try:
-            response = self.llm_client.chat(
-                messages=[{"role": "user", "content": knowledge_prompt}],
-                model="grok-4-fast-reasoning",
+            # ✅ CORREÇÃO: Usar send_to_xai diretamente
+            response = send_to_xai(
+                prompt=knowledge_prompt,
+                model="grok-beta",
+                temperature=0.8,
                 max_tokens=500
             )
             
@@ -582,3 +588,12 @@ Se você está como Rebelde + Sombra:
         
         # 9. Retornar mensagem
         return autonomous_insight
+
+
+# ============================================================
+# TESTE (OPCIONAL)
+# ============================================================
+
+if __name__ == "__main__":
+    print("🧠 Jung Proactive Advanced v3.1 - CORRIGIDO")
+    print("✅ SEM LLMClient - USA send_to_xai DIRETO")
