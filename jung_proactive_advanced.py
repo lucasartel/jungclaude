@@ -284,7 +284,7 @@ class ProactiveAdvancedSystem:
         self.proactive_db = ProactiveAdvancedDB(db)
         # ✅ REMOVIDO: self.llm_client = LLMClient()
         
-        # Configurações
+        # Configurações em modo de teste lendo
         self.inactivity_threshold_hours = 0.5
         self.cooldown_hours = 1.0
         self.min_conversations_required = 5

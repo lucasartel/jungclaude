@@ -67,7 +67,7 @@ if not TELEGRAM_BOT_TOKEN:
     raise ValueError("❌ TELEGRAM_BOT_TOKEN não encontrado no .env")
 
 # Intervalo de checagem proativa (em segundos)
-PROACTIVE_CHECK_INTERVAL = 600  # 10 minutos
+PROACTIVE_CHECK_INTERVAL = 600  # 10 minutos para checagem em modo de teste
 
 # ============================================================
 # GERENCIADOR DE ESTADO DO BOT
