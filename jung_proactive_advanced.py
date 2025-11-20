@@ -436,7 +436,7 @@ Responda APENAS com o tópico:"""
             
             refined_topic = send_to_xai(
                 messages=messages,
-                model="grok-beta",
+                model="grok-4-fast-reasoning",
                 max_tokens=50
             )
             
@@ -484,7 +484,7 @@ Tópico:"""
             
             response = send_to_xai(
                 messages=messages,
-                model="grok-beta",
+                model="grok-4-fast-reasoning",
                 max_tokens=50
             )
             
@@ -582,7 +582,7 @@ Se você está como **Rebelde + Sombra**:
             
             response = send_to_xai(
                 messages=messages,
-                model="grok-beta",
+                model="grok-4-fast-reasoning",
                 temperature=0.8,
                 max_tokens=500
             )

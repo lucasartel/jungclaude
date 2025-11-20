@@ -884,7 +884,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result = bot_state.jung_engine.process_message(
             user_id=user_id,
             message=message_text,
-            model="grok-beta",
+            model="grok-4-fast-reasoning",
             chat_history=chat_history
         )
         

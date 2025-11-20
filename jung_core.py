@@ -1499,7 +1499,7 @@ class JungianEngine:
         logger.info("✅ JungianEngine inicializado")
     
     def process_message(self, user_id: str, message: str, 
-                       model: str = "grok-beta",
+                       model: str = "grok-4-fast-reasoning",
                        chat_history: List[Dict] = None) -> Dict:
         """
         PROCESSAMENTO COMPLETO:
@@ -1512,7 +1512,7 @@ class JungianEngine:
         Args:
             user_id: ID do usuário
             message: Mensagem do usuário
-            model: Modelo LLM (padrão: grok-beta)
+            model: Modelo LLM (padrão: grok-4-fast-reasoning)
             chat_history: Histórico da conversa atual (opcional)
         
         Returns:
@@ -1853,7 +1853,7 @@ Tensão: {conflict.tension_level:.2f}
 # FUNÇÕES AUXILIARES (COMPATIBILIDADE)
 # ============================================================
 
-def send_to_xai(prompt: str, model: str = "grok-beta", 
+def send_to_xai(prompt: str, model: str = "grok-4-fast-reasoning", 
                 temperature: float = 0.7, max_tokens: int = 2000) -> str:
     """
     Envia prompt para API X.AI e retorna resposta
