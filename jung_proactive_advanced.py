@@ -285,9 +285,9 @@ class ProactiveAdvancedSystem:
         # ✅ REMOVIDO: self.llm_client = LLMClient()
         
         # Configurações
-        self.inactivity_threshold_hours = 24
-        self.cooldown_hours = 48
-        self.min_conversations_required = 10
+        self.inactivity_threshold_hours = 0.5
+        self.cooldown_hours = 1.0
+        self.min_conversations_required = 5
     
     def reset_timer(self, user_id: str):
         """✅ RESET CRONÔMETRO - Chamado quando usuário envia mensagem"""
