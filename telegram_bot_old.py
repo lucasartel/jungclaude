@@ -1,19 +1,18 @@
 """
-telegram_bot.py - Bot Telegram Jung Claude com Sistema Proativo AVANÇADO
-=========================================================================
+telegram_bot.py - Bot Telegram Jung Claude com Sistema Proativo
+================================================================
 
-✅ VERSÃO 3.0 - ADVANCED - Integração com jung_proactive_advanced.py
+✅ VERSÃO CORRIGIDA - Integração completa com jung_core.py v3.2
 
-Mudanças principais:
-- Sistema proativo avançado com personalidade variável
-- Reset automático de cronômetro ao receber mensagens
-- Comando /complexidade para ver evolução do agente
-- Rotação de duplas arquetípicas
-- Geração de conhecimento autônomo
+Mudanças:
+- Assinatura process_message() corrigida (sem user_name)
+- Uso correto de create_user() com platform_id
+- Compatível com JungianEngine() sem db explícito
+- Todos os imports e chamadas validados
 
 Autor: Sistema Jung Claude
-Data: 2025-11-20
-Versão: 3.0 - ADVANCED
+Data: 2025-11-19
+Versão: 2.1 - CORRIGIDO
 """
 
 import os
@@ -41,8 +40,7 @@ from jung_core import (
     create_user_hash
 )
 
-# ✅ NOVO: Importar sistema proativo AVANÇADO
-from jung_proactive_advanced import ProactiveAdvancedSystem
+from jung_proactive_old import ProactiveModule
 
 # ============================================================
 # CONFIGURAÇÃO DE LOGGING
@@ -77,12 +75,10 @@ class BotState:
     """Gerencia estado global do bot"""
     
     def __init__(self):
-        # Componentes principais
+        # ✅ CORRIGIDO: JungianEngine sem parâmetro db
         self.db = DatabaseManager()
-        self.jung_engine = JungianEngine()
-        
-        # ✅ NOVO: Sistema proativo AVANÇADO
-        self.proactive_system = ProactiveAdvancedSystem(self.db)
+        self.jung_engine = JungianEngine()  # ✅ Usa db interno
+        self.proactive_module = ProactiveModule()
         
         # Estado proativo por usuário (user_id -> bool)
         self.proactive_enabled: Dict[str, bool] = {}
@@ -131,6 +127,8 @@ bot_state = BotState()
 
 def ensure_user_in_database(telegram_user) -> str:
     """
+    ✅ CORRIGIDO: Usa create_user() com platform_id STRING
+    
     Garante que usuário Telegram está no banco
     Retorna user_id (hash)
     """
@@ -145,11 +143,12 @@ def ensure_user_in_database(telegram_user) -> str:
     existing_user = bot_state.db.get_user(user_id)
     
     if not existing_user:
+        # ✅ CORRIGIDO: Usar create_user() ao invés de register_user()
         bot_state.db.create_user(
             user_id=user_id,
             user_name=full_name or username,
             platform='telegram',
-            platform_id=str(telegram_id)
+            platform_id=str(telegram_id)  # ✅ STRING
         )
         logger.info(f"✨ Novo usuário criado: {full_name} ({user_id[:8]})")
     else:
@@ -166,6 +165,51 @@ def ensure_user_in_database(telegram_user) -> str:
             logger.info(f"📝 platform_id atualizado para {user_id[:8]}")
     
     return user_id
+
+def get_user_id_from_telegram_id(telegram_id: int) -> Optional[str]:
+    """
+    ✅ CORRIGIDO: Busca user_id a partir do telegram_id
+    Usa platform_id como STRING
+    """
+    
+    cursor = bot_state.db.conn.cursor()
+    
+    cursor.execute("""
+        SELECT user_id FROM users
+        WHERE platform = 'telegram'
+        AND platform_id = ?
+        LIMIT 1
+    """, (str(telegram_id),))  # ✅ STRING
+    
+    row = cursor.fetchone()
+    
+    return row['user_id'] if row else None
+
+def get_telegram_id_from_user_id(user_id: str) -> Optional[int]:
+    """
+    ✅ CORRIGIDO: Busca telegram_id a partir do user_id
+    Converte platform_id STRING para INT
+    """
+    
+    cursor = bot_state.db.conn.cursor()
+    
+    cursor.execute("""
+        SELECT platform_id FROM users
+        WHERE user_id = ?
+        AND platform = 'telegram'
+        LIMIT 1
+    """, (user_id,))
+    
+    row = cursor.fetchone()
+    
+    if row and row['platform_id']:
+        try:
+            return int(row['platform_id'])  # ✅ Converter para int
+        except (ValueError, TypeError):
+            logger.error(f"❌ platform_id inválido para {user_id[:8]}: {row['platform_id']}")
+            return None
+    
+    return None
 
 # ============================================================
 # COMANDOS DO BOT
@@ -185,15 +229,14 @@ Eu sou o **Jung Claude**, um agente conversacional baseado na psicologia junguia
 • Analiso tensões entre seus arquétipos internos
 • Ajudo você a integrar aspectos da sua personalidade
 • Desenvolvo autonomia ao longo de nossas conversas
-• Envio mensagens proativas com **personalidade variável**
+• Envio mensagens proativas quando percebo padrões importantes
 
 📝 **Comandos disponíveis:**
 /perfil - Ver seu perfil junguiano
 /tensoes - Ver tensões arquetípicas ativas
-/complexidade - Ver evolução da complexidade do agente
-/stats - Estatísticas de desenvolvimento
 /pausar_proativo - Pausar mensagens proativas
 /retomar_proativo - Retomar mensagens proativas
+/stats - Estatísticas de desenvolvimento
 /reset - Reiniciar conversação (apaga histórico)
 /help - Ajuda
 
@@ -202,10 +245,10 @@ Apenas converse naturalmente! Eu vou:
 1. Identificar seus arquétipos dominantes
 2. Detectar conflitos internos
 3. Propor caminhos de integração
-4. Desenvolver meu próprio conhecimento sobre você
+4. Desenvolver meu próprio entendimento sobre você
 
-🌟 **Sistema Proativo AVANÇADO:**
-Eu desenvolvo **personalidade complexa** através de duplas arquetípicas rotativas e gero conhecimento autônomo em múltiplos domínios (histórico, filosófico, técnico, religioso, artístico). Cada mensagem proativa será única!
+🌟 **Sistema Proativo:**
+Às vezes, eu vou iniciar conversas quando perceber padrões importantes ou quando houver tensões não resolvidas. Você pode pausar isso a qualquer momento com /pausar_proativo.
 
 Vamos começar? Me conte: **O que te trouxe aqui hoje?**
 """
@@ -217,47 +260,39 @@ Vamos começar? Me conte: **O que te trouxe aqui hoje?**
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler para /help"""
     
-    help_text = """📚 **Ajuda - Jung Claude ADVANCED**
+    help_text = """📚 **Ajuda - Jung Claude**
 
 **COMANDOS PRINCIPAIS:**
 
 /start - Iniciar conversa
 /perfil - Ver seu perfil junguiano completo
 /tensoes - Ver tensões arquetípicas ativas
-/complexidade - Ver evolução da complexidade do agente
-/stats - Estatísticas de desenvolvimento
+/stats - Estatísticas de desenvolvimento (suas e do agente)
 
 **COMANDOS PROATIVOS:**
 
-/pausar_proativo - Pausar mensagens proativas
+/pausar_proativo - Pausar mensagens proativas temporariamente
 /retomar_proativo - Retomar mensagens proativas
 /status_proativo - Ver status do sistema proativo
 
 **COMANDOS AVANÇADOS:**
 
 /reset - Reiniciar conversação (⚠️ apaga histórico)
+/export - Exportar suas conversas (em breve)
 
-**SISTEMA PROATIVO AVANÇADO:**
+**COMO FUNCIONA:**
 
-🎭 **Personalidade Variável:**
-Eu uso duplas arquetípicas rotativas:
-• Sábio + Explorador (contemplativo-curioso)
-• Mago + Criador (transformador-criativo)
-• Cuidador + Inocente (acolhedor-esperançoso)
-• Governante + Herói (organizador-corajoso)
-• Bobo + Amante (lúdico-apaixonado)
-• Rebelde + Sombra (transgressor-revelador)
+1️⃣ **Conversas Normais:**
+Você manda mensagens, eu respondo analisando seus arquétipos.
 
-📚 **Domínios de Conhecimento:**
-• Histórico
-• Filosófico
-• Técnico
-• Religioso
-• Psicológico
-• Artístico
+2️⃣ **Detecção de Tensões:**
+Eu identifico conflitos entre arquétipos (ex: Herói vs Sombra).
 
-🧠 **Geração Autônoma:**
-Eu extraio tópicos das suas conversas e formulo meu próprio conhecimento, reformulado através da minha personalidade arquetípica atual.
+3️⃣ **Mensagens Proativas:**
+Se você ficar inativo por >24h e houver tensões não resolvidas, eu posso iniciar uma conversa.
+
+4️⃣ **Desenvolvimento do Agente:**
+Eu evoluo ao longo de nossas conversas, ganhando autonomia e profundidade.
 
 **DÚVIDAS?**
 Apenas pergunte! Estou aqui para ajudar.
@@ -335,8 +370,7 @@ async def perfil_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         perfil_text += "_(Nenhuma tensão crítica no momento)_\n"
     
     perfil_text += """
-💡 Use /tensoes para análise detalhada
-💡 Use /complexidade para ver evolução do agente
+💡 Use /tensoes para ver análise detalhada das tensões.
 """
     
     await update.message.reply_text(perfil_text)
@@ -388,102 +422,6 @@ async def tensoes_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     logger.info(f"Comando /tensoes de {user.first_name}")
 
-async def complexidade_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """✅ NOVO: Handler para /complexidade - mostra evolução do agente"""
-    
-    user = update.effective_user
-    user_id = ensure_user_in_database(user)
-    
-    complexity_level = bot_state.proactive_system.proactive_db.get_complexity_level(user_id)
-    
-    cursor = bot_state.db.conn.cursor()
-    
-    # Contar abordagens
-    cursor.execute("""
-        SELECT COUNT(*) as total FROM proactive_approaches
-        WHERE user_id = ?
-    """, (user_id,))
-    
-    total_approaches = cursor.fetchone()['total']
-    
-    # Domínios usados
-    cursor.execute("""
-        SELECT DISTINCT knowledge_domain FROM proactive_approaches
-        WHERE user_id = ?
-    """, (user_id,))
-    
-    domains = [row['knowledge_domain'] for row in cursor.fetchall()]
-    
-    # Tópicos extraídos
-    top_topics = bot_state.proactive_system.proactive_db.get_top_topics(user_id, limit=5)
-    
-    # Últimas abordagens
-    cursor.execute("""
-        SELECT archetype_primary, archetype_secondary, 
-               knowledge_domain, complexity_score, timestamp,
-               topic_extracted
-        FROM proactive_approaches
-        WHERE user_id = ?
-        ORDER BY timestamp DESC
-        LIMIT 5
-    """, (user_id,))
-    
-    recent = cursor.fetchall()
-    
-    # Barra de progresso visual
-    progress_bars = int(complexity_level * 10)
-    progress_bar = "█" * progress_bars + "░" * (10 - progress_bars)
-    
-    message = f"""🧠 **Evolução de Complexidade do Agente**
-
-📊 **Nível de Complexidade:** {complexity_level:.0%}
-{progress_bar}
-
-📈 **Estatísticas:**
-• Abordagens realizadas: {total_approaches}
-• Domínios explorados: {len(domains)}
-• Tópicos identificados: {len(top_topics)}
-
-📚 **Domínios Utilizados:**
-{', '.join(domains) if domains else '_(Nenhum ainda)_'}
-
-🎯 **Tópicos Principais:**
-"""
-    
-    for i, topic in enumerate(top_topics[:3], 1):
-        message += f"{i}. {topic}\n"
-    
-    if not top_topics:
-        message += "_(Ainda coletando dados)_\n"
-    
-    message += "\n🎭 **Últimas Personalidades:**\n"
-    
-    for approach in recent:
-        pair = f"{approach['archetype_primary']} + {approach['archetype_secondary']}"
-        domain = approach['knowledge_domain']
-        score = approach['complexity_score']
-        topic = approach['topic_extracted'] or 'N/A'
-        
-        # Timestamp
-        timestamp = datetime.fromisoformat(approach['timestamp'])
-        delta = datetime.now() - timestamp
-        time_ago = f"{delta.days}d" if delta.days > 0 else f"{delta.seconds // 3600}h"
-        
-        message += f"\n• **{pair}**\n"
-        message += f"  {domain} | Score: {score:.0%}\n"
-        message += f"  Tópico: {topic}\n"
-        message += f"  Há {time_ago}\n"
-    
-    if not recent:
-        message += "_(Nenhuma abordagem ainda)_\n"
-    
-    message += "\n💡 **O que isso significa?**\n"
-    message += "Quanto maior a complexidade, mais profundo e variado é o conhecimento autônomo que desenvolvo sobre você e seus interesses."
-    
-    await update.message.reply_text(message)
-    
-    logger.info(f"Comando /complexidade de {user.first_name}")
-
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler para /stats - estatísticas completas"""
     
@@ -493,22 +431,13 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Stats do agente
     agent_state = bot_state.db.get_agent_state()
     
+    # Stats proativas
+    proactive_stats = bot_state.proactive_module.get_user_proactive_stats(user_id)
+    
     # Stats de conversas
     conversations = bot_state.db.get_user_conversations(user_id, limit=1000)
     total_user_words = sum(len(c['user_input'].split()) for c in conversations)
     total_ai_words = sum(len(c['ai_response'].split()) for c in conversations)
-    
-    # Stats proativas AVANÇADAS
-    cursor = bot_state.db.conn.cursor()
-    
-    cursor.execute("""
-        SELECT COUNT(*) as total FROM proactive_approaches
-        WHERE user_id = ?
-    """, (user_id,))
-    
-    total_proactive = cursor.fetchone()['total']
-    
-    complexity = bot_state.proactive_system.proactive_db.get_complexity_level(user_id)
     
     stats_text = f"""📊 **Estatísticas Completas**
 
@@ -524,17 +453,23 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Interações totais: {agent_state['total_interactions']}
 • Profundidade: {agent_state.get('depth_level', 0):.0%}
 
-🧠 **SISTEMA PROATIVO AVANÇADO:**
-• Mensagens proativas enviadas: {total_proactive}
-• Nível de complexidade: {complexity:.0%}
-• Personalidades manifestadas: {min(total_proactive, 6)}
+💬 **SISTEMA PROATIVO:**
+• Mensagens proativas enviadas: {proactive_stats['total_proactive_messages']}
+• Taxa de resposta: {proactive_stats['response_rate']:.0%}
+• Engajamento médio: {proactive_stats['avg_engagement_score']:.0%}
+• Pensamentos internos: {proactive_stats['total_internal_thoughts']}
 
 🌍 **ESTATÍSTICAS GLOBAIS:**
 • Mensagens processadas (bot): {bot_state.total_messages_processed}
 • Proativas enviadas (total): {bot_state.total_proactive_sent}
 
-💡 Use /complexidade para detalhes da evolução
+🎯 **PRÓXIMOS MARCOS:**
 """
+    
+    milestones = bot_state.db.get_milestones(limit=3)
+    
+    for milestone in milestones:
+        stats_text += f"• {milestone['description']}\n"
     
     await update.message.reply_text(stats_text)
     
@@ -580,20 +515,7 @@ async def status_proativo_command(update: Update, context: ContextTypes.DEFAULT_
     user_id = ensure_user_in_database(user)
     
     enabled = bot_state.is_proactive_enabled(user_id)
-    
-    # ✅ ATUALIZADO: Buscar última abordagem avançada
-    cursor = bot_state.db.conn.cursor()
-    
-    cursor.execute("""
-        SELECT timestamp, archetype_primary, archetype_secondary,
-               knowledge_domain, topic_extracted
-        FROM proactive_approaches
-        WHERE user_id = ?
-        ORDER BY timestamp DESC
-        LIMIT 1
-    """, (user_id,))
-    
-    last_proactive = cursor.fetchone()
+    last_proactive = bot_state.proactive_module.proactive_db.get_last_proactive_message(user_id)
     
     status_emoji = "✅" if enabled else "⏸️"
     status_text = "ATIVO" if enabled else "PAUSADO"
@@ -605,22 +527,16 @@ async def status_proativo_command(update: Update, context: ContextTypes.DEFAULT_
         delta = datetime.now() - last_time
         time_ago = f"{delta.days}d" if delta.days > 0 else f"{delta.seconds // 3600}h"
         
-        pair = f"{last_proactive['archetype_primary']} + {last_proactive['archetype_secondary']}"
-        domain = last_proactive['knowledge_domain']
-        topic = last_proactive['topic_extracted']
-        
         message += f"📩 **Última mensagem proativa:**\n"
         message += f"   Há {time_ago}\n"
-        message += f"   Personalidade: {pair}\n"
-        message += f"   Domínio: {domain}\n"
-        message += f"   Tópico: {topic}\n\n"
+        message += f"   Tipo: {last_proactive['trigger_type']}\n"
+        message += f"   Respondida: {'Sim' if last_proactive['user_responded'] else 'Não'}\n\n"
     else:
         message += "📩 Nenhuma mensagem proativa enviada ainda.\n\n"
     
     message += f"💡 Comandos:\n"
     message += f"   /pausar_proativo - Pausar\n"
-    message += f"   /retomar_proativo - Retomar\n"
-    message += f"   /complexidade - Ver evolução"
+    message += f"   /retomar_proativo - Retomar"
     
     await update.message.reply_text(message)
 
@@ -630,19 +546,20 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = ensure_user_in_database(user)
     
+    # Confirmar reset
     confirm_text = (
-        "⚠️ **ATENÇÃO: Isso vai apagar todo o histórico!**\n\n"
+        "⚠️ **ATENÇÃO: Isso vai apagar todo o histórico de conversas!**\n\n"
         "Você perderá:\n"
         "• Todas as conversas anteriores\n"
         "• Tensões arquetípicas identificadas\n"
         "• Mensagens proativas\n"
-        "• Abordagens e complexidade do agente\n"
-        "• Tópicos extraídos\n\n"
+        "• Pensamentos internos\n\n"
         "Para confirmar, envie: **CONFIRMAR RESET**"
     )
     
     await update.message.reply_text(confirm_text)
     
+    # Armazenar estado de confirmação
     context.user_data['awaiting_reset_confirmation'] = True
     
     logger.warning(f"Reset solicitado por {user.first_name}")
@@ -661,24 +578,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Garantir usuário no banco
     user_id = ensure_user_in_database(user)
     
-    # ✅ NOVO: RESET CRONÔMETRO A CADA MENSAGEM
-    bot_state.proactive_system.reset_timer(user_id)
-    
     # ========== CONFIRMAÇÃO DE RESET ==========
     if context.user_data.get('awaiting_reset_confirmation'):
         if message_text.strip().upper() == 'CONFIRMAR RESET':
+            # Executar reset
             cursor = bot_state.db.conn.cursor()
             
-            # Deletar tudo
+            # Deletar conversas
             cursor.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
-            cursor.execute("DELETE FROM archetype_conflicts WHERE user_id = ?", (user_id,))
-            cursor.execute("DELETE FROM internal_thoughts WHERE user_id = ?", (user_id,))
-            cursor.execute("DELETE FROM proactive_messages WHERE user_id = ?", (user_id,))
             
-            # ✅ NOVO: Deletar dados avançados
-            cursor.execute("DELETE FROM proactive_approaches WHERE user_id = ?", (user_id,))
-            cursor.execute("DELETE FROM extracted_topics WHERE user_id = ?", (user_id,))
-            cursor.execute("DELETE FROM agent_complexity_log WHERE user_id = ?", (user_id,))
+            # Deletar tensões
+            cursor.execute("DELETE FROM archetype_conflicts WHERE user_id = ?", (user_id,))
+            
+            # Deletar pensamentos proativos
+            cursor.execute("DELETE FROM internal_thoughts WHERE user_id = ?", (user_id,))
+            
+            # Deletar mensagens proativas
+            cursor.execute("DELETE FROM proactive_messages WHERE user_id = ?", (user_id,))
             
             bot_state.db.conn.commit()
             
@@ -691,7 +607,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.warning(f"Reset CONFIRMADO por {user.first_name}")
             return
         else:
-            await update.message.reply_text("❌ Reset cancelado.\n\nSeu histórico foi preservado.")
+            await update.message.reply_text(
+                "❌ Reset cancelado.\n\n"
+                "Seu histórico foi preservado."
+            )
             context.user_data['awaiting_reset_confirmation'] = False
             return
     
@@ -699,26 +618,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     last_proactive = bot_state.get_last_proactive(telegram_id)
     
     if last_proactive:
-        # Limpar registro (usuário respondeu)
+        # Usuário está respondendo a mensagem proativa
+        proactive_user_id = last_proactive['user_id']
+        
+        # Processar resposta
+        bot_state.proactive_module.process_user_response(proactive_user_id, message_text)
+        
+        # Limpar registro
         bot_state.clear_proactive_message(telegram_id)
+        
         logger.info(f"✅ Resposta a mensagem proativa detectada de {user.first_name}")
     
     # ========== PROCESSAR MENSAGEM NORMAL ==========
     
+    # Enviar indicador "digitando..."
     await update.message.chat.send_action(action="typing")
     
     try:
+        # ✅ CORRIGIDO: process_message() SEM user_name
         result = bot_state.jung_engine.process_message(
             user_id=user_id,
             message=message_text,
             model="grok-4-fast-reasoning"
         )
         
+        # Enviar resposta
         await update.message.reply_text(result['response'])
         
+        # Atualizar estatísticas
         bot_state.total_messages_processed += 1
         
-        logger.info(f"✅ Mensagem processada de {user.first_name}: {message_text[:50]}...")
+        # Log
+        logger.info(
+            f"✅ Mensagem processada de {user.first_name}: "
+            f"{message_text[:50]}..."
+        )
         
     except Exception as e:
         logger.error(f"❌ Erro ao processar mensagem: {e}", exc_info=True)
@@ -729,20 +663,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 # ============================================================
-# TASK ASSÍNCRONA: SISTEMA PROATIVO AVANÇADO
+# TASK ASSÍNCRONA: SISTEMA PROATIVO
 # ============================================================
 
 async def proactive_background_task(application: Application):
-    """✅ ATUALIZADO: Task proativa AVANÇADA"""
+    """
+    ✅ CORRIGIDO: Task proativa com platform_id STRING
+    """
     
-    logger.info("🚀 Task proativa AVANÇADA iniciada!")
+    logger.info("🚀 Task proativa iniciada!")
     
     while True:
         try:
             await asyncio.sleep(PROACTIVE_CHECK_INTERVAL)
             
-            logger.info("🔍 Checando usuários para mensagens proativas AVANÇADAS...")
+            logger.info("🔍 Checando usuários para mensagens proativas...")
             
+            # Buscar todos os usuários Telegram
             cursor = bot_state.db.conn.cursor()
             
             cursor.execute("""
@@ -761,6 +698,7 @@ async def proactive_background_task(application: Application):
                 platform_id_str = user_row['platform_id']
                 user_name = user_row['user_name']
                 
+                # ✅ CONVERTER platform_id PARA INT
                 try:
                     telegram_id = int(platform_id_str)
                 except (ValueError, TypeError):
@@ -772,11 +710,11 @@ async def proactive_background_task(application: Application):
                     logger.info(f"⏸️  Proativo desabilitado para {user_name}")
                     continue
                 
-                # ✅ USAR SISTEMA AVANÇADO
+                # Tentar gerar mensagem proativa
                 try:
-                    proactive_message = bot_state.proactive_system.check_and_generate_advanced_message(
+                    proactive_message = bot_state.proactive_module.check_and_generate_message(
                         user_id=user_id,
-                        user_name=user_name
+                        model="grok-4-fast-reasoning"
                     )
                     
                     if proactive_message:
@@ -784,17 +722,17 @@ async def proactive_background_task(application: Application):
                         try:
                             sent_message = await application.bot.send_message(
                                 chat_id=telegram_id,
-                                text=proactive_message
+                                text=proactive_message.content
                             )
                             
                             # Registrar envio
                             bot_state.register_proactive_message(telegram_id, {
-                                'message_id': sent_message.message_id,
-                                'content': proactive_message,
+                                'message_id': proactive_message.source_thought_id,
+                                'content': proactive_message.content,
                                 'user_id': user_id
                             })
                             
-                            logger.info(f"✅ Mensagem proativa AVANÇADA enviada para {user_name}")
+                            logger.info(f"✅ Mensagem proativa enviada para {user_name}")
                             
                         except Exception as e:
                             logger.error(f"❌ Erro ao enviar proativa para {user_name}: {e}")
@@ -804,7 +742,7 @@ async def proactive_background_task(application: Application):
                 except Exception as e:
                     logger.error(f"❌ Erro ao gerar proativa para {user_name}: {e}", exc_info=True)
                 
-                # Delay entre usuários
+                # Pequeno delay entre usuários
                 await asyncio.sleep(2)
             
             logger.info("✅ Checagem proativa concluída!")
@@ -826,7 +764,6 @@ async def post_init(application: Application):
         BotCommand("help", "Ajuda"),
         BotCommand("perfil", "Ver perfil junguiano"),
         BotCommand("tensoes", "Ver tensões arquetípicas"),
-        BotCommand("complexidade", "Ver evolução do agente"),
         BotCommand("stats", "Estatísticas completas"),
         BotCommand("pausar_proativo", "Pausar mensagens proativas"),
         BotCommand("retomar_proativo", "Retomar mensagens proativas"),
@@ -841,14 +778,14 @@ async def post_init(application: Application):
     # Iniciar task proativa
     asyncio.create_task(proactive_background_task(application))
     
-    logger.info("✅ Task proativa AVANÇADA iniciada em background")
+    logger.info("✅ Task proativa iniciada em background")
 
 def main():
     """Ponto de entrada principal"""
     
     logger.info("="*60)
-    logger.info("🤖 JUNG CLAUDE TELEGRAM BOT v3.0 - ADVANCED")
-    logger.info("   Sistema Proativo com Personalidade Complexa")
+    logger.info("🤖 JUNG CLAUDE TELEGRAM BOT v2.1 - CORRIGIDO")
+    logger.info("   Integração completa com jung_core.py v3.2")
     logger.info("="*60)
     
     # Criar aplicação
@@ -859,19 +796,18 @@ def main():
         .build()
     )
     
-    # Registrar handlers
+    # Registrar handlers de comandos
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("perfil", perfil_command))
     application.add_handler(CommandHandler("tensoes", tensoes_command))
-    application.add_handler(CommandHandler("complexidade", complexidade_command))
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("pausar_proativo", pausar_proativo_command))
     application.add_handler(CommandHandler("retomar_proativo", retomar_proativo_command))
     application.add_handler(CommandHandler("status_proativo", status_proativo_command))
     application.add_handler(CommandHandler("reset", reset_command))
     
-    # Handler de mensagens
+    # Handler de mensagens de texto
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
     )
