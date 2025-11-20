@@ -40,7 +40,7 @@ from jung_core import (
     create_user_hash
 )
 
-from jung_proactive_old import ProactiveModule
+from jung_proactive_bkp import ProactiveModule
 
 # ============================================================
 # CONFIGURAÇÃO DE LOGGING
