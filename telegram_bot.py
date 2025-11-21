@@ -2,8 +2,9 @@
 telegram_bot.py - Bot Telegram Jung Claude HÍBRIDO PREMIUM
 ===========================================================
 
-✅ VERSÃO 4.0 - HÍBRIDO PREMIUM
+✅ VERSÃO 4.0 - HÍBRIDO PREMIUM + SISTEMA PROATIVO
    Integração com jung_core.py v4.0 (ChromaDB + OpenAI Embeddings + SQLite)
+   Sistema Proativo Avançado com personalidades arquetípicas rotativas
 
 Mudanças principais:
 - Compatibilidade total com HybridDatabaseManager
@@ -12,10 +13,11 @@ Mudanças principais:
 - Detecção de padrões comportamentais
 - Sistema de desenvolvimento do agente
 - Comandos aprimorados para visualização de memória
+- ✅ SISTEMA PROATIVO AVANÇADO (jung_proactive_advanced.py)
 
 Autor: Sistema Jung Claude
 Data: 2025-11-20
-Versão: 4.0 - HÍBRIDO PREMIUM
+Versão: 4.0 - HÍBRIDO PREMIUM + PROATIVO
 """
 
 import os
@@ -44,6 +46,9 @@ from jung_core import (
     format_conflict_for_display,
     format_archetype_info
 )
+
+# ✅ IMPORTAR SISTEMA PROATIVO AVANÇADO
+from jung_proactive_advanced import ProactiveAdvancedSystem
 
 # ============================================================
 # CONFIGURAÇÃO DE LOGGING
@@ -75,12 +80,15 @@ ADMIN_IDS = Config.TELEGRAM_ADMIN_IDS
 # ============================================================
 
 class BotState:
-    """Gerencia estado global do bot HÍBRIDO"""
+    """Gerencia estado global do bot HÍBRIDO + PROATIVO"""
     
     def __init__(self):
         # Componentes principais HÍBRIDOS
         self.db = HybridDatabaseManager()
         self.jung_engine = JungianEngine(db=self.db)
+        
+        # ✅ Sistema Proativo Avançado
+        self.proactive = None  # Inicializado depois com bot instance
         
         # Histórico de chat por usuário (para contexto)
         # telegram_id -> List[Dict{"role": str, "content": str}]
@@ -89,8 +97,9 @@ class BotState:
         # Estatísticas
         self.total_messages_processed = 0
         self.total_semantic_searches = 0
+        self.total_proactive_messages_sent = 0
         
-        logger.info("✅ BotState HÍBRIDO inicializado")
+        logger.info("✅ BotState HÍBRIDO + PROATIVO inicializado")
     
     def get_chat_history(self, telegram_id: int) -> List[Dict]:
         """Retorna histórico de chat do usuário"""
@@ -199,6 +208,7 @@ Bem-vindo ao **Jung Claude v4.0 HÍBRIDO PREMIUM**!
 • Extraio fatos estruturados das suas conversas
 • Detecto padrões comportamentais ao longo do tempo
 • Desenvolvo autonomia e complexidade própria
+• 🌟 **Sistema Proativo**: Posso iniciar conversas quando você está inativo!
 
 🗄️ **Arquitetura Híbrida:**
 • **ChromaDB**: Busca semântica com embeddings OpenAI
@@ -222,6 +232,7 @@ Apenas converse naturalmente! Eu vou:
 3. Detectar conflitos internos
 4. Extrair fatos e padrões sobre você
 5. Propor caminhos de integração
+6. 🌟 Iniciar conversas quando você estiver inativo (após 10 conversas)
 
 Vamos começar? **O que te trouxe aqui hoje?**
 """
@@ -287,6 +298,9 @@ Extraio e armazeno fatos estruturados:
 
 🧠 **Detecção de Padrões:**
 Analiso suas conversas para identificar padrões recorrentes e temas que aparecem frequentemente.
+
+🌟 **Sistema Proativo:**
+Após 10 conversas, posso iniciar conversas quando você está inativo (12h+). Cada mensagem proativa usa uma personalidade arquetípica diferente e conhecimento autônomo sobre tópicos do seu interesse!
 
 **DÚVIDAS?**
 Apenas pergunte! Estou aqui para ajudar.
@@ -743,6 +757,10 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Buscas semânticas realizadas: {bot_state.total_semantic_searches}
 • Modelo de embeddings: {Config.EMBEDDING_MODEL}
 
+🌟 **SISTEMA PROATIVO:**
+• Mensagens proativas enviadas: {bot_state.total_proactive_messages_sent}
+• Status: {'ATIVO ✅' if user_stats['total_messages'] >= 10 else f'INATIVO (faltam {10 - user_stats["total_messages"]} conversas)'}
+
 🌍 **ESTATÍSTICAS GLOBAIS DO BOT:**
 • Mensagens processadas: {bot_state.total_messages_processed}
 
@@ -822,6 +840,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Garantir usuário no banco
     user_id = ensure_user_in_database(user)
+    
+    # ✅ RESET CRONÔMETRO PROATIVO (importante!)
+    if bot_state.proactive:
+        bot_state.proactive.reset_timer(user_id)
     
     # ========== CONFIRMAÇÃO DE RESET ==========
     if context.user_data.get('awaiting_reset_confirmation'):
@@ -918,6 +940,80 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 # ============================================================
+# ✅ SISTEMA PROATIVO - VERIFICAÇÃO PERIÓDICA
+# ============================================================
+
+async def check_inactive_users(context: ContextTypes.DEFAULT_TYPE):
+    """
+    Verificação periódica de usuários inativos
+    Executada automaticamente pelo scheduler a cada 1 hora
+    """
+    
+    if not bot_state.proactive:
+        logger.warning("⚠️ Sistema proativo não inicializado")
+        return
+    
+    try:
+        logger.info("="*60)
+        logger.info("⏰ VERIFICAÇÃO PROATIVA INICIADA")
+        logger.info("="*60)
+        
+        # Buscar todos os usuários do Telegram
+        all_users = bot_state.db.get_all_users(platform='telegram')
+        
+        logger.info(f"👥 Total de usuários: {len(all_users)}")
+        
+        messages_sent = 0
+        
+        for user in all_users:
+            user_id = user['user_id']
+            user_name = user['user_name']
+            platform_id = user.get('platform_id')
+            
+            if not platform_id:
+                continue
+            
+            try:
+                telegram_id = int(platform_id)
+            except (ValueError, TypeError):
+                logger.warning(f"⚠️ platform_id inválido para {user_name}")
+                continue
+            
+            # Verificar se deve enviar mensagem proativa
+            proactive_message = bot_state.proactive.check_and_generate_advanced_message(
+                user_id=user_id,
+                user_name=user_name
+            )
+            
+            if proactive_message:
+                try:
+                    await context.bot.send_message(
+                        chat_id=telegram_id,
+                        text=proactive_message
+                    )
+                    messages_sent += 1
+                    bot_state.total_proactive_messages_sent += 1
+                    
+                    logger.info(f"📨 Mensagem proativa enviada para {user_name}")
+                    
+                    # Aguardar 2 segundos entre mensagens (anti-spam Telegram)
+                    await asyncio.sleep(2)
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro ao enviar proativa para {user_name}: {e}")
+        
+        if messages_sent > 0:
+            logger.info(f"✅ {messages_sent} mensagem(ns) proativa(s) enviada(s)")
+        else:
+            logger.info("⏰ Nenhuma mensagem proativa necessária neste momento")
+        
+        logger.info("="*60)
+        logger.info("")
+            
+    except Exception as e:
+        logger.error(f"❌ Erro na verificação de usuários inativos: {e}", exc_info=True)
+
+# ============================================================
 # COMANDOS DE ADMINISTRAÇÃO (OPCIONAL)
 # ============================================================
 
@@ -965,6 +1061,9 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 • Interações totais: {agent_state['total_interactions']}
 • Autonomia: {agent_state['autonomy_score']:.0%}
 
+🌟 **SISTEMA PROATIVO:**
+• Mensagens enviadas: {bot_state.total_proactive_messages_sent}
+
 🌍 **BOT:**
 • Mensagens processadas: {bot_state.total_messages_processed}
 """
@@ -997,15 +1096,28 @@ async def post_init(application: Application):
     ]
     
     await application.bot.set_my_commands(commands)
-    
     logger.info("✅ Comandos registrados no Telegram")
+    
+    # ✅ INICIALIZAR SISTEMA PROATIVO
+    bot_state.proactive = ProactiveAdvancedSystem(bot_state.db)
+    logger.info("✅ Sistema Proativo Avançado inicializado")
+    
+    # ✅ CONFIGURAR SCHEDULER (verificar a cada 1 hora)
+    job_queue = application.job_queue
+    job_queue.run_repeating(
+        check_inactive_users,
+        interval=3600,  # 1 hora em segundos (3600s)
+        first=60  # Primeira verificação após 1 minuto
+    )
+    
+    logger.info("✅ Scheduler proativo ativado (verificação a cada 1h)")
 
 def main():
     """Ponto de entrada principal"""
     
     logger.info("="*60)
-    logger.info("🤖 JUNG CLAUDE TELEGRAM BOT v4.0 - HÍBRIDO PREMIUM")
-    logger.info("   ChromaDB + OpenAI Embeddings + SQLite")
+    logger.info("🤖 JUNG CLAUDE TELEGRAM BOT v4.0 - HÍBRIDO PREMIUM + PROATIVO")
+    logger.info("   ChromaDB + OpenAI Embeddings + SQLite + Sistema Proativo")
     logger.info("="*60)
     
     # Validar configuração
@@ -1050,6 +1162,7 @@ def main():
     logger.info("🚀 Iniciando bot...")
     logger.info(f"✅ ChromaDB: {'ATIVO' if bot_state.db.chroma_enabled else 'INATIVO'}")
     logger.info(f"✅ Modelo Embeddings: {Config.EMBEDDING_MODEL}")
+    logger.info(f"✅ Sistema Proativo: ATIVO (verificação a cada 1h)")
     logger.info("✅ Bot rodando! Pressione Ctrl+C para parar.")
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)

@@ -294,9 +294,9 @@ class ProactiveAdvancedSystem:
         self.proactive_db = ProactiveAdvancedDB(db)
         
         # Configurações (podem ser ajustadas)
-        self.inactivity_threshold_hours = 12  # Horas de inatividade necessárias
-        self.cooldown_hours = 24  # Cooldown entre mensagens proativas
-        self.min_conversations_required = 10  # Mínimo de conversas para ativar
+        self.inactivity_threshold_hours = 3  # Horas de inatividade necessárias
+        self.cooldown_hours = 6  # Cooldown entre mensagens proativas
+        self.min_conversations_required = 5  # Mínimo de conversas para ativar
     
     def reset_timer(self, user_id: str):
         """✅ RESET CRONÔMETRO - Chamado quando usuário envia mensagem"""
