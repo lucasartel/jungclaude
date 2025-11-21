@@ -44,10 +44,10 @@ logger = logging.getLogger(__name__)
 # CONFIGURAÇÕES DE AMBIENTE
 # ============================================================
 
-# 🧪 MODO TESTE FORÇADO - REMOVER DEPOIS DOS TESTES
-RAILWAY_ENVIRONMENT = "development"
-# RAILWAY_ENVIRONMENT = os.getenv("RAILWAY_ENVIRONMENT", "production")  # ← Comentado
-IS_PRODUCTION = (RAILWAY_ENVIRONMENT == "production")  
+# 🚀 MODO PRODUÇÃO ATIVADO
+# RAILWAY_ENVIRONMENT = "development"  # ← Comentado agora
+RAILWAY_ENVIRONMENT = os.getenv("RAILWAY_ENVIRONMENT", "production")  # ← Descomentado
+IS_PRODUCTION = (RAILWAY_ENVIRONMENT == "production")
 
 # Parâmetros ajustados por ambiente
 if IS_PRODUCTION:
