@@ -22,6 +22,7 @@ Versão: 4.0.1 - HÍBRIDO PREMIUM (CORRIGIDO)
 
 import os
 import json
+import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass
