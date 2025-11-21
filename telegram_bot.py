@@ -1106,7 +1106,7 @@ async def post_init(application: Application):
     job_queue = application.job_queue
     job_queue.run_repeating(
         check_inactive_users,
-        interval=3600,  # 1 hora em segundos (3600s)
+        interval=180,  # 1 hora em segundos (3600s)
         first=60  # Primeira verificação após 1 minuto
     )
     
