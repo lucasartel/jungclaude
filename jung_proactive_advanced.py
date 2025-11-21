@@ -44,8 +44,9 @@ logger = logging.getLogger(__name__)
 # CONFIGURAÇÕES DE AMBIENTE
 # ============================================================
 
-# Detectar ambiente (Railway seta RAILWAY_ENVIRONMENT em produção)
-IS_PRODUCTION = os.getenv("RAILWAY_ENVIRONMENT") == "production"
+# 🧪 MODO TESTE FORÇADO - REMOVER DEPOIS DOS TESTES
+RAILWAY_ENVIRONMENT = "development"
+# RAILWAY_ENVIRONMENT = os.getenv("RAILWAY_ENVIRONMENT", "production")  # ← Comentado
 
 # Parâmetros ajustados por ambiente
 if IS_PRODUCTION:
