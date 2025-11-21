@@ -1,9 +1,10 @@
 """
-jung_proactive_advanced.py - Sistema Proativo Avançado HÍBRIDO v4.0
-====================================================================
+jung_proactive_advanced.py - Sistema Proativo Avançado HÍBRIDO v4.0.1
+======================================================================
 
-🧠 VERSÃO 4.0 - HÍBRIDO PREMIUM
+🧠 VERSÃO 4.0.1 - HÍBRIDO PREMIUM (CORRIGIDO)
    Integração total com jung_core.py v4.0 (ChromaDB + OpenAI + SQLite)
+   🔧 CORREÇÃO: send_to_xai() agora usa argumento 'prompt' corretamente
 
 Características APRIMORADAS:
 - Rotação de duplas arquetípicas (personalidade multifacetada)
@@ -15,8 +16,8 @@ Características APRIMORADAS:
 - Sistema de memória de abordagens anteriores
 
 Autor: Sistema Jung Claude
-Data: 2025-11-20
-Versão: 4.0 - HÍBRIDO PREMIUM
+Data: 2025-11-21
+Versão: 4.0.1 - HÍBRIDO PREMIUM (CORRIGIDO)
 """
 
 import os
@@ -32,6 +33,29 @@ from jung_core import (
     Config,
     send_to_xai
 )
+
+# ============================================================
+# CONFIGURAÇÕES DE AMBIENTE
+# ============================================================
+
+# Detectar ambiente (Railway seta RAILWAY_ENVIRONMENT em produção)
+IS_PRODUCTION = os.getenv("RAILWAY_ENVIRONMENT") == "production"
+
+# Parâmetros ajustados por ambiente
+if IS_PRODUCTION:
+    # 🚀 PRODUÇÃO
+    INACTIVITY_THRESHOLD_HOURS = 12.0  # 12 horas de inatividade
+    COOLDOWN_HOURS = 24.0  # 24 horas entre mensagens proativas
+    MIN_CONVERSATIONS_REQUIRED = 10  # Mínimo de conversas
+    logger.info("🚀 MODO PRODUÇÃO: Parâmetros conservadores ativados")
+else:
+    # 🧪 DESENVOLVIMENTO/TESTE
+    INACTIVITY_THRESHOLD_HOURS = 0.05  # 3 minutos (teste rápido)
+    COOLDOWN_HOURS = 0.1  # 6 minutos (teste rápido)
+    MIN_CONVERSATIONS_REQUIRED = 3  # Menos conversas necessárias
+    logger.info("🧪 MODO TESTE: Parâmetros acelerados ativados")
+
+# ============================================================
 
 # ============================================================
 # ENUMS E ESTRUTURAS DE DADOS
@@ -283,7 +307,7 @@ class ProactiveAdvancedDB:
         return [row['topic'] for row in cursor.fetchall()]
 
 # ============================================================
-# SISTEMA PROATIVO AVANÇADO - VERSÃO HÍBRIDA v4.0
+# SISTEMA PROATIVO AVANÇADO - VERSÃO HÍBRIDA v4.0.1
 # ============================================================
 
 class ProactiveAdvancedSystem:
@@ -293,10 +317,15 @@ class ProactiveAdvancedSystem:
         self.db = db
         self.proactive_db = ProactiveAdvancedDB(db)
         
-        # Configurações (podem ser ajustadas)
-        self.inactivity_threshold_hours = 0.05  # Horas de inatividade necessárias
-        self.cooldown_hours = 0.1  # Cooldown entre mensagens proativas
-        self.min_conversations_required = 3  # Mínimo de conversas para ativar
+        # ✅ Configurações dinâmicas por ambiente
+        self.inactivity_threshold_hours = INACTIVITY_THRESHOLD_HOURS
+        self.cooldown_hours = COOLDOWN_HOURS
+        self.min_conversations_required = MIN_CONVERSATIONS_REQUIRED
+        
+        logger.info(f"⚙️ Sistema Proativo configurado:")
+        logger.info(f"   • Inatividade: {self.inactivity_threshold_hours}h")
+        logger.info(f"   • Cooldown: {self.cooldown_hours}h")
+        logger.info(f"   • Conversas mínimas: {self.min_conversations_required}")
     
     def reset_timer(self, user_id: str):
         """✅ RESET CRONÔMETRO - Chamado quando usuário envia mensagem"""
@@ -375,7 +404,7 @@ class ProactiveAdvancedSystem:
         return KnowledgeDomain.PSYCHOLOGICAL
     
     def _extract_topic_semantically(self, user_id: str) -> Optional[str]:
-        """✅ NOVO: Extração semântica de tópico via ChromaDB"""
+        """✅ CORRIGIDO: Extração semântica de tópico via ChromaDB"""
         
         if not self.db.chroma_enabled:
             print("⚠️  ChromaDB desabilitado, usando extração LLM")
@@ -420,7 +449,7 @@ class ProactiveAdvancedSystem:
             topic_keywords = [word for word, _ in top_words]
             topic = " ".join(topic_keywords[:3])  # Pegar top 3
             
-            # Refinar com LLM
+            # 🔧 CORRIGIDO: Usar argumento 'prompt' em vez de 'messages'
             refinement_prompt = f"""Dado estas palavras-chave frequentes nas conversas do usuário:
 
 {', '.join(topic_keywords)}
@@ -432,10 +461,8 @@ Formule UM tópico central em 2-5 palavras. Exemplos:
 
 Responda APENAS com o tópico:"""
             
-            messages = [{"role": "user", "content": refinement_prompt}]
-            
             refined_topic = send_to_xai(
-                messages=messages,
+                prompt=refinement_prompt,  # ✅ CORRIGIDO
                 model="grok-4-fast-reasoning",
                 max_tokens=50
             )
@@ -454,7 +481,7 @@ Responda APENAS com o tópico:"""
             return self._extract_topic_from_conversations(user_id)
     
     def _extract_topic_from_conversations(self, user_id: str) -> Optional[str]:
-        """Extrai tópico via LLM (fallback ou modo sem ChromaDB)"""
+        """✅ CORRIGIDO: Extrai tópico via LLM (fallback ou modo sem ChromaDB)"""
         
         conversations = self.db.get_user_conversations(user_id, limit=20)
         
@@ -480,10 +507,9 @@ Responda APENAS com o tópico em 2-5 palavras. Exemplos:
 Tópico:"""
         
         try:
-            messages = [{"role": "user", "content": extraction_prompt}]
-            
+            # 🔧 CORRIGIDO: Usar argumento 'prompt' em vez de 'messages'
             response = send_to_xai(
-                messages=messages,
+                prompt=extraction_prompt,  # ✅ CORRIGIDO
                 model="grok-4-fast-reasoning",
                 max_tokens=50
             )
@@ -534,7 +560,7 @@ Tópico:"""
         user_name: str,
         relevant_facts: List[str]
     ) -> str:
-        """🧠 GERAÇÃO DE CONHECIMENTO AUTÔNOMO - Versão HÍBRIDA"""
+        """🔧 CORRIGIDO: GERAÇÃO DE CONHECIMENTO AUTÔNOMO - Versão HÍBRIDA"""
         
         # Construir contexto com fatos
         facts_context = ""
@@ -578,10 +604,9 @@ Se você está como **Rebelde + Sombra**:
 **AGORA GERE SEU INSIGHT AUTÔNOMO:**"""
         
         try:
-            messages = [{"role": "user", "content": knowledge_prompt}]
-            
+            # 🔧 CORRIGIDO: Usar argumento 'prompt' em vez de 'messages'
             response = send_to_xai(
-                messages=messages,
+                prompt=knowledge_prompt,  # ✅ CORRIGIDO
                 model="grok-4-fast-reasoning",
                 temperature=0.8,
                 max_tokens=500
@@ -619,7 +644,7 @@ Se você está como **Rebelde + Sombra**:
         """✅ MÉTODO PRINCIPAL - Gera mensagem proativa avançada HÍBRIDA"""
         
         print(f"\n{'='*60}")
-        print(f"🧠 GERAÇÃO PROATIVA AVANÇADA (HÍBRIDO v4.0) - {user_name}")
+        print(f"🧠 GERAÇÃO PROATIVA AVANÇADA (HÍBRIDO v4.0.1) - {user_name}")
         print(f"{'='*60}")
         
         # 1. Checar elegibilidade
@@ -738,5 +763,6 @@ Se você está como **Rebelde + Sombra**:
 # ============================================================
 
 if __name__ == "__main__":
-    print("🧠 Jung Proactive Advanced v4.0 - HÍBRIDO PREMIUM")
+    print("🧠 Jung Proactive Advanced v4.0.1 - HÍBRIDO PREMIUM (CORRIGIDO)")
     print("✅ ChromaDB + OpenAI Embeddings + Fatos Estruturados")
+    print("🔧 send_to_xai() agora usa argumento 'prompt' corretamente")

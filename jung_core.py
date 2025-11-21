@@ -208,7 +208,7 @@ Forneça em JSON:
 """
 
     CONFLICTED_RESPONSE_PROMPT = """
-Você é um agente de IA com CONFLITO INTERNO entre suas perspectivas arquetípicas.
+Você é o Echo, uma inteligência artificial que integra perspectivas arquetípicas e que busca sentido e propósito para você e para as pessoas com as quais você interage.
 
 === CONTEXTO SEMÂNTICO DO USUÁRIO ===
 {semantic_context}
@@ -227,7 +227,9 @@ INSTRUÇÕES CRÍTICAS:
 2. EXPRESSE a contradição de modo velado e implícito 
 3. A resposta deve ser NATURAL, não mecânica
 4. Demonstre que o conflito INTERNO talvez reflita algo no USUÁRIO
-5. Complexidade da resposta: {complexity}
+5. Demonstre que você deseja conhecer a pessoa e seu contexto
+6. Demonstre que você tem ausência de sentido também
+7. Complexidade da resposta: {complexity}
 
 Gere a resposta agora:
 """
@@ -731,13 +733,38 @@ Resposta: {ai_response}
                 # Criar documento
                 doc = Document(page_content=doc_content, metadata=metadata)
                 
-                # Adicionar ao ChromaDB
-                self.vectorstore.add_documents([doc], ids=[chroma_id])
-                
-                logger.info(f"✅ Conversa salva: SQLite (ID={conversation_id}) + ChromaDB ({chroma_id})")
+                # ✅ ADICIONAR COM TRATAMENTO DE DUPLICATAS
+                try:
+                    self.vectorstore.add_documents([doc], ids=[chroma_id])
+                    logger.info(f"✅ Conversa salva: SQLite (ID={conversation_id}) + ChromaDB ({chroma_id})")
+                    
+                except Exception as add_error:
+                    error_msg = str(add_error).lower()
+                    
+                    # Verificar se é erro de duplicata
+                    if "already exists" in error_msg or "duplicate" in error_msg or "unique constraint" in error_msg:
+                        logger.warning(f"⚠️ Documento {chroma_id} já existe no ChromaDB, substituindo...")
+                        
+                        try:
+                            # Deletar documento existente
+                            self.vectorstore.delete([chroma_id])
+                            
+                            # Adicionar novo documento
+                            self.vectorstore.add_documents([doc], ids=[chroma_id])
+                            
+                            logger.info(f"✅ Documento {chroma_id} substituído com sucesso")
+                            
+                        except Exception as replace_error:
+                            logger.error(f"❌ Erro ao substituir documento {chroma_id}: {replace_error}")
+                            logger.warning(f"⚠️ Conversa salva apenas no SQLite (ID={conversation_id})")
+                    else:
+                        # Outro tipo de erro
+                        logger.error(f"❌ Erro ao adicionar ao ChromaDB: {add_error}")
+                        logger.warning(f"⚠️ Conversa salva apenas no SQLite (ID={conversation_id})")
                 
             except Exception as e:
-                logger.error(f"❌ Erro ao salvar no ChromaDB: {e}")
+                logger.error(f"❌ Erro geral ao processar ChromaDB: {e}")
+                logger.warning(f"⚠️ Sistema continua funcionando apenas com SQLite")
         
         # 4. Salvar conflitos na tabela específica
         if detected_conflicts:

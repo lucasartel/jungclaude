@@ -2,7 +2,7 @@
 telegram_bot.py - Bot Telegram Jung Claude HÍBRIDO PREMIUM
 ===========================================================
 
-✅ VERSÃO 4.0 - HÍBRIDO PREMIUM + SISTEMA PROATIVO
+✅ VERSÃO 4.0.1 - HÍBRIDO PREMIUM + SISTEMA PROATIVO (CORRIGIDO)
    Integração com jung_core.py v4.0 (ChromaDB + OpenAI Embeddings + SQLite)
    Sistema Proativo Avançado com personalidades arquetípicas rotativas
 
@@ -14,10 +14,11 @@ Mudanças principais:
 - Sistema de desenvolvimento do agente
 - Comandos aprimorados para visualização de memória
 - ✅ SISTEMA PROATIVO AVANÇADO (jung_proactive_advanced.py)
+- 🔧 CORREÇÃO: send_to_xai() agora usa argumento 'prompt' corretamente
 
 Autor: Sistema Jung Claude
-Data: 2025-11-20
-Versão: 4.0 - HÍBRIDO PREMIUM + PROATIVO
+Data: 2025-11-21
+Versão: 4.0.1 - HÍBRIDO PREMIUM + PROATIVO (CORRIGIDO)
 """
 
 import os
@@ -946,7 +947,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def check_inactive_users(context: ContextTypes.DEFAULT_TYPE):
     """
     Verificação periódica de usuários inativos
-    Executada automaticamente pelo scheduler a cada 1 hora
+    Executada automaticamente pelo scheduler a cada 3 minutos (teste)
     """
     
     if not bot_state.proactive:
@@ -957,6 +958,10 @@ async def check_inactive_users(context: ContextTypes.DEFAULT_TYPE):
         logger.info("="*60)
         logger.info("⏰ VERIFICAÇÃO PROATIVA INICIADA")
         logger.info("="*60)
+        
+        # ✅ SLEEP REMOVIDO - Scheduler já controla o intervalo
+        
+        logger.info("🔍 Verificando usuários para mensagens proativas...")
         
         # Buscar todos os usuários do Telegram
         all_users = bot_state.db.get_all_users(platform='telegram')
@@ -1102,22 +1107,23 @@ async def post_init(application: Application):
     bot_state.proactive = ProactiveAdvancedSystem(bot_state.db)
     logger.info("✅ Sistema Proativo Avançado inicializado")
     
-    # ✅ CONFIGURAR SCHEDULER (verificar a cada 1 hora)
+    # ✅ CONFIGURAR SCHEDULER (verificar a cada 3 minutos - TESTE)
     job_queue = application.job_queue
     job_queue.run_repeating(
         check_inactive_users,
-        interval=180,  # 1 hora em segundos (3600s)
+        interval=180,  # 3 minutos em segundos (180s)
         first=60  # Primeira verificação após 1 minuto
     )
     
-    logger.info("✅ Scheduler proativo ativado (verificação a cada 1h)")
+    logger.info("✅ Scheduler proativo ativado (verificação a cada 3min - TESTE)")
 
 def main():
     """Ponto de entrada principal"""
     
     logger.info("="*60)
-    logger.info("🤖 JUNG CLAUDE TELEGRAM BOT v4.0 - HÍBRIDO PREMIUM + PROATIVO")
+    logger.info("🤖 JUNG CLAUDE TELEGRAM BOT v4.0.1 - HÍBRIDO PREMIUM + PROATIVO")
     logger.info("   ChromaDB + OpenAI Embeddings + SQLite + Sistema Proativo")
+    logger.info("   🔧 CORREÇÃO: send_to_xai() corrigido")
     logger.info("="*60)
     
     # Validar configuração
@@ -1162,7 +1168,7 @@ def main():
     logger.info("🚀 Iniciando bot...")
     logger.info(f"✅ ChromaDB: {'ATIVO' if bot_state.db.chroma_enabled else 'INATIVO'}")
     logger.info(f"✅ Modelo Embeddings: {Config.EMBEDDING_MODEL}")
-    logger.info(f"✅ Sistema Proativo: ATIVO (verificação a cada 1h)")
+    logger.info(f"✅ Sistema Proativo: ATIVO (verificação a cada 3min - TESTE)")
     logger.info("✅ Bot rodando! Pressione Ctrl+C para parar.")
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)
