@@ -47,13 +47,13 @@ if IS_PRODUCTION:
     INACTIVITY_THRESHOLD_HOURS = 12.0  # 12 horas de inatividade
     COOLDOWN_HOURS = 24.0  # 24 horas entre mensagens proativas
     MIN_CONVERSATIONS_REQUIRED = 10  # Mínimo de conversas
-    logger.info("🚀 MODO PRODUÇÃO: Parâmetros conservadores ativados")
+    print("🚀 MODO PRODUÇÃO: Parâmetros conservadores ativados")  # ✅ Usando print
 else:
     # 🧪 DESENVOLVIMENTO/TESTE
     INACTIVITY_THRESHOLD_HOURS = 0.05  # 3 minutos (teste rápido)
     COOLDOWN_HOURS = 0.1  # 6 minutos (teste rápido)
     MIN_CONVERSATIONS_REQUIRED = 3  # Menos conversas necessárias
-    logger.info("🧪 MODO TESTE: Parâmetros acelerados ativados")
+    print("🧪 MODO TESTE: Parâmetros acelerados ativados")  # ✅ Usando print
 
 # ============================================================
 
