@@ -56,7 +56,6 @@ else:
     MIN_CONVERSATIONS_REQUIRED = 3  # Menos conversas necessárias
     print("🧪 MODO TESTE: Parâmetros acelerados ativados")  # ✅ Usando print
 
-# ============================================================
 
 # ============================================================
 # ENUMS E ESTRUTURAS DE DADOS
