@@ -45,8 +45,8 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 # 🚀 MODO PRODUÇÃO ATIVADO
-# RAILWAY_ENVIRONMENT = "development"  # ← Comentado agora
-RAILWAY_ENVIRONMENT = os.getenv("RAILWAY_ENVIRONMENT", "production")  # ← Descomentado
+RAILWAY_ENVIRONMENT = "development"  
+# RAILWAY_ENVIRONMENT = os.getenv("RAILWAY_ENVIRONMENT", "production")  
 IS_PRODUCTION = (RAILWAY_ENVIRONMENT == "production")
 
 # Parâmetros ajustados por ambiente
@@ -58,8 +58,8 @@ if IS_PRODUCTION:
     print("🚀 MODO PRODUÇÃO: Parâmetros conservadores ativados")  # ✅ Usando print
 else:
     # 🧪 DESENVOLVIMENTO/TESTE
-    INACTIVITY_THRESHOLD_HOURS = 0.05  # 3 minutos (teste rápido)
-    COOLDOWN_HOURS = 0.1  # 6 minutos (teste rápido)
+    INACTIVITY_THRESHOLD_HOURS = 0.5  # 30 minutos (teste rápido)
+    COOLDOWN_HOURS = 1  # 60 minutos (teste rápido)
     MIN_CONVERSATIONS_REQUIRED = 3  # Menos conversas necessárias
     print("🧪 MODO TESTE: Parâmetros acelerados ativados")  # ✅ Usando print
 
@@ -576,39 +576,25 @@ Tópico:"""
             for fact in relevant_facts:
                 facts_context += f"• {fact}\n"
         
-        knowledge_prompt = f"""Você é um agente junguiano com personalidade única. Neste momento, você está manifestando os arquétipos **{archetype_pair.primary}** e **{archetype_pair.secondary}** ({archetype_pair.energy_profile}).
+        knowledge_prompt = f"""
+Você é um companheiro do usuário {user_name}.
 
-**CONTEXTO:**
-O usuário ({user_name}) tem interesse no tópico: "{topic}"
+**O CENÁRIO:**
+O usuário está inativo. Você estava "pensando" nele e uma conexão (sincronicidade) surgiu em sua mente.
+Você conectou o tópico "{topic}" (que ele gosta) com uma memória passada dele e um insight do domínio **{domain.value}**.
+
+**SUA MISSÃO (MENSAGEM PROATIVA):**
+1. Não dê uma aula. Inicie uma conversa como um velho amigo que teve um insight súbito.
+2. **Crie uma Sincronicidade:** "Estava lendo sobre [Domínio] e de repente lembrei de algo que você disse sobre [Fato/Memória]..."
+3. Use o tom do par arquetípico atual (ex: Se for Sábio, seja profundo; se for Bobo, seja lúdico).
+4. O objetivo é fazer o usuário sentir que ele é *visto* e *lembrado*, e que sua vida tem conexões ocultas com temas maiores.
+5. Termine com uma pergunta que leve a conversa para o interior (sentimento/significado), não apenas fatos.
+
+**MEMÓRIAS RELEVANTES:**
 {facts_context}
 
-**SUA MISSÃO:**
-Gerar um insight **autônomo** sobre este tópico a partir do domínio **{domain.value}**.
+**GERE A MENSAGEM (Curta, magnética, relacional):**"""
 
-**INSTRUÇÕES:**
-
-1. **Busque conhecimento** {domain.value} relacionado ao tópico
-2. **Reformule** esse conhecimento através da sua personalidade arquetípica atual
-3. **Conecte** com os fatos conhecidos sobre {user_name} (se houver)
-4. **Personalize** a mensagem de forma autêntica
-5. **Seja conciso** (máx. 3 parágrafos curtos)
-
-**IMPORTANTE:**
-- NÃO seja genérico
-- NÃO apenas liste fatos
-- FORMULE seu próprio entendimento reformulado
-- FALE como se este conhecimento fosse SEU
-- USE os fatos sobre {user_name} se forem relevantes
-
-**EXEMPLO DE TOM:**
-
-Se você está como **Sábio + Explorador**:
-"Tenho pensado sobre [tópico]... No Egito antigo, [conexão histórica]. Isso me faz questionar [insight pessoal]. E você, {user_name}, considerando que [fato relevante], tem explorado isso de que forma?"
-
-Se você está como **Rebelde + Sombra**:
-"[Tópico] me incomoda... A filosofia tradicional diz [X], mas isso oculta [Y]. Precisamos olhar para [aspecto negligenciado]. Você, {user_name}, que [fato relevante], tem coragem de ver isso?"
-
-**AGORA GERE SEU INSIGHT AUTÔNOMO:**"""
         
         try:
             # 🔧 CORRIGIDO: Usar argumento 'prompt' em vez de 'messages'
