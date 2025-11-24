@@ -72,7 +72,36 @@ async def test_route():
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, username: str = Depends(verify_credentials)):
-    """Dashboard principal"""
+    """Dashboard principal - com fallback para quando jung_core não está disponível"""
+    
+    if not JUNG_CORE_AVAILABLE:
+        # Dashboard de diagnóstico quando jung_core não está disponível
+        import sys
+        import platform
+        
+        # Tentar importar dependências individualmente para diagnóstico
+        deps_status = {}
+        for dep in ["openai", "chromadb", "langchain", "langchain_openai", "langchain_chroma"]:
+            try:
+                __import__(dep)
+                deps_status[dep] = "✅ OK"
+            except ImportError as e:
+                deps_status[dep] = f"❌ {str(e)[:50]}"
+        
+        return templates.TemplateResponse("dashboard.html", {
+            "request": request,
+            "jung_core_available": False,
+            "total_users": 0,
+            "total_interactions": 0,
+            "total_conflicts": 0,
+            "users": [],
+            "diagnostic_mode": True,
+            "python_version": platform.python_version(),
+            "dependencies": deps_status,
+            "error_message": "jung_core não pôde ser carregado. Verifique os logs para detalhes."
+        })
+    
+    # Modo normal com jung_core disponível
     db = get_db()
     
     # Estatísticas Gerais
@@ -86,10 +115,12 @@ async def dashboard(request: Request, username: str = Depends(verify_credentials
     
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
+        "jung_core_available": True,
         "total_users": len(sqlite_users),
         "total_interactions": total_interactions,
         "total_conflicts": total_conflicts,
-        "users": sqlite_users[:5] # Top 5 recentes
+        "users": sqlite_users[:5],  # Top 5 recentes
+        "diagnostic_mode": False
     })
 
 @router.get("/users", response_class=HTMLResponse)
