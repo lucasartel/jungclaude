@@ -85,8 +85,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Jung Claude Admin", lifespan=lifespan)
 
-# Montar arquivos estáticos
-app.mount("/static", StaticFiles(directory="admin_web/static"), name="static")
+# Montar arquivos estáticos (apenas se o diretório existir)
+static_dir = "admin_web/static"
+if os.path.exists(static_dir) and os.path.isdir(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    logger.info(f"✅ Diretório static montado: {static_dir}")
+else:
+    logger.warning(f"⚠️  Diretório static não encontrado: {static_dir} - Continuando sem arquivos estáticos")
 
 # Importar e incluir rotas do admin
 from admin_web.routes import router as admin_router
