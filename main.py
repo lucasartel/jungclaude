@@ -6,7 +6,11 @@ from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 import logging
 import os
+import sys
 from dotenv import load_dotenv
+
+# Adicionar diretório atual ao PYTHONPATH para garantir que admin_web seja encontrado
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Importar o bot
 from telegram_bot import BotState, start_command, help_command, perfil_command, memoria_command, fatos_command, padroes_command, tensoes_command, arquetipo_command, stats_command, buscar_command, reset_command
@@ -84,6 +88,25 @@ async def lifespan(app: FastAPI):
 # ============================================================================
 
 app = FastAPI(title="Jung Claude Admin", lifespan=lifespan)
+
+# ============================================================================
+# ROTAS BÁSICAS
+# ============================================================================
+
+@app.get("/")
+async def root():
+    """Rota raiz - redireciona para o admin"""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/admin")
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint para monitoramento"""
+    return {
+        "status": "healthy",
+        "service": "Jung Claude Bot + Admin",
+        "bot_running": True
+    }
 
 # Montar arquivos estáticos (apenas se o diretório existir)
 static_dir = "admin_web/static"
