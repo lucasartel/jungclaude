@@ -396,7 +396,7 @@ Retorne JSON com esta estrutura EXATA:
         )
 
         response = client.chat.completions.create(
-            model="grok-beta",
+            model="grok-4-fast-reasoning",
             messages=[
                 {"role": "system", "content": "Você é um analista jungiano especializado em MBTI. Responda APENAS com JSON válido."},
                 {"role": "user", "content": prompt}
