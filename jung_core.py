@@ -1949,6 +1949,13 @@ def format_archetype_info(archetype_name: str) -> str:
 """.strip()
 
 # ============================================================
+# ALIASES DE COMPATIBILIDADE
+# ============================================================
+
+# Alias para compatibilidade com código legado
+DatabaseManager = HybridDatabaseManager
+
+# ============================================================
 # INICIALIZAÇÃO
 # ============================================================
 
