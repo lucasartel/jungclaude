@@ -23,11 +23,14 @@
                                 <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Username</th>
                                 <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Mensagens</th>
                                 <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Última Interação</th>
+                                <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                                    <span class="sr-only">Ações</span>
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white">
                             {% for user in users %}
-                            <tr>
+                            <tr class="hover:bg-gray-50">
                                 <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
                                     {{ user.user_id }}
                                 </td>
@@ -35,18 +38,26 @@
                                     {{ user.first_name or 'N/A' }}
                                 </td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                    @{{ user.username or 'N/A' }}
+                                    @{{ user.user_name or 'N/A' }}
                                 </td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                                     {{ user.total_messages or 0 }}
                                 </td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                    {{ user.last_interaction or 'N/A' }}
+                                    {{ user.last_seen or 'N/A' }}
+                                </td>
+                                <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                                    <a href="/admin/user/{{ user.user_id }}/analysis" class="text-indigo-600 hover:text-indigo-900 mr-4">
+                                        Análise
+                                    </a>
+                                    <a href="/admin/user/{{ user.user_id }}/development" class="text-purple-600 hover:text-purple-900">
+                                        Desenvolvimento
+                                    </a>
                                 </td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="5" class="px-3 py-4 text-sm text-gray-500 text-center">
+                                <td colspan="6" class="px-3 py-4 text-sm text-gray-500 text-center">
                                     Nenhum usuário encontrado
                                 </td>
                             </tr>

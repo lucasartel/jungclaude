@@ -8,11 +8,15 @@ from typing import Dict, List, Optional
 import logging
 
 # Importar core do Jung (opcional - pode falhar se dependências não estiverem disponíveis)
+JUNG_CORE_ERROR = None
 try:
     from jung_core import DatabaseManager, JungianEngine, Config
     JUNG_CORE_AVAILABLE = True
 except Exception as e:
-    logging.warning(f"jung_core não disponível: {e}")
+    import traceback
+    JUNG_CORE_ERROR = traceback.format_exc()
+    logging.error(f"❌ Erro ao importar jung_core: {e}")
+    logging.error(f"Traceback:\n{JUNG_CORE_ERROR}")
     DatabaseManager = None
     JungianEngine = None
     Config = None
@@ -98,7 +102,8 @@ async def dashboard(request: Request, username: str = Depends(verify_credentials
             "diagnostic_mode": True,
             "python_version": platform.python_version(),
             "dependencies": deps_status,
-            "error_message": "jung_core não pôde ser carregado. Verifique os logs para detalhes."
+            "error_message": "jung_core não pôde ser carregado.",
+            "error_traceback": JUNG_CORE_ERROR
         })
     
     # Modo normal com jung_core disponível
@@ -134,6 +139,81 @@ async def users_list(request: Request, username: str = Depends(verify_credential
 async def sync_check_page(request: Request, username: str = Depends(verify_credentials)):
     """Página de diagnóstico de sincronização"""
     return templates.TemplateResponse("sync_check.html", {"request": request})
+
+@router.get("/user/{user_id}/analysis", response_class=HTMLResponse)
+async def user_analysis_page(request: Request, user_id: str, username: str = Depends(verify_credentials)):
+    """Página de análise MBTI/Jungiana do usuário"""
+    db = get_db()
+
+    # Buscar usuário
+    user = db.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    # Buscar conversas
+    conversations = db.get_user_conversations(user_id, limit=50)
+    total_conversations = db.count_conversations(user_id)
+
+    # Buscar conflitos
+    cursor = db.conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*) as count FROM archetype_conflicts WHERE user_id = ?
+    """, (user_id,))
+    total_conflicts = cursor.fetchone()[0]
+
+    return templates.TemplateResponse("user_analysis.html", {
+        "request": request,
+        "user": user,
+        "user_id": user_id,
+        "total_conversations": total_conversations,
+        "total_conflicts": total_conflicts,
+        "conversations": conversations[:10]  # Últimas 10 para preview
+    })
+
+@router.get("/user/{user_id}/development", response_class=HTMLResponse)
+async def user_development_page(request: Request, user_id: str, username: str = Depends(verify_credentials)):
+    """Página de desenvolvimento do agente do usuário"""
+    db = get_db()
+
+    # Buscar usuário
+    user = db.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    # Buscar milestones
+    cursor = db.conn.cursor()
+    cursor.execute("""
+        SELECT * FROM user_milestones
+        WHERE user_id = ?
+        ORDER BY achieved_at DESC
+        LIMIT 20
+    """, (user_id,))
+    milestones = [dict(row) for row in cursor.fetchall()]
+
+    # Buscar padrões
+    cursor.execute("""
+        SELECT * FROM user_patterns
+        WHERE user_id = ?
+        ORDER BY confidence_score DESC, frequency_count DESC
+        LIMIT 10
+    """, (user_id,))
+    patterns = [dict(row) for row in cursor.fetchall()]
+
+    # Buscar conflitos recentes
+    conflicts = db.get_user_conflicts(user_id, limit=10)
+
+    # Stats
+    total_conversations = db.count_conversations(user_id)
+
+    return templates.TemplateResponse("user_development.html", {
+        "request": request,
+        "user": user,
+        "user_id": user_id,
+        "total_conversations": total_conversations,
+        "milestones": milestones,
+        "patterns": patterns,
+        "conflicts": conflicts
+    })
 
 # ============================================================================
 # ROTAS DE API (HTMX / JSON)
@@ -212,5 +292,135 @@ async def run_diagnosis(username: str = Depends(verify_credentials)):
             </div>
         </div>
         """
-        
+
     return HTMLResponse(html)
+
+@router.post("/api/user/{user_id}/analyze-mbti")
+async def analyze_user_mbti(request: Request, user_id: str, username: str = Depends(verify_credentials)):
+    """Analisa padrão MBTI do usuário usando Grok"""
+    import re
+    import json
+    from openai import OpenAI
+
+    db = get_db()
+
+    # Verificar se XAI_API_KEY está disponível
+    xai_api_key = os.getenv("XAI_API_KEY")
+    if not xai_api_key:
+        return JSONResponse({
+            "error": "XAI_API_KEY não configurada",
+            "type_indicator": "XXXX",
+            "confidence": 0,
+            "summary": "Configure a variável XAI_API_KEY para habilitar análise MBTI"
+        }, status_code=503)
+
+    # Buscar conversas do usuário
+    conversations = db.get_user_conversations(user_id, limit=30)
+
+    if len(conversations) < 5:
+        return JSONResponse({
+            "error": "Conversas insuficientes",
+            "type_indicator": "XXXX",
+            "confidence": 0,
+            "summary": f"São necessárias pelo menos 5 conversas para análise. Atualmente: {len(conversations)}"
+        }, status_code=400)
+
+    # Extrair inputs do usuário
+    user_inputs = [conv['user_input'] for conv in conversations if conv.get('user_input')]
+
+    if len(user_inputs) < 5:
+        return JSONResponse({
+            "error": "Dados insuficientes",
+            "type_indicator": "XXXX",
+            "confidence": 0,
+            "summary": "Dados de conversas insuficientes para análise"
+        }, status_code=400)
+
+    # Preparar amostra
+    sample_size = min(15, len(user_inputs))
+    first_inputs = user_inputs[:sample_size // 2]
+    last_inputs = user_inputs[-(sample_size // 2):] if len(user_inputs) > sample_size // 2 else []
+
+    inputs_text = "**Mensagens Iniciais:**\n"
+    inputs_text += "\n".join([f"- {inp[:150]}..." for inp in first_inputs])
+
+    if last_inputs:
+        inputs_text += "\n\n**Mensagens Recentes:**\n"
+        inputs_text += "\n".join([f"- {inp[:150]}..." for inp in last_inputs])
+
+    # Calcular estatísticas
+    total_conversations = len(conversations)
+    avg_tension = sum(conv.get('tension_level', 0) for conv in conversations) / total_conversations
+    avg_affective = sum(conv.get('affective_charge', 0) for conv in conversations) / total_conversations
+
+    # Prompt para Grok
+    prompt = f"""
+Analise o padrão psicológico deste usuário seguindo princípios junguianos e o modelo MBTI.
+
+**ESTATÍSTICAS:**
+- Total de interações: {total_conversations}
+- Tensão média: {avg_tension:.2f}/10
+- Carga afetiva média: {avg_affective:.1f}/100
+
+**MENSAGENS DO USUÁRIO:**
+{inputs_text}
+
+Retorne JSON com esta estrutura EXATA:
+{{
+    "type_indicator": "XXXX (ex: INFP)",
+    "confidence": 0-100,
+    "dimensions": {{
+        "E_I": {{
+            "score": -100 a +100 (negativo=E, positivo=I),
+            "interpretation": "Análise com evidências",
+            "key_indicators": ["indicador1", "indicador2"]
+        }},
+        "S_N": {{"score": -100 a +100, "interpretation": "...", "key_indicators": [...]}},
+        "T_F": {{"score": -100 a +100, "interpretation": "...", "key_indicators": [...]}},
+        "J_P": {{"score": -100 a +100, "interpretation": "...", "key_indicators": [...]}}
+    }},
+    "dominant_function": "Ex: Ni (Intuição Introvertida)",
+    "auxiliary_function": "Ex: Fe",
+    "summary": "Resumo analítico em 2-3 frases",
+    "potentials": ["potencial1", "potencial2"],
+    "challenges": ["desafio1", "desafio2"],
+    "recommendations": ["recomendação1", "recomendação2"]
+}}
+"""
+
+    try:
+        # Chamar Grok
+        client = OpenAI(
+            api_key=xai_api_key,
+            base_url="https://api.x.ai/v1"
+        )
+
+        response = client.chat.completions.create(
+            model="grok-beta",
+            messages=[
+                {"role": "system", "content": "Você é um analista jungiano especializado em MBTI. Responda APENAS com JSON válido."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=2000
+        )
+
+        content = response.choices[0].message.content
+
+        # Extrair JSON
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if json_match:
+            analysis = json.loads(json_match.group())
+        else:
+            analysis = json.loads(content)
+
+        return JSONResponse(analysis)
+
+    except Exception as e:
+        logger.error(f"Erro na análise MBTI: {e}")
+        return JSONResponse({
+            "error": str(e),
+            "type_indicator": "XXXX",
+            "confidence": 0,
+            "summary": f"Erro ao processar análise: {str(e)}"
+        }, status_code=500)
