@@ -1523,42 +1523,42 @@ class ConflictDetector:
                 
                 arch1 = archetype_analyses[arch1_name]
                 arch2 = archetype_analyses[arch2_name]
-                
-                direction1 = arch1.suggested_response_direction.lower()
-                direction2 = arch2.suggested_response_direction.lower()
-                
+
+                impulse1 = arch1.impulse.lower()
+                impulse2 = arch2.impulse.lower()
+
                 is_conflicting = False
                 conflict_type = ""
-                
+
                 # Verificar oposições
-                if direction1 in self.opposing_directions:
-                    if direction2 in self.opposing_directions[direction1]:
+                if impulse1 in self.opposing_directions:
+                    if impulse2 in self.opposing_directions[impulse1]:
                         is_conflicting = True
-                        conflict_type = f"{direction1}_vs_{direction2}"
-                
-                if direction2 in self.opposing_directions:
-                    if direction1 in self.opposing_directions[direction2]:
+                        conflict_type = f"{impulse1}_vs_{impulse2}"
+
+                if impulse2 in self.opposing_directions:
+                    if impulse1 in self.opposing_directions[impulse2]:
                         is_conflicting = True
-                        conflict_type = f"{direction2}_vs_{direction1}"
-                
-                # Conflitos específicos
+                        conflict_type = f"{impulse2}_vs_{impulse1}"
+
+                # Conflitos específicos por nome de arquétipo
                 if (arch1_name.lower() == "persona" and arch2_name.lower() == "sombra") or \
                    (arch1_name.lower() == "sombra" and arch2_name.lower() == "persona"):
-                    if direction1 != direction2:
+                    if impulse1 != impulse2:
                         is_conflicting = True
                         conflict_type = "persona_sombra_clash"
-                
+
                 if is_conflicting:
                     tension_level = self._calculate_tension(arch1, arch2)
-                    
+
                     conflict = ArchetypeConflict(
                         archetype_1=arch1_name,
                         archetype_2=arch2_name,
                         conflict_type=conflict_type,
-                        archetype_1_position=f"{arch1.suggested_stance} ({direction1})",
-                        archetype_2_position=f"{arch2.suggested_stance} ({direction2})",
+                        archetype_1_position=f"{impulse1} (intensidade: {arch1.intensity:.1f})",
+                        archetype_2_position=f"{impulse2} (intensidade: {arch2.intensity:.1f})",
                         tension_level=tension_level,
-                        description=f"Tensão entre {arch1_name} ({direction1}) e {arch2_name} ({direction2})"
+                        description=f"Tensão entre {arch1_name} ({impulse1}) e {arch2_name} ({impulse2})"
                     )
                     
                     conflicts.append(conflict)
@@ -1568,24 +1568,26 @@ class ConflictDetector:
     
     def _calculate_tension(self, arch1: ArchetypeInsight, arch2: ArchetypeInsight) -> float:
         """Calcula nível de tensão entre dois arquétipos"""
-        direction1 = arch1.suggested_response_direction.lower()
-        direction2 = arch2.suggested_response_direction.lower()
-        
-        high_tension_words = ['confrontar', 'desafiar', 'expor', 'provocar']
-        low_tension_words = ['acolher', 'validar', 'proteger', 'suavizar']
-        
-        tension = 0.5
-        
-        if direction1 in high_tension_words and direction2 in low_tension_words:
-            tension = 0.9
-        elif direction1 in low_tension_words and direction2 in high_tension_words:
-            tension = 0.9
-        elif direction1 in high_tension_words and direction2 in high_tension_words:
-            tension = 0.3
-        elif direction1 in low_tension_words and direction2 in low_tension_words:
-            tension = 0.2
-        
-        return tension
+        impulse1 = arch1.impulse.lower()
+        impulse2 = arch2.impulse.lower()
+
+        high_tension_words = ['confrontar', 'provocar', 'desafiar']
+        low_tension_words = ['acolher', 'proteger']
+
+        # Base: média das intensidades
+        tension = (arch1.intensity + arch2.intensity) / 2
+
+        # Ajustar tensão baseado em oposição de impulsos
+        if impulse1 in high_tension_words and impulse2 in low_tension_words:
+            tension = min(0.9, tension + 0.3)
+        elif impulse1 in low_tension_words and impulse2 in high_tension_words:
+            tension = min(0.9, tension + 0.3)
+        elif impulse1 in high_tension_words and impulse2 in high_tension_words:
+            tension = max(0.3, tension - 0.2)  # Ambos intensos, mas alinhados
+        elif impulse1 in low_tension_words and impulse2 in low_tension_words:
+            tension = max(0.2, tension - 0.3)  # Ambos suaves, pouca tensão
+
+        return min(1.0, tension)  # Cap em 1.0
 
 # ============================================================
 # JUNGIAN ENGINE (Motor principal)
@@ -1668,7 +1670,7 @@ class JungianEngine:
                 semantic_context, chat_history, model
             )
             archetype_analyses[archetype_name] = analysis
-            logger.info(f"    → Direção: {analysis.suggested_response_direction}")
+            logger.info(f"    → Impulso: {analysis.impulse} (intensidade: {analysis.intensity:.1f})")
         
         # Detectar conflitos
         logger.info("⚡ Detectando conflitos internos...")
