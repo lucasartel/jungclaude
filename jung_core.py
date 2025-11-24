@@ -23,6 +23,7 @@ import hashlib
 import json
 import re
 import logging
+import threading
 from typing import List, Dict, Optional, Tuple, Any
 from datetime import datetime
 from dataclasses import dataclass, asdict
@@ -282,16 +283,19 @@ class HybridDatabaseManager:
     - SQLite: Metadados estruturados, fatos, padrões, desenvolvimento
     - ChromaDB: Memória semântica conversacional (busca vetorial)
     """
-    
+
     def __init__(self):
         """Inicializa gerenciador híbrido"""
-        
+
         Config.ensure_directories()
-        
+
         logger.info(f"🗄️  Inicializando banco HÍBRIDO...")
         logger.info(f"   SQLite: {Config.SQLITE_PATH}")
         logger.info(f"   ChromaDB: {Config.CHROMA_PATH}")
-        
+
+        # ===== Thread Safety =====
+        self._lock = threading.RLock()  # Reentrant lock para operações SQLite
+
         # ===== SQLite =====
         self.conn = sqlite3.connect(Config.SQLITE_PATH, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
@@ -321,10 +325,34 @@ class HybridDatabaseManager:
             logger.warning("⚠️  ChromaDB desabilitado. Usando apenas SQLite.")
         
         # ===== OpenAI Client (para embeddings e análises) =====
-        self.openai_client = OpenAI(api_key=Config.OPENAI_API_KEY)
-        
+        self.openai_client = OpenAI(
+            api_key=Config.OPENAI_API_KEY,
+            timeout=30.0  # 30 segundos de timeout
+        )
+
         logger.info("✅ Banco híbrido inicializado com sucesso")
-    
+
+    # ========================================
+    # THREAD-SAFE TRANSACTION MANAGEMENT
+    # ========================================
+
+    def transaction(self):
+        """Context manager para transações thread-safe"""
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _transaction():
+            with self._lock:
+                try:
+                    yield self.conn
+                    self.conn.commit()
+                except Exception as e:
+                    self.conn.rollback()
+                    logger.error(f"❌ Erro na transação, rollback executado: {e}")
+                    raise
+
+        return _transaction()
+
     # ========================================
     # SQLite: SCHEMA
     # ========================================
@@ -531,71 +559,97 @@ class HybridDatabaseManager:
             )
         """)
         
-        # ========== ÍNDICES ==========
+        # ========== ÍNDICES DE PERFORMANCE ==========
+        # Conversas
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_user ON conversations(user_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_timestamp ON conversations(timestamp)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conflict_user ON archetype_conflicts(user_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_platform ON users(platform, platform_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_facts_user_category ON user_facts(user_id, fact_category, is_current)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_patterns_user ON user_patterns(user_id, pattern_type)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_timestamp ON conversations(timestamp DESC)")  # DESC para ORDER BY
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_user_timestamp ON conversations(user_id, timestamp DESC)")  # Composto
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_chroma ON conversations(chroma_id)")
-        
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_session ON conversations(session_id)")
+
+        # Conflitos
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conflict_user ON archetype_conflicts(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conflict_conversation ON archetype_conflicts(conversation_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conflict_timestamp ON archetype_conflicts(timestamp DESC)")
+
+        # Usuários
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_platform ON users(platform, platform_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_last_seen ON users(last_seen DESC)")
+
+        # Fatos
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_facts_user_category ON user_facts(user_id, fact_category, is_current)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_facts_current ON user_facts(is_current, user_id)")  # Para buscas de fatos atuais
+
+        # Padrões
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_patterns_user ON user_patterns(user_id, pattern_type)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_patterns_confidence ON user_patterns(confidence_score DESC)")
+
+        # Milestones
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_milestones_type ON milestones(milestone_type)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_milestones_timestamp ON milestones(timestamp DESC)")
+
+        # Análises
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_analyses_user ON full_analyses(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_analyses_timestamp ON full_analyses(timestamp DESC)")
+
         self.conn.commit()
-        logger.info("✅ Schema SQLite criado/verificado")
+        logger.info("✅ Schema SQLite criado/verificado com índices de performance")
     
     # ========================================
     # USUÁRIOS
     # ========================================
     
-    def create_user(self, user_id: str, user_name: str, 
+    def create_user(self, user_id: str, user_name: str,
                    platform: str = 'telegram', platform_id: str = None):
         """Cria ou atualiza usuário"""
-        cursor = self.conn.cursor()
-        
-        name_parts = user_name.split()
-        first_name = name_parts[0].title() if name_parts else ""
-        last_name = name_parts[-1].title() if len(name_parts) > 1 else ""
-        
-        cursor.execute("""
-            INSERT OR REPLACE INTO users 
-            (user_id, user_name, first_name, last_name, platform, platform_id)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (user_id, user_name, first_name, last_name, platform, platform_id))
-        
-        self.conn.commit()
-        logger.info(f"✅ Usuário criado/atualizado: {user_name}")
+        with self._lock:
+            cursor = self.conn.cursor()
+
+            name_parts = user_name.split()
+            first_name = name_parts[0].title() if name_parts else ""
+            last_name = name_parts[-1].title() if len(name_parts) > 1 else ""
+
+            cursor.execute("""
+                INSERT OR REPLACE INTO users
+                (user_id, user_name, first_name, last_name, platform, platform_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user_id, user_name, first_name, last_name, platform, platform_id))
+
+            self.conn.commit()
+            logger.info(f"✅ Usuário criado/atualizado: {user_name}")
     
     def register_user(self, full_name: str, platform: str = "telegram") -> str:
         """Registra usuário (método legado compatível)"""
         name_normalized = full_name.lower().strip()
         user_id = hashlib.md5(name_normalized.encode()).hexdigest()[:12]
-        
-        cursor = self.conn.cursor()
-        
-        cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
-        existing = cursor.fetchone()
-        
-        if existing:
-            cursor.execute("""
-                UPDATE users 
-                SET total_sessions = total_sessions + 1,
-                    last_seen = CURRENT_TIMESTAMP
-                WHERE user_id = ?
-            """, (user_id,))
-            logger.info(f"✅ Usuário existente: {full_name} (sessão #{existing['total_sessions'] + 1})")
-        else:
-            name_parts = full_name.split()
-            first_name = name_parts[0].title()
-            last_name = name_parts[-1].title() if len(name_parts) > 1 else ""
-            
-            cursor.execute("""
-                INSERT INTO users (user_id, user_name, first_name, last_name, platform)
-                VALUES (?, ?, ?, ?, ?)
-            """, (user_id, full_name.title(), first_name, last_name, platform))
-            logger.info(f"✅ Novo usuário: {full_name}")
-        
-        self.conn.commit()
-        return user_id
+
+        with self._lock:
+            cursor = self.conn.cursor()
+
+            cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+            existing = cursor.fetchone()
+
+            if existing:
+                cursor.execute("""
+                    UPDATE users
+                    SET total_sessions = total_sessions + 1,
+                        last_seen = CURRENT_TIMESTAMP
+                    WHERE user_id = ?
+                """, (user_id,))
+                logger.info(f"✅ Usuário existente: {full_name} (sessão #{existing['total_sessions'] + 1})")
+            else:
+                name_parts = full_name.split()
+                first_name = name_parts[0].title()
+                last_name = name_parts[-1].title() if len(name_parts) > 1 else ""
+
+                cursor.execute("""
+                    INSERT INTO users (user_id, user_name, first_name, last_name, platform)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (user_id, full_name.title(), first_name, last_name, platform))
+                logger.info(f"✅ Novo usuário: {full_name}")
+
+            self.conn.commit()
+            return user_id
     
     def get_user(self, user_id: str) -> Optional[Dict]:
         """Busca dados do usuário"""
@@ -631,54 +685,55 @@ class HybridDatabaseManager:
     
     def save_conversation(self, user_id: str, user_name: str, user_input: str,
                          ai_response: str, session_id: str = None,
-                         archetype_analyses: Dict = None, 
+                         archetype_analyses: Dict = None,
                          detected_conflicts: List[ArchetypeConflict] = None,
                          tension_level: float = 0.0,
-                         affective_charge: float = 0.0, 
+                         affective_charge: float = 0.0,
                          existential_depth: float = 0.0,
-                         intensity_level: int = 5, 
+                         intensity_level: int = 5,
                          complexity: str = "medium",
-                         keywords: List[str] = None, 
+                         keywords: List[str] = None,
                          platform: str = "telegram",
                          chat_history: List[Dict] = None) -> int:
         """
         Salva conversa em AMBOS: SQLite (metadados) + ChromaDB (semântica)
-        
+
         Returns:
             int: ID da conversa no SQLite
         """
-        
-        cursor = self.conn.cursor()
-        
-        # 1. Salvar no SQLite (metadados)
-        cursor.execute("""
-            INSERT INTO conversations 
-            (user_id, user_name, session_id, user_input, ai_response, 
-             archetype_analyses, detected_conflicts,
-             tension_level, affective_charge, existential_depth,
-             intensity_level, complexity, keywords, platform)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            user_id, user_name, session_id, user_input, ai_response,
-            json.dumps({k: asdict(v) for k, v in archetype_analyses.items()}) if archetype_analyses else None,
-            json.dumps([asdict(c) for c in detected_conflicts]) if detected_conflicts else None,
-            tension_level, affective_charge, existential_depth,
-            intensity_level, complexity,
-            ",".join(keywords) if keywords else "",
-            platform
-        ))
-        
-        conversation_id = cursor.lastrowid
-        chroma_id = f"conv_{conversation_id}"
-        
-        # 2. Atualizar com chroma_id
-        cursor.execute("""
-            UPDATE conversations 
-            SET chroma_id = ? 
-            WHERE id = ?
-        """, (chroma_id, conversation_id))
-        
-        self.conn.commit()
+
+        with self._lock:
+            cursor = self.conn.cursor()
+
+            # 1. Salvar no SQLite (metadados)
+            cursor.execute("""
+                INSERT INTO conversations
+                (user_id, user_name, session_id, user_input, ai_response,
+                 archetype_analyses, detected_conflicts,
+                 tension_level, affective_charge, existential_depth,
+                 intensity_level, complexity, keywords, platform)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                user_id, user_name, session_id, user_input, ai_response,
+                json.dumps({k: asdict(v) for k, v in archetype_analyses.items()}) if archetype_analyses else None,
+                json.dumps([asdict(c) for c in detected_conflicts]) if detected_conflicts else None,
+                tension_level, affective_charge, existential_depth,
+                intensity_level, complexity,
+                ",".join(keywords) if keywords else "",
+                platform
+            ))
+
+            conversation_id = cursor.lastrowid
+            chroma_id = f"conv_{conversation_id}"
+
+            # 2. Atualizar com chroma_id
+            cursor.execute("""
+                UPDATE conversations
+                SET chroma_id = ?
+                WHERE id = ?
+            """, (chroma_id, conversation_id))
+
+            self.conn.commit()
         
         # 3. Salvar no ChromaDB (se habilitado)
         if self.chroma_enabled:
@@ -754,20 +809,21 @@ Resposta: {ai_response}
         
         # 4. Salvar conflitos na tabela específica
         if detected_conflicts:
-            for conflict in detected_conflicts:
-                cursor.execute("""
-                    INSERT INTO archetype_conflicts
-                    (user_id, conversation_id, archetype1, archetype2, 
-                     conflict_type, tension_level, description)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    user_id, conversation_id,
-                    conflict.archetype_1, conflict.archetype_2,
-                    conflict.conflict_type, conflict.tension_level,
-                    conflict.description
-                ))
-            
-            self.conn.commit()
+            with self._lock:
+                for conflict in detected_conflicts:
+                    cursor.execute("""
+                        INSERT INTO archetype_conflicts
+                        (user_id, conversation_id, archetype1, archetype2,
+                         conflict_type, tension_level, description)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        user_id, conversation_id,
+                        conflict.archetype_1, conflict.archetype_2,
+                        conflict.conflict_type, conflict.tension_level,
+                        conflict.description
+                    ))
+
+                self.conn.commit()
         
         # 5. Atualizar desenvolvimento do agente
         self._update_agent_development()
@@ -1109,44 +1165,45 @@ Resposta: {ai_response}
         
         return extracted
     
-    def _save_or_update_fact(self, user_id: str, category: str, key: str, 
+    def _save_or_update_fact(self, user_id: str, category: str, key: str,
                             value: str, conversation_id: int):
         """Salva ou atualiza fato (com versionamento)"""
-        cursor = self.conn.cursor()
-        
-        # Verificar se fato já existe
-        cursor.execute("""
-            SELECT id, fact_value FROM user_facts
-            WHERE user_id = ? AND fact_category = ? AND fact_key = ? AND is_current = 1
-        """, (user_id, category, key))
-        
-        existing = cursor.fetchone()
-        
-        if existing:
-            # Se valor mudou, criar nova versão
-            if existing['fact_value'] != value:
-                # Desativar versão antiga
-                cursor.execute("""
-                    UPDATE user_facts SET is_current = 0 WHERE id = ?
-                """, (existing['id'],))
-                
-                # Criar nova versão
+        with self._lock:
+            cursor = self.conn.cursor()
+
+            # Verificar se fato já existe
+            cursor.execute("""
+                SELECT id, fact_value FROM user_facts
+                WHERE user_id = ? AND fact_category = ? AND fact_key = ? AND is_current = 1
+            """, (user_id, category, key))
+
+            existing = cursor.fetchone()
+
+            if existing:
+                # Se valor mudou, criar nova versão
+                if existing['fact_value'] != value:
+                    # Desativar versão antiga
+                    cursor.execute("""
+                        UPDATE user_facts SET is_current = 0 WHERE id = ?
+                    """, (existing['id'],))
+
+                    # Criar nova versão
+                    cursor.execute("""
+                        INSERT INTO user_facts
+                        (user_id, fact_category, fact_key, fact_value,
+                         source_conversation_id, version)
+                        SELECT user_id, fact_category, fact_key, ?, ?, version + 1
+                        FROM user_facts WHERE id = ?
+                    """, (value, conversation_id, existing['id']))
+            else:
+                # Criar fato novo
                 cursor.execute("""
                     INSERT INTO user_facts
-                    (user_id, fact_category, fact_key, fact_value, 
-                     source_conversation_id, version)
-                    SELECT user_id, fact_category, fact_key, ?, ?, version + 1
-                    FROM user_facts WHERE id = ?
-                """, (value, conversation_id, existing['id']))
-        else:
-            # Criar fato novo
-            cursor.execute("""
-                INSERT INTO user_facts
-                (user_id, fact_category, fact_key, fact_value, source_conversation_id)
-                VALUES (?, ?, ?, ?, ?)
-            """, (user_id, category, key, value, conversation_id))
-        
-        self.conn.commit()
+                    (user_id, fact_category, fact_key, fact_value, source_conversation_id)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (user_id, category, key, value, conversation_id))
+
+            self.conn.commit()
     
     # ========================================
     # DETECÇÃO DE PADRÕES
@@ -1180,54 +1237,56 @@ Resposta: {ai_response}
             theme = theme.strip()
             if not theme or len(theme) < 3:
                 continue
-            
+
             related = self.semantic_search(user_id, theme, k=10)
-            
+
             # Se há múltiplas conversas sobre o tema (padrão recorrente)
             if len(related) >= 3:
                 conv_ids = [m['conversation_id'] for m in related]
-                
-                # Verificar se padrão já existe
-                cursor.execute("""
-                    SELECT id FROM user_patterns
-                    WHERE user_id = ? AND pattern_name = ?
-                """, (user_id, f"tema_{theme}"))
-                
-                existing = cursor.fetchone()
-                
-                if existing:
-                    # Atualizar
+
+                with self._lock:
+                    # Verificar se padrão já existe
                     cursor.execute("""
-                        UPDATE user_patterns
-                        SET frequency_count = ?,
-                            last_occurrence_at = CURRENT_TIMESTAMP,
-                            supporting_conversation_ids = ?,
-                            confidence_score = ?
-                        WHERE id = ?
-                    """, (
-                        len(related),
-                        json.dumps(conv_ids),
-                        min(1.0, len(related) * 0.15),
-                        existing['id']
-                    ))
-                else:
-                    # Criar
-                    cursor.execute("""
-                        INSERT INTO user_patterns
-                        (user_id, pattern_type, pattern_name, pattern_description,
-                         frequency_count, supporting_conversation_ids, confidence_score)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        user_id,
-                        'TEMÁTICO',
-                        f"tema_{theme}",
-                        f"Usuário frequentemente menciona: {theme}",
-                        len(related),
-                        json.dumps(conv_ids),
-                        min(1.0, len(related) * 0.15)
-                    ))
-        
-        self.conn.commit()
+                        SELECT id FROM user_patterns
+                        WHERE user_id = ? AND pattern_name = ?
+                    """, (user_id, f"tema_{theme}"))
+
+                    existing = cursor.fetchone()
+
+                    if existing:
+                        # Atualizar
+                        cursor.execute("""
+                            UPDATE user_patterns
+                            SET frequency_count = ?,
+                                last_occurrence_at = CURRENT_TIMESTAMP,
+                                supporting_conversation_ids = ?,
+                                confidence_score = ?
+                            WHERE id = ?
+                        """, (
+                            len(related),
+                            json.dumps(conv_ids),
+                            min(1.0, len(related) * 0.15),
+                            existing['id']
+                        ))
+                    else:
+                        # Criar
+                        cursor.execute("""
+                            INSERT INTO user_patterns
+                            (user_id, pattern_type, pattern_name, pattern_description,
+                             frequency_count, supporting_conversation_ids, confidence_score)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            user_id,
+                            'TEMÁTICO',
+                            f"tema_{theme}",
+                            f"Usuário frequentemente menciona: {theme}",
+                            len(related),
+                            json.dumps(conv_ids),
+                            min(1.0, len(related) * 0.15)
+                        ))
+
+                    self.conn.commit()
+
         logger.info(f"✅ Padrões detectados para usuário {user_id}")
     
     # ========================================
@@ -1236,54 +1295,58 @@ Resposta: {ai_response}
     
     def _update_agent_development(self):
         """Atualiza métricas de desenvolvimento do agente"""
-        cursor = self.conn.cursor()
-        
-        cursor.execute("""
-            UPDATE agent_development
-            SET total_interactions = total_interactions + 1,
-                self_awareness_score = MIN(1.0, self_awareness_score + 0.001),
-                moral_complexity_score = MIN(1.0, moral_complexity_score + 0.0008),
-                emotional_depth_score = MIN(1.0, emotional_depth_score + 0.0012),
-                autonomy_score = MIN(1.0, autonomy_score + 0.0005),
-                depth_level = (self_awareness_score + moral_complexity_score + emotional_depth_score) / 3,
-                autonomy_level = autonomy_score,
-                last_updated = CURRENT_TIMESTAMP
-            WHERE id = 1
-        """)
-        
-        self.conn.commit()
-        self._check_phase_progression()
+        with self._lock:
+            cursor = self.conn.cursor()
+
+            cursor.execute("""
+                UPDATE agent_development
+                SET total_interactions = total_interactions + 1,
+                    self_awareness_score = MIN(1.0, self_awareness_score + 0.001),
+                    moral_complexity_score = MIN(1.0, moral_complexity_score + 0.0008),
+                    emotional_depth_score = MIN(1.0, emotional_depth_score + 0.0012),
+                    autonomy_score = MIN(1.0, autonomy_score + 0.0005),
+                    depth_level = (self_awareness_score + moral_complexity_score + emotional_depth_score) / 3,
+                    autonomy_level = autonomy_score,
+                    last_updated = CURRENT_TIMESTAMP
+                WHERE id = 1
+            """)
+
+            self.conn.commit()
+            self._check_phase_progression()
     
     def _check_phase_progression(self):
         """Verifica se agente deve progredir de fase"""
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM agent_development WHERE id = 1")
-        state = dict(cursor.fetchone())
-        
-        avg_score = (
-            state['self_awareness_score'] +
-            state['moral_complexity_score'] +
-            state['emotional_depth_score'] +
-            state['autonomy_score']
-        ) / 4
-        
-        new_phase = min(5, int(avg_score * 5) + 1)
-        
-        if new_phase > state['phase']:
-            cursor.execute("UPDATE agent_development SET phase = ? WHERE id = 1", (new_phase,))
-            
-            cursor.execute("""
-                INSERT INTO milestones (milestone_type, description, phase, interaction_count)
-                VALUES (?, ?, ?, ?)
-            """, (
-                "phase_progression",
-                f"Progressão para Fase {new_phase}",
-                new_phase,
-                state['total_interactions']
-            ))
-            
-            self.conn.commit()
-            logger.info(f"🎯 AGENTE PROGREDIU PARA FASE {new_phase}!")
+        # Note: Pode ser chamado de dentro de _update_agent_development (já locked)
+        # ou de forma independente. RLock permite reentrada.
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT * FROM agent_development WHERE id = 1")
+            state = dict(cursor.fetchone())
+
+            avg_score = (
+                state['self_awareness_score'] +
+                state['moral_complexity_score'] +
+                state['emotional_depth_score'] +
+                state['autonomy_score']
+            ) / 4
+
+            new_phase = min(5, int(avg_score * 5) + 1)
+
+            if new_phase > state['phase']:
+                cursor.execute("UPDATE agent_development SET phase = ? WHERE id = 1", (new_phase,))
+
+                cursor.execute("""
+                    INSERT INTO milestones (milestone_type, description, phase, interaction_count)
+                    VALUES (?, ?, ?, ?)
+                """, (
+                    "phase_progression",
+                    f"Progressão para Fase {new_phase}",
+                    new_phase,
+                    state['total_interactions']
+                ))
+
+                self.conn.commit()
+                logger.info(f"🎯 AGENTE PROGREDIU PARA FASE {new_phase}!")
     
     def get_agent_state(self) -> Dict:
         """Retorna estado atual do agente"""
@@ -1320,26 +1383,27 @@ Resposta: {ai_response}
     # ANÁLISES COMPLETAS
     # ========================================
     
-    def save_full_analysis(self, user_id: str, user_name: str, 
+    def save_full_analysis(self, user_id: str, user_name: str,
                           analysis: Dict, platform: str = "telegram") -> int:
         """Salva análise completa"""
-        cursor = self.conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO full_analyses
-            (user_id, user_name, mbti, dominant_archetypes, phase, full_analysis, platform)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            user_id, user_name,
-            analysis.get('mbti', 'N/A'),
-            json.dumps(analysis.get('archetypes', [])),
-            analysis.get('phase', 1),
-            analysis.get('insights', ''),
-            platform
-        ))
-        
-        self.conn.commit()
-        return cursor.lastrowid
+        with self._lock:
+            cursor = self.conn.cursor()
+
+            cursor.execute("""
+                INSERT INTO full_analyses
+                (user_id, user_name, mbti, dominant_archetypes, phase, full_analysis, platform)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                user_id, user_name,
+                analysis.get('mbti', 'N/A'),
+                json.dumps(analysis.get('archetypes', [])),
+                analysis.get('phase', 1),
+                analysis.get('insights', ''),
+                platform
+            ))
+
+            self.conn.commit()
+            return cursor.lastrowid
     
     def get_user_analyses(self, user_id: str) -> List[Dict]:
         """Retorna análises completas do usuário"""
@@ -1494,10 +1558,14 @@ class JungianEngine:
         self.db = db if db else HybridDatabaseManager()
         
         # Clientes LLM
-        self.openai_client = OpenAI(api_key=Config.OPENAI_API_KEY)
+        self.openai_client = OpenAI(
+            api_key=Config.OPENAI_API_KEY,
+            timeout=30.0  # 30 segundos de timeout
+        )
         self.xai_client = OpenAI(
             api_key=Config.XAI_API_KEY,
-            base_url="https://api.x.ai/v1"
+            base_url="https://api.x.ai/v1",
+            timeout=30.0  # 30 segundos de timeout
         )
         
         self.conflict_detector = ConflictDetector()
@@ -1699,11 +1767,35 @@ class JungianEngine:
                 suggested_response_direction=analysis_dict.get("suggested_response_direction", "acolher")
             )
             
-        except Exception as e:
-            logger.error(f"❌ Erro na análise do {archetype_name}: {e}")
+        except json.JSONDecodeError as e:
+            logger.error(f"❌ Erro ao parsear JSON na análise do {archetype_name}: {e}")
             return ArchetypeInsight(
                 archetype_name=archetype_name,
-                insight_text=f"Erro: {str(e)}",
+                insight_text="Erro ao processar resposta da análise",
+                key_observations=[],
+                emotional_reading="N/A",
+                shadow_reading="N/A",
+                wisdom_perspective="N/A",
+                suggested_stance="neutro",
+                suggested_response_direction="acolher"
+            )
+        except (TimeoutError, ConnectionError) as e:
+            logger.error(f"❌ Erro de conexão/timeout na análise do {archetype_name}: {e}")
+            return ArchetypeInsight(
+                archetype_name=archetype_name,
+                insight_text="Erro de conectividade com o serviço de IA",
+                key_observations=[],
+                emotional_reading="N/A",
+                shadow_reading="N/A",
+                wisdom_perspective="N/A",
+                suggested_stance="neutro",
+                suggested_response_direction="acolher"
+            )
+        except Exception as e:
+            logger.error(f"❌ Erro inesperado na análise do {archetype_name}: {type(e).__name__} - {e}")
+            return ArchetypeInsight(
+                archetype_name=archetype_name,
+                insight_text=f"Erro inesperado: {type(e).__name__}",
                 key_observations=[],
                 emotional_reading="N/A",
                 shadow_reading="N/A",
@@ -1762,9 +1854,15 @@ Tensão: {conflict.tension_level:.2f}
                 )
             
             return completion.choices[0].message.content
-        
+
+        except (TimeoutError, ConnectionError) as e:
+            logger.error(f"❌ Erro de conexão/timeout ao gerar resposta conflituosa: {e}")
+            return "Desculpe, tive problemas de conectividade. Por favor, tente novamente."
+        except ValueError as e:
+            logger.error(f"❌ Erro de validação ao gerar resposta conflituosa: {e}")
+            return "Desculpe, houve um erro ao validar sua mensagem."
         except Exception as e:
-            logger.error(f"❌ Erro ao gerar resposta conflituosa: {e}")
+            logger.error(f"❌ Erro inesperado ao gerar resposta conflituosa: {type(e).__name__} - {e}")
             return "Desculpe, tive dificuldades para processar isso."
     
     def _generate_harmonious_response(self, user_input: str, semantic_context: str,
@@ -1808,9 +1906,15 @@ Tensão: {conflict.tension_level:.2f}
                 )
             
             return completion.choices[0].message.content
-        
+
+        except (TimeoutError, ConnectionError) as e:
+            logger.error(f"❌ Erro de conexão/timeout ao gerar resposta harmoniosa: {e}")
+            return "Desculpe, tive problemas de conectividade. Por favor, tente novamente."
+        except ValueError as e:
+            logger.error(f"❌ Erro de validação ao gerar resposta harmoniosa: {e}")
+            return "Desculpe, houve um erro ao validar sua mensagem."
         except Exception as e:
-            logger.error(f"❌ Erro ao gerar resposta harmoniosa: {e}")
+            logger.error(f"❌ Erro inesperado ao gerar resposta harmoniosa: {type(e).__name__} - {e}")
             return "Desculpe, tive dificuldades para processar isso."
     
     def _determine_complexity(self, user_input: str) -> str:
@@ -1881,7 +1985,8 @@ def send_to_xai(prompt: str, model: str = "grok-4-fast-reasoning",
     try:
         client = OpenAI(
             api_key=xai_api_key,
-            base_url="https://api.x.ai/v1"
+            base_url="https://api.x.ai/v1",
+            timeout=30.0  # 30 segundos de timeout
         )
         
         completion = client.chat.completions.create(
