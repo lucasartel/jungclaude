@@ -14,10 +14,16 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copiar todos os arquivos Python
 COPY *.py .
 
-RUN mkdir -p /data
+# Copiar o diretório admin_web com templates e static
+COPY admin_web/ ./admin_web/
+
+# Criar diretórios necessários
+RUN mkdir -p /data /app/chroma_db /app/logs
 
 EXPOSE 8000
 
-CMD ["python", "telegram_bot.py"]
+# Rodar o main.py que gerencia bot + FastAPI
+CMD ["python", "main.py"]
