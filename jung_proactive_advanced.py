@@ -58,8 +58,8 @@ if IS_PRODUCTION:
     print("🚀 MODO PRODUÇÃO: Parâmetros conservadores ativados")  # ✅ Usando print
 else:
     # 🧪 DESENVOLVIMENTO/TESTE
-    INACTIVITY_THRESHOLD_HOURS = 0.5  # 30 minutos (teste rápido)
-    COOLDOWN_HOURS = 1  # 60 minutos (teste rápido)
+    INACTIVITY_THRESHOLD_HOURS = 3  # 3 horas (teste rápido)
+    COOLDOWN_HOURS = 3  # 60 minutos (teste rápido)
     MIN_CONVERSATIONS_REQUIRED = 3  # Menos conversas necessárias
     print("🧪 MODO TESTE: Parâmetros acelerados ativados")  # ✅ Usando print
 
