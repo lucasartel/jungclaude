@@ -93,9 +93,13 @@ if os.path.exists(static_dir) and os.path.isdir(static_dir):
 else:
     logger.warning(f"⚠️  Diretório static não encontrado: {static_dir} - Continuando sem arquivos estáticos")
 
-# Importar e incluir rotas do admin
-from admin_web.routes import router as admin_router
-app.include_router(admin_router)
+# Importar e incluir rotas do admin (opcional)
+try:
+    from admin_web.routes import router as admin_router
+    app.include_router(admin_router)
+    logger.info("✅ Rotas do admin web carregadas")
+except ImportError as e:
+    logger.warning(f"⚠️  Admin web não disponível: {e} - Apenas bot Telegram funcionará")
 
 if __name__ == "__main__":
     # Rodar com uvicorn
