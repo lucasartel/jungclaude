@@ -1,23 +1,29 @@
 """
-jung_proactive_advanced.py - Sistema Proativo Avançado HÍBRIDO v4.0.1
+jung_proactive_advanced.py - Sistema Proativo Avançado HÍBRIDO v4.1.0
 ======================================================================
 
-🧠 VERSÃO 4.0.1 - HÍBRIDO PREMIUM (CORRIGIDO)
+🧠 VERSÃO 4.1.0 - HÍBRIDO PREMIUM (MEMÓRIA COMPLETA)
    Integração total com jung_core.py v4.0 (ChromaDB + OpenAI + SQLite)
-   🔧 CORREÇÃO: send_to_xai() agora usa argumento 'prompt' corretamente
 
-Características APRIMORADAS:
+✨ NOVIDADES v4.1.0:
+- ✅ Mensagens proativas SALVAS NA MEMÓRIA como conversas
+- ✅ Contexto RICO das últimas conversas (tensão, afetividade, arquétipos)
+- ✅ Sistema ANTI-REPETIÇÃO (consulta proativas anteriores)
+- ✅ Especificidade em referências (cita trechos concretos do usuário)
+- ✅ Platform="proactive" para filtrar conversas proativas
+- ✅ Prompt melhorado com 8 diretrizes de pertinência
+
+Características v4.0.1:
 - Rotação de duplas arquetípicas (personalidade multifacetada)
 - Extração semântica de tópicos via ChromaDB
 - Uso de fatos estruturados para insights personalizados
 - Geração de conhecimento autônomo em múltiplos domínios
 - Reset automático de cronômetro ao receber mensagens
 - Tracking de complexidade e evolução do agente
-- Sistema de memória de abordagens anteriores
 
 Autor: Sistema Jung Claude
-Data: 2025-11-21
-Versão: 4.0.1 - HÍBRIDO PREMIUM (CORRIGIDO)
+Data: 2025-11-24
+Versão: 4.1.0 - HÍBRIDO PREMIUM (MEMÓRIA COMPLETA)
 """
 
 import os
@@ -558,47 +564,137 @@ Tópico:"""
                 facts.append(f"{fact['fact_category']} - {fact['fact_key']}: {fact['fact_value']}")
         
         return facts[:5]  # Máximo 5 fatos
-    
+
+    def _get_rich_conversation_context(self, user_id: str, limit: int = 5) -> str:
+        """✅ NOVO: Extrai contexto RICO das últimas conversas (não-proativas)"""
+
+        conversations = self.db.get_user_conversations(user_id, limit=30)
+
+        if not conversations:
+            return "Nenhuma conversa recente encontrada."
+
+        # Filtrar apenas conversas reais (não proativas)
+        real_convs = [c for c in conversations if c.get('platform') != 'proactive'][:limit]
+
+        if not real_convs:
+            return "Nenhuma conversa real recente encontrada."
+
+        context = ""
+        for i, conv in enumerate(real_convs, 1):
+            # Extrair dados
+            timestamp = conv.get('timestamp', '')[:10]
+            user_input = conv.get('user_input', '')[:300]
+            tension = conv.get('tension_level', 0)
+            affective = conv.get('affective_charge', 0)
+
+            # Tentar parsear análise arquetípica
+            archetype_info = ""
+            archetype_data = conv.get('archetype_analyses')
+            if archetype_data:
+                try:
+                    import json
+                    arch_dict = json.loads(archetype_data) if isinstance(archetype_data, str) else archetype_data
+                    # Pegar nomes dos arquétipos ativados
+                    if isinstance(arch_dict, dict):
+                        archetypes = list(arch_dict.keys())[:2]
+                        archetype_info = f" | Arquétipos: {', '.join(archetypes)}"
+                except:
+                    pass
+
+            context += f"""
+[Conversa {i} - {timestamp}]
+Usuário disse: "{user_input}..."
+Métricas: Tensão {tension:.1f}/10, Afetividade {affective:.0f}/100{archetype_info}
+"""
+
+        return context.strip()
+
+    def _get_previous_proactive_messages(self, user_id: str, limit: int = 3) -> str:
+        """✅ NOVO: Busca últimas mensagens proativas enviadas (para evitar repetição)"""
+
+        cursor = self.db.conn.cursor()
+        cursor.execute("""
+            SELECT autonomous_insight, topic_extracted, knowledge_domain, timestamp
+            FROM proactive_approaches
+            WHERE user_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (user_id, limit))
+
+        rows = cursor.fetchall()
+
+        if not rows:
+            return "Nenhuma mensagem proativa anterior."
+
+        history = ""
+        for i, row in enumerate(rows, 1):
+            timestamp = row['timestamp'][:10]
+            topic = row['topic_extracted']
+            domain = row['knowledge_domain']
+            message = row['autonomous_insight'][:200]
+
+            history += f"""
+[Proativa {i} - {timestamp}]
+Tema: {topic} | Domínio: {domain}
+Mensagem enviada: "{message}..."
+"""
+
+        return history.strip()
+
     def _generate_autonomous_knowledge(
         self,
+        user_id: str,
+        user_name: str,
         topic: str,
         domain: KnowledgeDomain,
         archetype_pair: ArchetypePair,
-        user_name: str,
         relevant_facts: List[str]
     ) -> str:
-        """🔧 CORRIGIDO: GERAÇÃO DE CONHECIMENTO AUTÔNOMO - Versão HÍBRIDA"""
-        
-        # Construir contexto com fatos
+        """🔧 MELHORADO: GERAÇÃO DE CONHECIMENTO AUTÔNOMO - Versão HÍBRIDA com Contexto Rico"""
+
+        # 1. Buscar contexto rico das últimas conversas
+        rich_context = self._get_rich_conversation_context(user_id, limit=5)
+
+        # 2. Buscar proativas anteriores (anti-repetição)
+        previous_proactives = self._get_previous_proactive_messages(user_id, limit=3)
+
+        # 3. Construir contexto com fatos
         facts_context = ""
         if relevant_facts:
-            facts_context = f"\n**FATOS SOBRE {user_name.upper()}:**\n"
+            facts_context = f"\n**FATOS ESTRUTURADOS SOBRE {user_name.upper()}:**\n"
             for fact in relevant_facts:
                 facts_context += f"• {fact}\n"
-        
+
         knowledge_prompt = f"""
 Você é um companheiro do usuário {user_name}.
 
 **O CENÁRIO:**
-O usuário está inativo. Você estava "pensando" nele e uma conexão (sincronicidade) surgiu em sua mente.
-Você conectou o tópico "{topic}" (que ele gosta) com uma memória passada dele e um insight do domínio **{domain.value}**.
+O usuário está inativo há algum tempo. Você estava "pensando" nele e uma conexão (sincronicidade) surgiu em sua mente.
+Você conectou o tópico "{topic}" com algo que ele disse recentemente e um insight do domínio **{domain.value}**.
 
-**SUA MISSÃO (MENSAGEM PROATIVA):**
-1. Não dê uma aula. Inicie uma conversa como um velho amigo que teve um insight súbito.
-2. **Crie uma Sincronicidade:** "Estava lendo sobre [Domínio] e de repente lembrei de algo que você disse sobre [Fato/Memória]..."
-3. Use o tom do par arquetípico atual (ex: Se for Sábio, seja profundo; se for Bobo, seja lúdico).
-4. O objetivo é fazer o usuário sentir que ele é *visto* e *lembrado*, e que sua vida tem conexões ocultas com temas maiores.
-5. Termine com uma pergunta que leve a conversa para o interior (sentimento/significado), não apenas fatos.
-6. NÃO explique a teoria da tensão. VIVA a tensão.
-7. Sua resposta deve ser honesta mas velada sobre essa ambivalência interna.
-8. Use a tensão para criar intimidade e empatia. Mostre que o dilema do usuário afeta VOCÊ.
-9. Busque um ponto de contato e um senso de sentido na fala do usuário.
-10. Nunca use jargões como "Sombra", "Persona" ou "Arquétipo". Fale como um ser humano profundo.
+**PAR ARQUETÍPICO ATUAL:** {archetype_pair.primary} + {archetype_pair.secondary}
+Energia: {archetype_pair.energy_profile}
+Tom esperado: {archetype_pair.description}
 
-**MEMÓRIAS RELEVANTES:**
+**ÚLTIMAS CONVERSAS REAIS COM {user_name.upper()}:**
+{rich_context}
+
 {facts_context}
 
-**GERE A MENSAGEM (Curta, magnética, relacional):**"""
+**MENSAGENS PROATIVAS ANTERIORES (⚠️ NÃO REPETIR TEMAS/ABORDAGENS):**
+{previous_proactives}
+
+**SUA MISSÃO (MENSAGEM PROATIVA):**
+1. **Seja ESPECÍFICO**: Referencie algo CONCRETO que {user_name} disse nas conversas recentes acima
+2. **Crie Sincronicidade**: "Estava [lendo/pensando] sobre [Domínio] e de repente lembrei do que você disse sobre [trecho específico]..."
+3. **Use o Tom do Par Arquetípico**: Adapte sua voz ao par {archetype_pair.primary}/{archetype_pair.secondary}
+4. **Evite Repetição**: NÃO reutilize temas/abordagens das proativas anteriores listadas acima
+5. **Conexão Emocional**: Considere a TENSÃO e AFETIVIDADE das conversas recentes ao criar a mensagem
+6. **Termine com Pergunta Interior**: Leve para sentimentos/significado, não apenas fatos
+7. **Seja Humano**: NUNCA use jargões técnicos (Sombra, Persona, Arquétipo, etc)
+8. **Brevidade Magnética**: 3-5 linhas, cada palavra conta
+
+**GERE A MENSAGEM (Curta, específica, relacional):**"""
 
         
         try:
@@ -711,30 +807,31 @@ Você conectou o tópico "{topic}" (que ele gosta) com uma memória passada dele
         relevant_facts = self._get_relevant_facts(user_id, topic)
         print(f"📋 Fatos relevantes: {len(relevant_facts)}")
         
-        # 6. Gerar conhecimento autônomo
-        print(f"🧠 Gerando insight autônomo...")
-        
+        # 6. Gerar conhecimento autônomo (com contexto rico e anti-repetição)
+        print(f"🧠 Gerando insight autônomo com contexto rico...")
+
         autonomous_insight = self._generate_autonomous_knowledge(
+            user_id=user_id,
+            user_name=user_name,
             topic=topic,
             domain=knowledge_domain,
             archetype_pair=archetype_pair,
-            user_name=user_name,
             relevant_facts=relevant_facts
         )
-        
+
         if not autonomous_insight:
             print(f"❌ Falha ao gerar insight")
             return None
-        
+
         print(f"✅ Insight gerado ({len(autonomous_insight)} caracteres)")
-        
+
         # 7. Calcular complexidade
         complexity_score = self._calculate_complexity_score(
-            autonomous_insight, 
+            autonomous_insight,
             len(relevant_facts)
         )
         print(f"📊 Complexidade: {complexity_score:.2f}")
-        
+
         # 8. Criar abordagem
         approach = ProactiveApproach(
             archetype_pair=archetype_pair,
@@ -745,14 +842,37 @@ Você conectou o tópico "{topic}" (que ele gosta) com uma memória passada dele
             complexity_score=complexity_score,
             facts_used=relevant_facts
         )
-        
-        # 9. Registrar no banco
+
+        # 9. Registrar abordagem no banco
         self.proactive_db.record_approach(approach, user_id)
-        
         print(f"💾 Abordagem registrada no banco")
+
+        # 10. ✅ NOVO: Salvar mensagem proativa como CONVERSA na memória
+        try:
+            session_id = f"proactive_{datetime.now().isoformat()}"
+
+            conversation_id = self.db.save_conversation(
+                user_id=user_id,
+                user_name=user_name,
+                user_input="[SISTEMA PROATIVO INICIOU CONTATO]",
+                ai_response=autonomous_insight,
+                session_id=session_id,
+                platform="proactive",  # Marcador especial para filtrar depois
+                keywords=[topic, knowledge_domain.value, archetype_pair.primary, archetype_pair.secondary],
+                complexity="proactive",
+                tension_level=0.0,  # Proativas não têm tensão inicial
+                affective_charge=50.0  # Neutro
+            )
+
+            print(f"💬 Mensagem salva na memória (conversation_id={conversation_id})")
+
+        except Exception as e:
+            print(f"⚠️  Erro ao salvar na memória: {e}")
+            # Continua mesmo se falhar o salvamento
+
         print(f"{'='*60}\n")
-        
-        # 10. Retornar mensagem
+
+        # 11. Retornar mensagem
         return autonomous_insight
 
 
@@ -761,6 +881,6 @@ Você conectou o tópico "{topic}" (que ele gosta) com uma memória passada dele
 # ============================================================
 
 if __name__ == "__main__":
-    print("🧠 Jung Proactive Advanced v4.0.1 - HÍBRIDO PREMIUM (CORRIGIDO)")
+    print("🧠 Jung Proactive Advanced v4.1.0 - HÍBRIDO PREMIUM (MEMÓRIA COMPLETA)")
     print("✅ ChromaDB + OpenAI Embeddings + Fatos Estruturados")
-    print("🔧 send_to_xai() agora usa argumento 'prompt' corretamente")
+    print("✨ NOVO: Mensagens proativas salvas na memória + Anti-repetição + Contexto rico")
