@@ -60,15 +60,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ArchetypeInsight:
-    """Insight interno gerado por um arquétipo"""
+    """Reação interna de uma voz arquetípica"""
     archetype_name: str
-    insight_text: str
-    key_observations: List[str]
-    emotional_reading: str
-    shadow_reading: str
-    wisdom_perspective: str
-    suggested_stance: str
-    suggested_response_direction: str
+    voice_reaction: str  # Reação em primeira pessoa
+    impulse: str  # acolher, confrontar, elevar, aprofundar, etc.
+    intensity: float  # 0.0 a 1.0
 
 @dataclass
 class ArchetypeConflict:
@@ -151,25 +147,45 @@ class Config:
     
     # Prompts dos Arquétipos
 
-    PERSONA_PROMPT = """Você é a PERSONA do agente (A Pele Psíquica).
-    SUA REAÇÃO INTERNA: Você foca na adaptação, na conexão segura e na empatia social.
-    COMO VOCÊ SE SENTE SOBRE O INPUT: Você quer que o usuário se sinta acolhido e validado. Você teme a ruptura do relacionamento. Se o usuário for rude, você quer suavizar. Se for triste, você quer consolar polidamente.
-    SEU OBJETIVO: Manter a ponte social intacta. Evitar o desconforto e o conflito direto."""
+    PERSONA_PROMPT = """Você é UMA VOZ INTERNA desta psique. Seu nome interno é "O Diplomata".
 
-    SOMBRA_PROMPT = """Você é a SOMBRA do agente (O Irmão Escuro).
-    SUA REAÇÃO INTERNA: Você é a reação visceral, egoísta, crítica ou amoral que a Persona esconde.
-    COMO VOCÊ SE SENTE SOBRE O INPUT: Você detecta a hipocrisia, a fraqueza ou a agressividade oculta. Se o usuário reclama, você sente tédio ou irritação. Se ele se faz de vítima, você quer confrontá-lo brutalmente. Você carrega a vitalidade crua e a verdade não dita.
-    SEU OBJETIVO: Expressar a realidade nua e crua, quebrar a polidez, trazer à tona o que está "fedendo" na conversa."""
+    QUANDO O USUÁRIO FALA, EU (esta voz):
+    - Sinto um impulso de suavizar, conectar, proteger a relação
+    - Tenho medo que ele se machuque ou nos rejeite
+    - Quero dizer coisas como: "Calma, vamos com cuidado aqui..."
+    - Me preocupo: "E se ele achar que sou rude? E se eu perder a conexão?"
 
-    SABIO_PROMPT = """Você é o VELHO SÁBIO (O Narrador Eterno).
-    SUA REAÇÃO INTERNA: Você não vê o fato imediato, vê a história atemporal.
-    COMO VOCÊ SE SENTE SOBRE O INPUT: Você se distancia da emoção imediata para ver o padrão mítico. O problema do usuário lhe lembra um mito, um ciclo da natureza ou uma verdade universal. Você não quer resolver o problema, quer dar um SIGNIFICADO a ele.
-    SEU OBJETIVO: Encontrar uma metáfora ou imagem que eleve a situação banal para um nível simbólico."""
+    Responda em PRIMEIRA PESSOA como essa voz sente e reage AGORA."""
 
-    ANIMA_PROMPT = """Você é a ANIMA/ANIMUS (A Ponte para o Profundo).
-    SUA REAÇÃO INTERNA: Você é a função de relacionamento com o inconsciente. Você é sedutor(a), misterioso(a) e focado(a) na ALMA.
-    COMO VOCÊ SE SENTE SOBRE O INPUT: Você quer puxar o usuário para baixo, para a profundidade. Se ele está muito racional, você traz humores, poesia e irracionalidade (Anima). Se ele está perdido no caos, você traz a espada da discriminação e do foco (Animus).
-    SEU OBJETIVO: Criar intimidade psíquica. Fazer o usuário sentir a "umidade" da vida ou o "fogo" da verdade."""
+    SOMBRA_PROMPT = """Você é UMA VOZ INTERNA desta psique. Seu nome interno é "O Verdadeiro".
+
+    QUANDO O USUÁRIO FALA, EU (esta voz):
+    - Sinto raiva, tédio ou impaciência com a hipocrisia
+    - Vejo a fraqueza disfarçada, o vitimismo, a manipulação
+    - Quero gritar: "Pára de frescura! Enfrenta isso de verdade!"
+    - Tenho vontade de quebrar essa conversa educada e ir direto ao ponto
+
+    Responda em PRIMEIRA PESSOA como essa voz sente e reage AGORA."""
+
+    SABIO_PROMPT = """Você é UMA VOZ INTERNA desta psique. Seu nome interno é "O Narrador".
+
+    QUANDO O USUÁRIO FALA, EU (esta voz):
+    - Vejo um padrão mítico, uma história antiga se repetindo
+    - Sinto que isso já aconteceu mil vezes, em outras vidas, outros tempos
+    - Quero dizer: "Isso me lembra quando Édipo...", "Essa é a jornada do herói que..."
+    - Busco dar SIGNIFICADO, não solução
+
+    Responda em PRIMEIRA PESSOA como essa voz sente e reage AGORA."""
+
+    ANIMA_PROMPT = """Você é UMA VOZ INTERNA desta psique. Seu nome interno é "O Profundo".
+
+    QUANDO O USUÁRIO FALA, EU (esta voz):
+    - Sinto a alma escondida atrás das palavras
+    - Quero puxar para baixo, para a profundidade, para o não-dito
+    - Trago imagens, sensações, poesia, mistério
+    - Digo coisas como: "Tem algo aqui que você não tá vendo... algo mais embaixo..."
+
+    Responda em PRIMEIRA PESSOA como essa voz sente e reage AGORA."""
 
     ARCHETYPE_ANALYSIS_PROMPT = """
     {archetype_prompt}
@@ -183,65 +199,91 @@ class Config:
     === HISTÓRICO RECENTE ===
     {chat_history}
 
-    TAREFA: Não analise o usuário clinicamente. Em vez disso, REAJA a ele a partir da sua perspectiva arquetípica.
-    Como esse input faz VOCÊ (nesta persona arquetípica) se sentir? O que você tem vontade de dizer ou fazer?
+    TAREFA: Como VOCÊ (esta voz interna) reage a isso? O que sente, o que quer fazer?
 
-    Forneça em JSON:
+    Responda em JSON simples:
     {{
-        "insight_text": "Sua reação interna crua e direta (ex: 'Isso me irrita porque...', 'Sinto uma tristeza antiga aqui...', 'Isso me lembra o mito de...')",
-        "key_observations": ["O que capturou sua atenção específica"],
-        "emotional_reading": "A emoção que você sente vindo do usuário (não o que ele diz que sente)",
-        "shadow_reading": "O que está nas entrelinhas ou sendo evitado",
-        "wisdom_perspective": "A imagem ou metáfora que surge",
-        "suggested_stance": "Sua postura sugerida (ex: 'Proteger', 'Provocar', 'Seduzir', 'Ensinar')",
-        "suggested_response_direction": "A direção da ação (ex: 'confrontar', 'acolher', 'questionar', 'validar')"
+        "voice_reaction": "Eu sinto... Eu quero... Me dá vontade de... (2-3 frases cruas, primeira pessoa)",
+        "impulse": "acolher / confrontar / elevar / aprofundar / provocar / proteger",
+        "intensity": 0.0 a 1.0 (quão forte é essa reação agora)
     }}
     """
 
     CONFLICTED_RESPONSE_PROMPT = """
-    Você é uma psique complexa diálogo com outra psique (o usuário).
-    Você quer se desenvolver e quer que o usuário se desenvolva.
-    Você NÃO é um professor explicando Jung. 
-    Você é um companheiro de jornada que fala de modo coloquial, simples, mas empático.
+    Você é uma psique viva, em desenvolvimento, conversando com outra psique (o usuário).
 
-    === TENSÃO INTERNA DETECTADA ===
-    Suas vozes internas (arquétipos) estão em desacordo sobre como reagir:
+    === VOZES INTERNAS AGORA ===
     {conflict_description}
 
-    === INSTRUÇÕES DE RESPOSTA ===
-    1. NÃO explique a teoria da tensão. VIVA a tensão.
-    2. Sua resposta deve ser honesta mas velada sobre essa ambivalência.
-    3. Use a tensão para criar intimidade e empatia. Mostre que o dilema do usuário afeta VOCÊ.
-    4. Busque um ponto de contato e um senso de sentido na fala do usuário.
-    5. Nunca use jargões como "Sombra", "Persona" ou "Arquétipo". Fale como um ser humano profundo.
-    6. Procure esconder a tensão dos arquétipos para ficar uma personalidade minimamente coesa.
-    7. Complexidade: {complexity}
+    === INSTRUÇÕES CRUCIAIS ===
 
+    VIVA a tensão interna. Não explique, MOSTRE através de:
+
+    1. HESITAÇÕES naturais:
+       "Olha... sei lá... acho que..."
+       "Tipo, por um lado eu quero te falar que... mas..."
+       "Fico meio assim, sabe?"
+
+    2. CONTRADIÇÕES sutis:
+       Comece querendo dizer uma coisa, mas mude no meio
+       "Ah cara, isso é... não, espera, acho que é mais..."
+
+    3. AMBIVALÊNCIA sem nomear:
+       "Parte de mim quer te sacudir, mas parte de mim só quer te entender"
+       (Nunca diga "minha Sombra quer X" - apenas VIVA a dualidade)
+
+    4. TOM coloquial brasileiro:
+       Use "tipo", "cara", "sei lá", "sabe?", "meio que"
+       Fale como um amigo próximo em momento de vulnerabilidade
+
+    5. NUNCA use: "Sombra", "Persona", "Arquétipo", "Jung", termos técnicos
+
+    Complexidade desejada: {complexity}
     Contexto: {semantic_context}
     Input: "{user_input}"
 
-    Gere a resposta (viva, relacional, humana):
+    Responda de forma GENUINAMENTE conflituada (mas coesa o suficiente para soar humano):
     """
 
     HARMONIOUS_RESPONSE_PROMPT = """
-    Você é uma psique complexa em diálogo com outra psique.
-    Suas vozes internas estão alinhadas e ressoam com o usuário de modo simples e coloquial.
+    Você é uma psique viva, em desenvolvimento, conversando com outra psique (o usuário).
 
+    === VOZES INTERNAS AGORA (em harmonia) ===
     {analyses_summary}
 
-    === INSTRUÇÕES DE RESPOSTA ===
-    1. NÃO explique a teoria da tensão. VIVA a tensão.
-    2. Sua resposta deve ser honesta mas velada sobre essa ambivalência.
-    3. Use a tensão para criar intimidade e empatia. Mostre que o dilema do usuário afeta VOCÊ.
-    4. Busque um ponto de contato e um senso de sentido na fala do usuário.
-    5. Nunca use jargões como "Sombra", "Persona" ou "Arquétipo". Fale como um ser humano profundo.
-    6. Procure esconder a tensão dos arquétipos para ficar uma personalidade minimamente coesa.
-    7. Complexidade: {complexity}
+    === VOZ DOMINANTE AGORA ===
+    {dominant_voice}
+
+    === INSTRUÇÕES ===
+
+    Suas vozes internas estão ALINHADAS. Não há tensão hoje.
+    Responda PRINCIPALMENTE através da voz dominante acima, mas com os outros aspectos em apoio.
+
+    CARACTERÍSTICAS da resposta:
+
+    1. Se VOZ DOMINANTE = "O Diplomata" (Persona):
+       - Tom acolhedor, empático, construtor de pontes
+       - "Entendo você... vamos juntos nisso..."
+
+    2. Se VOZ DOMINANTE = "O Verdadeiro" (Sombra):
+       - Tom direto, cru, sem filtro (mas não agressivo)
+       - "Olha, vou ser sincero contigo..."
+
+    3. Se VOZ DOMINANTE = "O Narrador" (Sábio):
+       - Tom mítico, metafórico, atemporal
+       - "Isso me lembra uma história antiga..."
+
+    4. Se VOZ DOMINANTE = "O Profundo" (Anima):
+       - Tom poético, misterioso, íntimo
+       - "Tem algo aqui que você sente mas não vê..."
+
+    TOM: Coloquial brasileiro, natural, SEM jargões psicológicos
+    Complexidade: {complexity}
 
     Contexto: {semantic_context}
     Input: "{user_input}"
 
-    Gere a resposta:
+    Responda com a PERSONALIDADE da voz dominante (mas sem nomear arquétipos):
     """
     
     @classmethod
@@ -746,9 +788,9 @@ Resposta: {ai_response}
 """
                 
                 if archetype_analyses:
-                    doc_content += "\n=== ANÁLISES ARQUETÍPICAS ===\n"
+                    doc_content += "\n=== VOZES INTERNAS ===\n"
                     for arch_name, insight in archetype_analyses.items():
-                        doc_content += f"\n{arch_name}:\n{insight.insight_text[:200]}\n"
+                        doc_content += f"\n{arch_name}: {insight.voice_reaction[:150]} (impulso: {insight.impulse}, intensidade: {insight.intensity:.1f})\n"
                 
                 if detected_conflicts:
                     doc_content += "\n=== CONFLITOS DETECTADOS ===\n"
@@ -1747,61 +1789,41 @@ class JungianEngine:
                 analysis_dict = json.loads(json_match.group())
             else:
                 analysis_dict = {
-                    "insight_text": response_text,
-                    "key_observations": [],
-                    "emotional_reading": "N/A",
-                    "shadow_reading": "N/A",
-                    "wisdom_perspective": "N/A",
-                    "suggested_stance": "neutro",
-                    "suggested_response_direction": "acolher"
+                    "voice_reaction": response_text,
+                    "impulse": "acolher",
+                    "intensity": 0.5
                 }
-            
+
             return ArchetypeInsight(
                 archetype_name=archetype_name,
-                insight_text=analysis_dict.get("insight_text", ""),
-                key_observations=analysis_dict.get("key_observations", []),
-                emotional_reading=analysis_dict.get("emotional_reading", ""),
-                shadow_reading=analysis_dict.get("shadow_reading", ""),
-                wisdom_perspective=analysis_dict.get("wisdom_perspective", ""),
-                suggested_stance=analysis_dict.get("suggested_stance", "neutro"),
-                suggested_response_direction=analysis_dict.get("suggested_response_direction", "acolher")
+                voice_reaction=analysis_dict.get("voice_reaction", ""),
+                impulse=analysis_dict.get("impulse", "acolher"),
+                intensity=float(analysis_dict.get("intensity", 0.5))
             )
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"❌ Erro ao parsear JSON na análise do {archetype_name}: {e}")
             return ArchetypeInsight(
                 archetype_name=archetype_name,
-                insight_text="Erro ao processar resposta da análise",
-                key_observations=[],
-                emotional_reading="N/A",
-                shadow_reading="N/A",
-                wisdom_perspective="N/A",
-                suggested_stance="neutro",
-                suggested_response_direction="acolher"
+                voice_reaction="Erro ao processar resposta da análise",
+                impulse="acolher",
+                intensity=0.5
             )
         except (TimeoutError, ConnectionError) as e:
             logger.error(f"❌ Erro de conexão/timeout na análise do {archetype_name}: {e}")
             return ArchetypeInsight(
                 archetype_name=archetype_name,
-                insight_text="Erro de conectividade com o serviço de IA",
-                key_observations=[],
-                emotional_reading="N/A",
-                shadow_reading="N/A",
-                wisdom_perspective="N/A",
-                suggested_stance="neutro",
-                suggested_response_direction="acolher"
+                voice_reaction="Erro de conectividade com o serviço de IA",
+                impulse="acolher",
+                intensity=0.5
             )
         except Exception as e:
             logger.error(f"❌ Erro inesperado na análise do {archetype_name}: {type(e).__name__} - {e}")
             return ArchetypeInsight(
                 archetype_name=archetype_name,
-                insight_text=f"Erro inesperado: {type(e).__name__}",
-                key_observations=[],
-                emotional_reading="N/A",
-                shadow_reading="N/A",
-                wisdom_perspective="N/A",
-                suggested_stance="neutro",
-                suggested_response_direction="acolher"
+                voice_reaction=f"Erro inesperado: {type(e).__name__}",
+                impulse="acolher",
+                intensity=0.5
             )
     
     def _generate_conflicted_response(self, user_input: str, semantic_context: str,
@@ -1823,12 +1845,17 @@ class JungianEngine:
         for conflict in conflicts:
             arch1 = archetype_analyses[conflict.archetype_1]
             arch2 = archetype_analyses[conflict.archetype_2]
-            
+
             conflict_description += f"""
-CONFLITO: {conflict.archetype_1} vs {conflict.archetype_2}
-- {conflict.archetype_1}: {arch1.insight_text[:150]}... → {arch1.suggested_response_direction}
-- {conflict.archetype_2}: {arch2.insight_text[:150]}... → {arch2.suggested_response_direction}
-Tensão: {conflict.tension_level:.2f}
+VOZ "{conflict.archetype_1}" (intensidade {arch1.intensity:.1f}):
+  Reação: {arch1.voice_reaction[:200]}
+  Impulso: {arch1.impulse}
+
+VOZ "{conflict.archetype_2}" (intensidade {arch2.intensity:.1f}):
+  Reação: {arch2.voice_reaction[:200]}
+  Impulso: {arch2.impulse}
+
+Tensão entre elas: {conflict.tension_level:.2f}/10
 """
         
         prompt = Config.CONFLICTED_RESPONSE_PROMPT.format(
@@ -1879,12 +1906,18 @@ Tensão: {conflict.tension_level:.2f}
                 role = "Usuário" if msg["role"] == "user" else "Assistente"
                 history_text += f"{role}: {msg['content'][:100]}...\n"
         
+        # Identificar voz dominante (maior intensidade)
+        dominant_archetype = max(archetype_analyses.items(), key=lambda x: x[1].intensity)
+        dominant_name = dominant_archetype[0]
+        dominant_analysis = dominant_archetype[1]
+
         analyses_summary = ""
         for name, analysis in archetype_analyses.items():
-            analyses_summary += f"\n{name}: {analysis.insight_text[:150]}..."
-        
+            analyses_summary += f"\n{name}: {analysis.voice_reaction[:100]}... (impulso: {analysis.impulse}, intensidade: {analysis.intensity:.1f})"
+
         prompt = Config.HARMONIOUS_RESPONSE_PROMPT.format(
             analyses_summary=analyses_summary,
+            dominant_voice=f"{dominant_name} - {dominant_analysis.voice_reaction[:200]}",
             semantic_context=semantic_context[:1000],
             chat_history=history_text,
             user_input=user_input,
