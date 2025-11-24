@@ -4,11 +4,19 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import secrets
 import os
-from typing import Dict, List
+from typing import Dict, List, Optional
 import logging
 
-# Importar core do Jung
-from jung_core import DatabaseManager, JungianEngine, Config
+# Importar core do Jung (opcional - pode falhar se dependências não estiverem disponíveis)
+try:
+    from jung_core import DatabaseManager, JungianEngine, Config
+    JUNG_CORE_AVAILABLE = True
+except Exception as e:
+    logging.warning(f"jung_core não disponível: {e}")
+    DatabaseManager = None
+    JungianEngine = None
+    Config = None
+    JUNG_CORE_AVAILABLE = False
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 templates = Jinja2Templates(directory="admin_web/templates")
@@ -20,6 +28,11 @@ _db_manager = None
 
 def get_db():
     global _db_manager
+    if not JUNG_CORE_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Database não disponível - jung_core não carregado"
+        )
     if _db_manager is None:
         _db_manager = DatabaseManager()
     return _db_manager
@@ -47,6 +60,15 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
 # ============================================================================
 # ROTAS DE PÁGINA (HTML)
 # ============================================================================
+
+@router.get("/test")
+async def test_route():
+    """Rota de teste simples - não requer autenticação"""
+    return {
+        "status": "ok",
+        "message": "Admin routes carregadas com sucesso!",
+        "jung_core_available": JUNG_CORE_AVAILABLE
+    }
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, username: str = Depends(verify_credentials)):

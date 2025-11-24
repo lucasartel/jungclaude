@@ -121,8 +121,12 @@ try:
     from admin_web.routes import router as admin_router
     app.include_router(admin_router)
     logger.info("✅ Rotas do admin web carregadas")
-except ImportError as e:
-    logger.warning(f"⚠️  Admin web não disponível: {e} - Apenas bot Telegram funcionará")
+except Exception as e:
+    import traceback
+    logger.error(f"❌ Erro ao carregar admin web: {e}")
+    logger.error(f"Traceback completo:\n{traceback.format_exc()}")
+    logger.warning("⚠️  Admin web não disponível - Apenas bot Telegram funcionará")
+
 
 if __name__ == "__main__":
     # Rodar com uvicorn
