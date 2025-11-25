@@ -612,19 +612,85 @@ class HybridDatabaseManager:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT NOT NULL,
                 user_name TEXT NOT NULL,
-                
+
                 mbti TEXT,
                 dominant_archetypes TEXT,
                 phase INTEGER DEFAULT 1,
                 full_analysis TEXT,
-                
+
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 platform TEXT DEFAULT 'telegram',
-                
+
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
         """)
-        
+
+        # ========== ANÁLISES PSICOMÉTRICAS (RH) ==========
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_psychometrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                version INTEGER DEFAULT 1,
+
+                -- Big Five (OCEAN) - scores 0-100
+                openness_score INTEGER,
+                openness_level TEXT,
+                openness_description TEXT,
+
+                conscientiousness_score INTEGER,
+                conscientiousness_level TEXT,
+                conscientiousness_description TEXT,
+
+                extraversion_score INTEGER,
+                extraversion_level TEXT,
+                extraversion_description TEXT,
+
+                agreeableness_score INTEGER,
+                agreeableness_level TEXT,
+                agreeableness_description TEXT,
+
+                neuroticism_score INTEGER,
+                neuroticism_level TEXT,
+                neuroticism_description TEXT,
+
+                big_five_confidence INTEGER,
+                big_five_interpretation TEXT,
+
+                -- Inteligência Emocional (EQ) - scores 0-100
+                eq_self_awareness INTEGER,
+                eq_self_management INTEGER,
+                eq_social_awareness INTEGER,
+                eq_relationship_management INTEGER,
+                eq_overall INTEGER,
+                eq_leadership_potential TEXT,
+                eq_details TEXT,
+
+                -- Estilos de Aprendizagem (VARK) - scores 0-100
+                vark_visual INTEGER,
+                vark_auditory INTEGER,
+                vark_reading INTEGER,
+                vark_kinesthetic INTEGER,
+                vark_dominant TEXT,
+                vark_recommended_training TEXT,
+
+                -- Valores Pessoais (Schwartz) - JSON
+                schwartz_values TEXT,
+                schwartz_top_3 TEXT,
+                schwartz_cultural_fit TEXT,
+                schwartz_retention_risk TEXT,
+
+                -- Resumo Executivo
+                executive_summary TEXT,
+
+                -- Metadados
+                analysis_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                conversations_analyzed INTEGER,
+                last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+
         # ========== ÍNDICES DE PERFORMANCE ==========
         # Conversas
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_user ON conversations(user_id)")
@@ -657,6 +723,10 @@ class HybridDatabaseManager:
         # Análises
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_analyses_user ON full_analyses(user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_analyses_timestamp ON full_analyses(timestamp DESC)")
+
+        # Psicometria
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_psychometrics_user ON user_psychometrics(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_psychometrics_version ON user_psychometrics(user_id, version DESC)")
 
         self.conn.commit()
         logger.info("✅ Schema SQLite criado/verificado com índices de performance")
@@ -1480,7 +1550,569 @@ Resposta: {ai_response}
             ORDER BY timestamp DESC
         """, (user_id,))
         return [dict(row) for row in cursor.fetchall()]
-    
+
+    # ========================================
+    # ANÁLISES PSICOMÉTRICAS (RH)
+    # ========================================
+
+    def analyze_big_five(self, user_id: str, min_conversations: int = 20) -> Dict:
+        """
+        Analisa Big Five (OCEAN) do usuário via Grok AI
+
+        Retorna dict com scores 0-100 para cada dimensão:
+        - openness, conscientiousness, extraversion, agreeableness, neuroticism
+        """
+        logger.info(f"🧬 Iniciando análise Big Five para {user_id}")
+
+        # Buscar conversas do usuário
+        conversations = self.get_user_conversations(user_id, limit=50)
+
+        if len(conversations) < min_conversations:
+            return {
+                "error": f"Dados insuficientes ({len(conversations)} conversas, mínimo {min_conversations})",
+                "conversations_analyzed": len(conversations)
+            }
+
+        # Montar contexto para o Grok
+        convo_texts = []
+        for c in conversations[:30]:  # Últimas 30 para não exceder token limit
+            convo_texts.append(f"Usuário: {c['user_input']}")
+            convo_texts.append(f"Resposta: {c['ai_response'][:200]}")  # Truncar resposta
+
+        context = "\n\n".join(convo_texts)
+
+        # Prompt para Grok
+        prompt = f"""Analise as conversas abaixo e infira os traços Big Five (OCEAN) do usuário.
+
+CONVERSAS:
+{context}
+
+TAREFA:
+Para cada dimensão, dê um score de 0-100 e justifique em 2-3 frases:
+
+1. OPENNESS (Abertura): Criatividade, curiosidade intelectual, preferência por novidade
+   - Alto: busca experiências novas, criativo, imaginativo
+   - Baixo: prefere rotina, prático, tradicional
+
+2. CONSCIENTIOUSNESS (Conscienciosidade): Organização, autodisciplina, orientação a metas
+   - Alto: organizado, responsável, planejado
+   - Baixo: espontâneo, flexível, menos estruturado
+
+3. EXTRAVERSION (Extroversão): Sociabilidade, assertividade, busca por estimulação
+   - Alto: social, energético, falante
+   - Baixo: reservado, independente, introspectivo
+
+4. AGREEABLENESS (Amabilidade): Empatia, cooperação, confiança
+   - Alto: empático, cooperativo, altruísta
+   - Baixo: analítico, competitivo, direto
+
+5. NEUROTICISM (Neuroticismo): Ansiedade, instabilidade emocional, vulnerabilidade
+   - Alto: ansioso, sensível, emocionalmente reativo
+   - Baixo: calmo, estável, resiliente
+
+CONSIDERE:
+- Temas abordados (projetos criativos = Openness alto)
+- Estrutura da comunicação (mensagens organizadas = Conscientiousness alto)
+- Tom emocional (ansiedade recorrente = Neuroticism alto)
+- Menções a relações sociais (solidão = Extraversion baixo)
+
+Responda APENAS em JSON válido (sem markdown):
+{{
+    "openness": {{"score": 0-100, "level": "Muito Baixo/Baixo/Médio/Alto/Muito Alto", "description": "..."}},
+    "conscientiousness": {{"score": 0-100, "level": "...", "description": "..."}},
+    "extraversion": {{"score": 0-100, "level": "...", "description": "..."}},
+    "agreeableness": {{"score": 0-100, "level": "...", "description": "..."}},
+    "neuroticism": {{"score": 0-100, "level": "...", "description": "..."}},
+    "confidence": 0-100,
+    "interpretation": "Resumo do perfil em 2-3 frases para RH"
+}}
+"""
+
+        try:
+            response = send_to_xai(prompt, model="grok-4-fast-reasoning", temperature=0.7, max_tokens=1500)
+
+            # Parse JSON
+            import json as json_lib
+            result = json_lib.loads(response.strip())
+
+            # Adicionar metadados
+            result["conversations_analyzed"] = len(conversations)
+            result["analysis_date"] = datetime.now().isoformat()
+
+            logger.info(f"✅ Big Five analisado: O={result['openness']['score']}, C={result['conscientiousness']['score']}, E={result['extraversion']['score']}, A={result['agreeableness']['score']}, N={result['neuroticism']['score']}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Erro ao analisar Big Five: {e}")
+            return {
+                "error": str(e),
+                "conversations_analyzed": len(conversations)
+            }
+
+    def analyze_emotional_intelligence(self, user_id: str) -> Dict:
+        """
+        Calcula Inteligência Emocional (EQ) baseado em dados já coletados
+
+        4 Componentes:
+        1. Autoconsciência (self_awareness_score do banco)
+        2. Autogestão (variação de tension_level)
+        3. Consciência Social (menções a outros)
+        4. Gestão de Relacionamentos (evolução de conflitos)
+        """
+        logger.info(f"💖 Iniciando análise EQ para {user_id}")
+
+        # 1. Autoconsciência - pegar do agent_development
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT self_awareness_score FROM agent_development WHERE id = 1")
+        agent_state = cursor.fetchone()
+        self_awareness_raw = agent_state['self_awareness_score'] if agent_state else 5.0
+        self_awareness = int(min(100, (self_awareness_raw / 10) * 100))  # Normalizar para 0-100
+
+        # 2. Autogestão - analisar variação de tension_level
+        conversations = self.get_user_conversations(user_id, limit=50)
+        if len(conversations) < 10:
+            return {
+                "error": f"Dados insuficientes ({len(conversations)} conversas, mínimo 10)",
+                "conversations_analyzed": len(conversations)
+            }
+
+        tensions = [c.get('tension_level', 5.0) for c in conversations if c.get('tension_level')]
+        if tensions:
+            import statistics
+            avg_tension = statistics.mean(tensions)
+            std_tension = statistics.stdev(tensions) if len(tensions) > 1 else 0
+            # Menor desvio padrão = melhor autogestão
+            self_management = int(max(0, min(100, 100 - (std_tension * 15))))
+        else:
+            self_management = 50  # Default médio
+
+        # 3. Consciência Social - contar menções a "outros", "equipe", "família", etc
+        social_keywords = ['outros', 'equipe', 'família', 'amigos', 'colegas', 'pessoas', 'eles', 'ela', 'ele']
+        social_mentions = 0
+        total_words = 0
+
+        for c in conversations:
+            user_input_lower = c['user_input'].lower()
+            words = user_input_lower.split()
+            total_words += len(words)
+            for keyword in social_keywords:
+                social_mentions += user_input_lower.count(keyword)
+
+        social_ratio = (social_mentions / max(1, total_words)) * 1000  # Normalizar
+        social_awareness = int(min(100, social_ratio * 30 + 40))  # Base 40, até 100
+
+        # 4. Gestão de Relacionamentos - analisar conflitos Persona vs outros
+        conflicts = self.get_user_conflicts(user_id, limit=100)
+        persona_conflicts = [c for c in conflicts if 'persona' in c['archetype1'].lower() or 'persona' in c['archetype2'].lower()]
+
+        if len(persona_conflicts) > 5:
+            # Analisar se conflitos diminuem com o tempo (sinal de melhoria)
+            recent_conflicts = persona_conflicts[:len(persona_conflicts)//2]
+            old_conflicts = persona_conflicts[len(persona_conflicts)//2:]
+
+            recent_avg_tension = statistics.mean([c.get('tension_level', 5.0) for c in recent_conflicts]) if recent_conflicts else 5.0
+            old_avg_tension = statistics.mean([c.get('tension_level', 5.0) for c in old_conflicts]) if old_conflicts else 5.0
+
+            improvement = ((old_avg_tension - recent_avg_tension) / max(0.1, old_avg_tension)) * 100
+            relationship_management = int(min(100, max(30, 60 + improvement * 2)))
+        else:
+            relationship_management = 60  # Default médio-alto
+
+        # Calcular EQ geral
+        eq_overall = int((self_awareness + self_management + social_awareness + relationship_management) / 4)
+
+        # Determinar potencial de liderança
+        if eq_overall >= 75:
+            leadership_potential = "Alto"
+        elif eq_overall >= 60:
+            leadership_potential = "Médio-Alto"
+        elif eq_overall >= 45:
+            leadership_potential = "Médio"
+        else:
+            leadership_potential = "Baixo"
+
+        result = {
+            "self_awareness": {
+                "score": self_awareness,
+                "level": self._get_level(self_awareness),
+                "description": "Capacidade de reconhecer emoções e padrões próprios"
+            },
+            "self_management": {
+                "score": self_management,
+                "level": self._get_level(self_management),
+                "description": "Capacidade de regular emoções e manter equilíbrio"
+            },
+            "social_awareness": {
+                "score": social_awareness,
+                "level": self._get_level(social_awareness),
+                "description": "Capacidade de perceber emoções e necessidades alheias"
+            },
+            "relationship_management": {
+                "score": relationship_management,
+                "level": self._get_level(relationship_management),
+                "description": "Capacidade de influenciar e conectar-se com outros"
+            },
+            "overall_eq": eq_overall,
+            "leadership_potential": leadership_potential,
+            "conversations_analyzed": len(conversations),
+            "analysis_date": datetime.now().isoformat()
+        }
+
+        logger.info(f"✅ EQ analisado: Overall={eq_overall}, Liderança={leadership_potential}")
+
+        return result
+
+    def _get_level(self, score: int) -> str:
+        """Helper para converter score em nível textual"""
+        if score >= 80:
+            return "Muito Alto"
+        elif score >= 65:
+            return "Alto"
+        elif score >= 45:
+            return "Médio"
+        elif score >= 30:
+            return "Baixo"
+        else:
+            return "Muito Baixo"
+
+    def analyze_learning_style(self, user_id: str, min_conversations: int = 20) -> Dict:
+        """
+        Analisa Estilos de Aprendizagem (VARK) via Grok AI
+
+        VARK:
+        - Visual, Auditory, Reading/Writing, Kinesthetic
+        """
+        logger.info(f"📚 Iniciando análise VARK para {user_id}")
+
+        conversations = self.get_user_conversations(user_id, limit=40)
+
+        if len(conversations) < min_conversations:
+            return {
+                "error": f"Dados insuficientes ({len(conversations)} conversas, mínimo {min_conversations})",
+                "conversations_analyzed": len(conversations)
+            }
+
+        # Montar contexto
+        user_messages = [c['user_input'] for c in conversations[:25]]
+        context = "\n\n".join([f"Mensagem {i+1}: {msg}" for i, msg in enumerate(user_messages)])
+
+        prompt = f"""Analise o estilo de comunicação do usuário e infira seu estilo de aprendizagem VARK.
+
+MENSAGENS DO USUÁRIO:
+{context}
+
+INDICADORES:
+
+VISUAL (V):
+- Usa palavras: "vejo", "imagem", "parece", "claro", "visualizo", "mostra"
+- Menciona gráficos, diagramas, cores, formas
+- Pede explicações visuais
+
+AUDITIVO (A):
+- Usa palavras: "ouço", "soa", "ritmo", "harmonia", "escuto", "fala"
+- Menciona músicas, podcasts, conversas, tom de voz
+- Prefere explicações verbais
+
+LEITURA/ESCRITA (R):
+- Mensagens longas e estruturadas
+- Usa listas, tópicos, citações, referências
+- Menciona livros, artigos, documentação, pesquisa
+- Vocabulário rico e formal
+
+CINESTÉSICO (K):
+- Usa palavras: "sinto", "toque", "movimento", "prática", "experiência"
+- Menciona fazer, experimentar, testar, agir
+- Foco em sensações físicas e ação
+
+Responda APENAS em JSON válido (sem markdown):
+{{
+    "visual": 0-100,
+    "auditory": 0-100,
+    "reading": 0-100,
+    "kinesthetic": 0-100,
+    "dominant_style": "Visual/Auditivo/Leitura/Cinestésico",
+    "recommended_training": "Sugestão de formato de treinamento ideal para este perfil"
+}}
+
+IMPORTANTE: Os 4 scores devem somar aproximadamente 100.
+"""
+
+        try:
+            response = send_to_xai(prompt, model="grok-4-fast-reasoning", temperature=0.6, max_tokens=800)
+
+            import json as json_lib
+            result = json_lib.loads(response.strip())
+
+            result["conversations_analyzed"] = len(conversations)
+            result["analysis_date"] = datetime.now().isoformat()
+
+            logger.info(f"✅ VARK analisado: Dominante={result['dominant_style']}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Erro ao analisar VARK: {e}")
+            return {
+                "error": str(e),
+                "conversations_analyzed": len(conversations)
+            }
+
+    def analyze_personal_values(self, user_id: str, min_conversations: int = 20) -> Dict:
+        """
+        Analisa Valores Pessoais (Schwartz) via extração de user_facts + Grok AI
+
+        10 Valores Universais de Schwartz
+        """
+        logger.info(f"⭐ Iniciando análise Valores Schwartz para {user_id}")
+
+        # Primeiro tentar buscar de user_facts categoria 'values'
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT fact_key, fact_value, confidence
+            FROM user_facts
+            WHERE user_id = ? AND fact_category = 'values' AND is_current = 1
+            ORDER BY confidence DESC
+        """, (user_id,))
+
+        existing_values = cursor.fetchall()
+
+        # Se tiver menos de 3 valores, usar Grok para inferir
+        if len(existing_values) < 3:
+            conversations = self.get_user_conversations(user_id, limit=40)
+
+            if len(conversations) < min_conversations:
+                return {
+                    "error": f"Dados insuficientes ({len(conversations)} conversas, mínimo {min_conversations})",
+                    "conversations_analyzed": len(conversations)
+                }
+
+            # Montar contexto
+            convo_texts = []
+            for c in conversations[:25]:
+                convo_texts.append(f"{c['user_input']}")
+            context = "\n\n".join(convo_texts)
+
+            prompt = f"""Analise as mensagens do usuário e identifique seus valores pessoais segundo a teoria de Schwartz.
+
+MENSAGENS:
+{context}
+
+10 VALORES UNIVERSAIS DE SCHWARTZ:
+
+1. AUTODIREÇÃO: Independência, criatividade, exploração, liberdade de pensamento
+2. ESTIMULAÇÃO: Novidade, desafios, excitação, vida variada
+3. HEDONISMO: Prazer, gratificação sensorial, aproveitar a vida
+4. REALIZAÇÃO: Sucesso pessoal, competência, ambição, reconhecimento
+5. PODER: Status social, prestígio, controle sobre recursos/pessoas
+6. SEGURANÇA: Proteção, ordem, estabilidade, harmonia
+7. CONFORMIDADE: Restrição de ações que violam normas sociais, autodisciplina
+8. TRADIÇÃO: Respeito por costumes culturais/religiosos, humildade
+9. BENEVOLÊNCIA: Bem-estar de pessoas próximas, ajudar, honestidade
+10. UNIVERSALISMO: Compreensão, tolerância, justiça social, proteção da natureza
+
+Identifique os 3 valores MAIS FORTES do usuário.
+
+Responda APENAS em JSON válido (sem markdown):
+{{
+    "self_direction": {{"score": 0-100, "evidences": ["evidência 1", "evidência 2"]}},
+    "stimulation": {{"score": 0-100, "evidences": []}},
+    "hedonism": {{"score": 0-100, "evidences": []}},
+    "achievement": {{"score": 0-100, "evidences": []}},
+    "power": {{"score": 0-100, "evidences": []}},
+    "security": {{"score": 0-100, "evidences": []}},
+    "conformity": {{"score": 0-100, "evidences": []}},
+    "tradition": {{"score": 0-100, "evidences": []}},
+    "benevolence": {{"score": 0-100, "evidences": []}},
+    "universalism": {{"score": 0-100, "evidences": []}},
+    "top_3_values": ["Valor 1", "Valor 2", "Valor 3"],
+    "cultural_fit": "Descrição de ambientes/culturas onde este perfil prospera",
+    "retention_risk": "Baixo/Médio/Alto - baseado em alinhamento de valores"
+}}
+"""
+
+            try:
+                response = send_to_xai(prompt, model="grok-4-fast-reasoning", temperature=0.7, max_tokens=1800)
+
+                import json as json_lib
+                result = json_lib.loads(response.strip())
+
+                result["conversations_analyzed"] = len(conversations)
+                result["analysis_date"] = datetime.now().isoformat()
+                result["source"] = "grok_inference"
+
+                logger.info(f"✅ Valores analisados (Grok): Top 3={result['top_3_values']}")
+
+                return result
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao analisar valores: {e}")
+                return {
+                    "error": str(e),
+                    "conversations_analyzed": len(conversations)
+                }
+
+        else:
+            # Construir resultado a partir de user_facts existentes
+            logger.info(f"✅ Valores extraídos de user_facts ({len(existing_values)} encontrados)")
+
+            # Mapear fatos para valores de Schwartz (simplificado)
+            result = {
+                "self_direction": {"score": 0, "evidences": []},
+                "stimulation": {"score": 0, "evidences": []},
+                "hedonism": {"score": 0, "evidences": []},
+                "achievement": {"score": 0, "evidences": []},
+                "power": {"score": 0, "evidences": []},
+                "security": {"score": 0, "evidences": []},
+                "conformity": {"score": 0, "evidences": []},
+                "tradition": {"score": 0, "evidences": []},
+                "benevolence": {"score": 0, "evidences": []},
+                "universalism": {"score": 0, "evidences": []},
+                "top_3_values": [],
+                "cultural_fit": "A determinar com mais dados",
+                "retention_risk": "Médio",
+                "source": "user_facts",
+                "conversations_analyzed": 0,
+                "analysis_date": datetime.now().isoformat()
+            }
+
+            # Classificação básica (pode ser melhorada)
+            for fact in existing_values:
+                key = fact['fact_key'].lower()
+                value = fact['fact_value'].lower()
+                confidence = fact['confidence'] * 100
+
+                if any(word in key+value for word in ['independência', 'criatividade', 'autonomia']):
+                    result["self_direction"]["score"] = max(result["self_direction"]["score"], int(confidence))
+                    result["self_direction"]["evidences"].append(fact['fact_value'])
+
+                if any(word in key+value for word in ['sucesso', 'realização', 'ambição']):
+                    result["achievement"]["score"] = max(result["achievement"]["score"], int(confidence))
+                    result["achievement"]["evidences"].append(fact['fact_value'])
+
+                # Adicionar mais mapeamentos conforme necessário
+
+            # Identificar top 3
+            values_scores = {k: v["score"] for k, v in result.items() if isinstance(v, dict) and "score" in v}
+            sorted_values = sorted(values_scores.items(), key=lambda x: x[1], reverse=True)
+            result["top_3_values"] = [k.replace("_", " ").title() for k, _ in sorted_values[:3] if sorted_values[0][1] > 0]
+
+            return result
+
+    def save_psychometrics(self, user_id: str, big_five: Dict, eq: Dict, vark: Dict, values: Dict) -> None:
+        """
+        Salva análises psicométricas no banco
+        """
+        logger.info(f"💾 Salvando análises psicométricas para {user_id}")
+
+        # Verificar se já existe análise (para versionamento)
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT MAX(version) as max_version FROM user_psychometrics WHERE user_id = ?", (user_id,))
+        row = cursor.fetchone()
+        version = (row['max_version'] or 0) + 1 if row else 1
+
+        # Preparar dados
+        import json as json_lib
+
+        # Big Five
+        bf_o = big_five.get('openness', {})
+        bf_c = big_five.get('conscientiousness', {})
+        bf_e = big_five.get('extraversion', {})
+        bf_a = big_five.get('agreeableness', {})
+        bf_n = big_five.get('neuroticism', {})
+
+        # EQ
+        eq_sa = eq.get('self_awareness', {})
+        eq_sm = eq.get('self_management', {})
+        eq_soc = eq.get('social_awareness', {})
+        eq_rm = eq.get('relationship_management', {})
+
+        # Resumo executivo
+        executive_summary = json_lib.dumps({
+            "profile": f"Big Five: O{bf_o.get('score', 0)}, C{bf_c.get('score', 0)}, E{bf_e.get('score', 0)}, A{bf_a.get('score', 0)}, N{bf_n.get('score', 0)} | EQ: {eq.get('overall_eq', 0)}",
+            "strengths": big_five.get('interpretation', 'N/A')[:200],
+            "development_areas": f"EQ Liderança: {eq.get('leadership_potential', 'N/A')}",
+            "organizational_fit": values.get('cultural_fit', 'A determinar'),
+            "recommendations": f"Estilo de aprendizagem: {vark.get('dominant_style', 'N/A')}"
+        })
+
+        # Insert
+        cursor.execute("""
+            INSERT INTO user_psychometrics (
+                user_id, version,
+                openness_score, openness_level, openness_description,
+                conscientiousness_score, conscientiousness_level, conscientiousness_description,
+                extraversion_score, extraversion_level, extraversion_description,
+                agreeableness_score, agreeableness_level, agreeableness_description,
+                neuroticism_score, neuroticism_level, neuroticism_description,
+                big_five_confidence, big_five_interpretation,
+                eq_self_awareness, eq_self_management, eq_social_awareness, eq_relationship_management,
+                eq_overall, eq_leadership_potential, eq_details,
+                vark_visual, vark_auditory, vark_reading, vark_kinesthetic,
+                vark_dominant, vark_recommended_training,
+                schwartz_values, schwartz_top_3, schwartz_cultural_fit, schwartz_retention_risk,
+                executive_summary,
+                conversations_analyzed
+            ) VALUES (
+                ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?,
+                ?, ?, ?, ?,
+                ?,
+                ?
+            )
+        """, (
+            user_id, version,
+            bf_o.get('score'), bf_o.get('level'), bf_o.get('description'),
+            bf_c.get('score'), bf_c.get('level'), bf_c.get('description'),
+            bf_e.get('score'), bf_e.get('level'), bf_e.get('description'),
+            bf_a.get('score'), bf_a.get('level'), bf_a.get('description'),
+            bf_n.get('score'), bf_n.get('level'), bf_n.get('description'),
+            big_five.get('confidence'), big_five.get('interpretation'),
+            eq_sa.get('score'), eq_sm.get('score'), eq_soc.get('score'), eq_rm.get('score'),
+            eq.get('overall_eq'), eq.get('leadership_potential'), json_lib.dumps(eq),
+            vark.get('visual'), vark.get('auditory'), vark.get('reading'), vark.get('kinesthetic'),
+            vark.get('dominant_style'), vark.get('recommended_training'),
+            json_lib.dumps(values), ','.join(values.get('top_3_values', [])),
+            values.get('cultural_fit'), values.get('retention_risk'),
+            executive_summary,
+            big_five.get('conversations_analyzed', 0)
+        ))
+
+        self.conn.commit()
+        logger.info(f"✅ Análises psicométricas salvas (versão {version})")
+
+    def get_psychometrics(self, user_id: str, version: int = None) -> Optional[Dict]:
+        """
+        Busca análises psicométricas do usuário
+        Se version não especificado, retorna a mais recente
+        """
+        cursor = self.conn.cursor()
+
+        if version:
+            cursor.execute("""
+                SELECT * FROM user_psychometrics
+                WHERE user_id = ? AND version = ?
+            """, (user_id, version))
+        else:
+            cursor.execute("""
+                SELECT * FROM user_psychometrics
+                WHERE user_id = ?
+                ORDER BY version DESC
+                LIMIT 1
+            """, (user_id,))
+
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
     # ========================================
     # UTILITÁRIOS
     # ========================================

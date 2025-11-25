@@ -424,3 +424,119 @@ Retorne JSON com esta estrutura EXATA:
             "confidence": 0,
             "summary": f"Erro ao processar análise: {str(e)}"
         }, status_code=500)
+
+@router.get("/user/{user_id}/psychometrics", response_class=HTMLResponse)
+async def user_psychometrics_page(request: Request, user_id: str, username: str = Depends(verify_credentials)):
+    """Página de análises psicométricas completas (Big Five, EQ, VARK, Schwartz)"""
+    db = get_db()
+
+    # Buscar usuário
+    user = db.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    # Verificar se análise já existe (cache)
+    psychometrics_data = db.get_psychometrics(user_id)
+
+    # Se não existe ou está desatualizada, gerar nova
+    if not psychometrics_data:
+        logger.info(f"🧪 Gerando análises psicométricas para {user_id}...")
+
+        try:
+            # Gerar todas as 4 análises
+            big_five = db.analyze_big_five(user_id, min_conversations=20)
+            eq = db.analyze_emotional_intelligence(user_id)
+            vark = db.analyze_learning_style(user_id, min_conversations=20)
+            values = db.analyze_personal_values(user_id, min_conversations=20)
+
+            # Verificar se houve erros
+            errors = []
+            if "error" in big_five:
+                errors.append(f"Big Five: {big_five['error']}")
+            if "error" in eq:
+                errors.append(f"EQ: {eq['error']}")
+            if "error" in vark:
+                errors.append(f"VARK: {vark['error']}")
+            if "error" in values:
+                errors.append(f"Values: {values['error']}")
+
+            if errors:
+                # Renderizar página com erro
+                return templates.TemplateResponse("user_psychometrics.html", {
+                    "request": request,
+                    "user": user,
+                    "user_id": user_id,
+                    "error": " | ".join(errors),
+                    "conversations_count": db.count_conversations(user_id)
+                })
+
+            # Salvar no banco
+            db.save_psychometrics(user_id, big_five, eq, vark, values)
+
+            # Buscar dados salvos
+            psychometrics_data = db.get_psychometrics(user_id)
+
+        except Exception as e:
+            logger.error(f"❌ Erro ao gerar psicometria: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise HTTPException(status_code=500, detail=f"Erro ao gerar análise: {str(e)}")
+
+    # Parse JSON fields
+    import json as json_lib
+
+    schwartz_values = {}
+    if psychometrics_data.get('schwartz_values'):
+        try:
+            schwartz_values = json_lib.loads(psychometrics_data['schwartz_values'])
+        except:
+            schwartz_values = {}
+
+    eq_details = {}
+    if psychometrics_data.get('eq_details'):
+        try:
+            eq_details = json_lib.loads(psychometrics_data['eq_details'])
+        except:
+            eq_details = {}
+
+    # Stats
+    total_conversations = db.count_conversations(user_id)
+
+    # Renderizar template
+    return templates.TemplateResponse("user_psychometrics.html", {
+        "request": request,
+        "user": user,
+        "user_id": user_id,
+        "psychometrics": psychometrics_data,
+        "schwartz_values": schwartz_values,
+        "eq_details": eq_details,
+        "total_conversations": total_conversations
+    })
+
+@router.post("/api/user/{user_id}/regenerate-psychometrics")
+async def regenerate_psychometrics(user_id: str, username: str = Depends(verify_credentials)):
+    """Força regeneração das análises psicométricas (cria nova versão)"""
+    db = get_db()
+
+    try:
+        logger.info(f"🔄 Regenerando análises psicométricas para {user_id}...")
+
+        # Gerar todas as 4 análises
+        big_five = db.analyze_big_five(user_id, min_conversations=20)
+        eq = db.analyze_emotional_intelligence(user_id)
+        vark = db.analyze_learning_style(user_id, min_conversations=20)
+        values = db.analyze_personal_values(user_id, min_conversations=20)
+
+        # Verificar erros
+        if "error" in big_five or "error" in eq or "error" in vark or "error" in values:
+            error_msg = big_five.get("error") or eq.get("error") or vark.get("error") or values.get("error")
+            return JSONResponse({"error": error_msg}, status_code=400)
+
+        # Salvar (vai criar nova versão)
+        db.save_psychometrics(user_id, big_five, eq, vark, values)
+
+        return JSONResponse({"success": True, "message": "Análises regeneradas com sucesso!"})
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao regenerar psicometria: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
