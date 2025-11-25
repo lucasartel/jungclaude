@@ -1,29 +1,28 @@
 """
-jung_proactive_advanced.py - Sistema Proativo Avançado HÍBRIDO v4.1.0
+jung_proactive_advanced.py - Sistema Proativo Avançado HÍBRIDO v4.2.0
 ======================================================================
 
-🧠 VERSÃO 4.1.0 - HÍBRIDO PREMIUM (MEMÓRIA COMPLETA)
+🧠 VERSÃO 4.2.0 - HÍBRIDO PREMIUM (BETA-READY)
    Integração total com jung_core.py v4.0 (ChromaDB + OpenAI + SQLite)
 
-✨ NOVIDADES v4.1.0:
-- ✅ Mensagens proativas SALVAS NA MEMÓRIA como conversas
-- ✅ Contexto RICO das últimas conversas (tensão, afetividade, arquétipos)
-- ✅ Sistema ANTI-REPETIÇÃO (consulta proativas anteriores)
-- ✅ Especificidade em referências (cita trechos concretos do usuário)
-- ✅ Platform="proactive" para filtrar conversas proativas
-- ✅ Prompt melhorado com 8 diretrizes de pertinência
+✨ NOVIDADES v4.2.0:
+- ✅ Configurações de tempo editáveis manualmente (sem modo prod/dev)
+- ✅ Parâmetros simplificados e centralizados
+- ✅ Pronto para beta-testers
 
-Características v4.0.1:
+Características v4.1.0:
+- Mensagens proativas SALVAS NA MEMÓRIA como conversas
+- Contexto RICO das últimas conversas (tensão, afetividade, arquétipos)
+- Sistema ANTI-REPETIÇÃO (consulta proativas anteriores)
+- Especificidade em referências (cita trechos concretos do usuário)
+- Platform="proactive" para filtrar conversas proativas
 - Rotação de duplas arquetípicas (personalidade multifacetada)
 - Extração semântica de tópicos via ChromaDB
-- Uso de fatos estruturados para insights personalizados
-- Geração de conhecimento autônomo em múltiplos domínios
 - Reset automático de cronômetro ao receber mensagens
-- Tracking de complexidade e evolução do agente
 
 Autor: Sistema Jung Claude
-Data: 2025-11-24
-Versão: 4.1.0 - HÍBRIDO PREMIUM (MEMÓRIA COMPLETA)
+Data: 2025-11-25
+Versão: 4.2.0 - HÍBRIDO PREMIUM (BETA-READY)
 """
 
 import os
@@ -47,27 +46,18 @@ from jung_core import (
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# CONFIGURAÇÕES DE AMBIENTE
+# CONFIGURAÇÕES DE TEMPO (Editáveis Manualmente)
 # ============================================================
 
-# 🚀 MODO PRODUÇÃO ATIVADO
-RAILWAY_ENVIRONMENT = "development"  
-# RAILWAY_ENVIRONMENT = os.getenv("RAILWAY_ENVIRONMENT", "production")  
-IS_PRODUCTION = (RAILWAY_ENVIRONMENT == "production")
+# Valores padrão para testes (podem ser alterados conforme necessário)
+INACTIVITY_THRESHOLD_HOURS = 3  # Horas de inatividade antes de enviar proativa
+COOLDOWN_HOURS = 3               # Horas entre mensagens proativas
+MIN_CONVERSATIONS_REQUIRED = 3   # Mínimo de conversas necessárias
 
-# Parâmetros ajustados por ambiente
-if IS_PRODUCTION:
-    # 🚀 PRODUÇÃO
-    INACTIVITY_THRESHOLD_HOURS = 12.0  # 12 horas de inatividade
-    COOLDOWN_HOURS = 24.0  # 24 horas entre mensagens proativas
-    MIN_CONVERSATIONS_REQUIRED = 10  # Mínimo de conversas
-    print("🚀 MODO PRODUÇÃO: Parâmetros conservadores ativados")  # ✅ Usando print
-else:
-    # 🧪 DESENVOLVIMENTO/TESTE
-    INACTIVITY_THRESHOLD_HOURS = 3  # 3 horas (teste rápido)
-    COOLDOWN_HOURS = 3  # 60 minutos (teste rápido)
-    MIN_CONVERSATIONS_REQUIRED = 3  # Menos conversas necessárias
-    print("🧪 MODO TESTE: Parâmetros acelerados ativados")  # ✅ Usando print
+print(f"⚙️ Sistema Proativo configurado:")
+print(f"   • Inatividade: {INACTIVITY_THRESHOLD_HOURS}h")
+print(f"   • Cooldown: {COOLDOWN_HOURS}h")
+print(f"   • Conversas mínimas: {MIN_CONVERSATIONS_REQUIRED}")
 
 
 # ============================================================
