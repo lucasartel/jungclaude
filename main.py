@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Importar o bot
-from telegram_bot import BotState, start_command, help_command, perfil_command, memoria_command, fatos_command, padroes_command, tensoes_command, arquetipo_command, stats_command, buscar_command, reset_command
+from telegram_bot import BotState, start_command, help_command, stats_command, mbti_command, desenvolvimento_command, reset_command
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 # Importar rotas do admin (serão criadas)
@@ -46,17 +46,12 @@ async def lifespan(app: FastAPI):
     logger.info("🤖 Inicializando Bot Telegram...")
     telegram_app = Application.builder().token(telegram_token).build()
 
-    # Registrar handlers (copiado do telegram_bot.py original)
+    # Registrar handlers (apenas comandos essenciais)
     telegram_app.add_handler(CommandHandler("start", start_command))
     telegram_app.add_handler(CommandHandler("help", help_command))
-    telegram_app.add_handler(CommandHandler("perfil", perfil_command))
-    telegram_app.add_handler(CommandHandler("memoria", memoria_command))
-    telegram_app.add_handler(CommandHandler("fatos", fatos_command))
-    telegram_app.add_handler(CommandHandler("padroes", padroes_command))
-    telegram_app.add_handler(CommandHandler("tensoes", tensoes_command))
-    telegram_app.add_handler(CommandHandler("arquetipo", arquetipo_command))
     telegram_app.add_handler(CommandHandler("stats", stats_command))
-    telegram_app.add_handler(CommandHandler("buscar", buscar_command))
+    telegram_app.add_handler(CommandHandler("mbti", mbti_command))
+    telegram_app.add_handler(CommandHandler("desenvolvimento", desenvolvimento_command))
     telegram_app.add_handler(CommandHandler("reset", reset_command))
     
     # Handler de mensagens (precisamos importar a função handle_message se ela existir, 
