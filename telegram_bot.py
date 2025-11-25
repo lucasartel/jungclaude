@@ -642,3 +642,140 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info(f"Comando /stats de {user.first_name}")
 
+
+async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler para /reset - reinicia conversação (Admin-only)"""
+
+    user = update.effective_user
+    user_id = ensure_user_in_database(user)
+
+    confirm_text = (
+        "⚠️ **ATENÇÃO: Isso vai apagar TODO o histórico!**\n\n"
+        "Você perderá:\n"
+        "• Todas as conversas anteriores\n"
+        "• Tensões arquetípicas identificadas\n"
+        "• Fatos estruturados extraídos\n"
+        "• Padrões comportamentais detectados\n"
+        "• Memórias semânticas no ChromaDB\n\n"
+        "Para confirmar, envie: **CONFIRMAR RESET**"
+    )
+
+    await update.message.reply_text(confirm_text)
+
+    context.user_data['awaiting_reset_confirmation'] = True
+
+    logger.warning(f"Reset solicitado por {user.first_name}")
+
+
+# ============================================================
+# HANDLER DE MENSAGENS
+# ============================================================
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler principal de mensagens de texto"""
+
+    user = update.effective_user
+    telegram_id = user.id
+    message_text = update.message.text
+
+    # Garantir usuário no banco
+    user_id = ensure_user_in_database(user)
+
+    # ✅ RESET CRONÔMETRO PROATIVO (importante!)
+    if bot_state.proactive:
+        bot_state.proactive.reset_timer(user_id)
+
+    # ========== CONFIRMAÇÃO DE RESET ==========
+    if context.user_data.get('awaiting_reset_confirmation'):
+        if message_text.strip().upper() == 'CONFIRMAR RESET':
+            cursor = bot_state.db.conn.cursor()
+
+            # Deletar tudo do SQLite
+            cursor.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM archetype_conflicts WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM user_facts WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM user_patterns WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM user_milestones WHERE user_id = ?", (user_id,))
+
+            bot_state.db.conn.commit()
+
+            # Deletar do ChromaDB (se habilitado)
+            if bot_state.db.chroma_enabled:
+                try:
+                    # Buscar IDs dos documentos do usuário
+                    results = bot_state.db.vectorstore._collection.get(
+                        where={"user_id": user_id}
+                    )
+
+                    if results and results.get('ids'):
+                        bot_state.db.vectorstore._collection.delete(
+                            ids=results['ids']
+                        )
+                        logger.info(f"🗑️ {len(results['ids'])} documentos removidos do ChromaDB")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao deletar do ChromaDB: {e}")
+
+            # Limpar histórico de chat
+            bot_state.clear_chat_history(telegram_id)
+
+            await update.message.reply_text(
+                "🔄 **Reset executado!**\n\n"
+                "Todo o histórico foi apagado (SQLite + ChromaDB).\n"
+                "Podemos começar do zero. O que você gostaria de explorar?"
+            )
+            context.user_data['awaiting_reset_confirmation'] = False
+            logger.warning(f"Reset CONFIRMADO por {user.first_name}")
+            return
+        else:
+            await update.message.reply_text("❌ Reset cancelado.\n\nSeu histórico foi preservado.")
+            context.user_data['awaiting_reset_confirmation'] = False
+            return
+
+    # ========== PROCESSAR MENSAGEM NORMAL ==========
+
+    await update.message.chat.send_action(action="typing")
+
+    # Adicionar ao histórico
+    bot_state.add_to_chat_history(telegram_id, "user", message_text)
+
+    # Buscar histórico completo
+    chat_history = bot_state.get_chat_history(telegram_id)
+
+    try:
+        # Processar com JungianEngine (passa chat_history)
+        result = bot_state.jung_engine.process_message(
+            user_id=user_id,
+            message=message_text,
+            model="grok-4-fast-reasoning",
+            chat_history=chat_history
+        )
+
+        response = result['response']
+
+        # Adicionar resposta ao histórico
+        bot_state.add_to_chat_history(telegram_id, "assistant", response)
+
+        # Enviar resposta
+        await update.message.reply_text(response)
+
+        # Detectar padrões periodicamente
+        if bot_state.total_messages_processed % 10 == 0:
+            bot_state.db.detect_and_save_patterns(user_id)
+
+        bot_state.total_messages_processed += 1
+
+        # Log com informações de conflito
+        conflict_info = ""
+        if result.get('conflicts'):
+            conflict_info = f" | Conflitos: {len(result['conflicts'])}"
+
+        logger.info(f"✅ Mensagem processada de {user.first_name}: {message_text[:50]}...{conflict_info}")
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao processar mensagem: {e}", exc_info=True)
+
+        await update.message.reply_text(
+            "😔 Desculpe, ocorreu um erro ao processar sua mensagem.\n"
+            "Pode tentar novamente?"
+        )
+
