@@ -570,3 +570,75 @@ Total enviadas: {proactive_count}
             "Tente novamente mais tarde."
         )
 
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler para /stats - estatísticas completas"""
+
+    user = update.effective_user
+    user_id = ensure_user_in_database(user)
+
+    # Stats do usuário
+    user_data = bot_state.db.get_user(user_id)
+    user_stats = bot_state.db.get_user_stats(user_id)
+
+    # Stats do agente
+    agent_state = bot_state.db.get_agent_state()
+
+    # Stats de conversas
+    conversations = bot_state.db.get_user_conversations(user_id, limit=1000)
+    total_user_words = sum(len(c['user_input'].split()) for c in conversations)
+    total_ai_words = sum(len(c['ai_response'].split()) for c in conversations)
+
+    # Stats de fatos e padrões
+    cursor = bot_state.db.conn.cursor()
+
+    cursor.execute("""
+        SELECT COUNT(*) as count FROM user_facts
+        WHERE user_id = ? AND is_current = 1
+    """, (user_id,))
+    total_facts = cursor.fetchone()['count']
+
+    cursor.execute("""
+        SELECT COUNT(*) as count FROM user_patterns
+        WHERE user_id = ? AND confidence_score > 0.6
+    """, (user_id,))
+    total_patterns = cursor.fetchone()['count']
+
+    stats_text = f"""📊 **Estatísticas Completas**
+
+👤 **SUAS ESTATÍSTICAS:**
+• Total de mensagens: {user_stats['total_messages']}
+• Palavras enviadas: {total_user_words:,}
+• Palavras recebidas: {total_ai_words:,}
+• Média palavras/msg: {total_user_words // max(1, user_stats['total_messages'])}
+• Fatos extraídos: {total_facts}
+• Padrões detectados: {total_patterns}
+• Sessões: {user_stats.get('total_sessions', user_data.get('total_sessions', 1))}
+
+🤖 **DESENVOLVIMENTO DO AGENTE:**
+• Fase atual: {agent_state['phase']}/5
+• Auto-consciência: {agent_state['self_awareness_score']:.0%}
+• Complexidade moral: {agent_state['moral_complexity_score']:.0%}
+• Profundidade emocional: {agent_state['emotional_depth_score']:.0%}
+• Autonomia: {agent_state['autonomy_score']:.0%}
+• Interações totais: {agent_state['total_interactions']}
+
+🗄️ **SISTEMA HÍBRIDO:**
+• ChromaDB: {'ATIVO ✅' if bot_state.db.chroma_enabled else 'INATIVO ❌'}
+• Buscas semânticas realizadas: {bot_state.total_semantic_searches}
+• Modelo de embeddings: {Config.EMBEDDING_MODEL}
+
+🌟 **SISTEMA PROATIVO:**
+• Mensagens proativas enviadas: {bot_state.total_proactive_messages_sent}
+• Status: {'ATIVO ✅' if user_stats['total_messages'] >= 10 else f'INATIVO (faltam {10 - user_stats["total_messages"]} conversas)'}
+
+🌍 **ESTATÍSTICAS GLOBAIS DO BOT:**
+• Mensagens processadas: {bot_state.total_messages_processed}
+
+💡 Use /mbti para análise de personalidade
+💡 Use /desenvolvimento para ver evolução do agente
+"""
+
+    await update.message.reply_text(stats_text)
+
+    logger.info(f"Comando /stats de {user.first_name}")
+
