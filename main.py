@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Importar o bot
-from telegram_bot import BotState, start_command, help_command, stats_command, mbti_command, desenvolvimento_command, reset_command
+from telegram_bot import bot_state, start_command, help_command, stats_command, mbti_command, desenvolvimento_command, reset_command
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 # Importar rotas do admin (serão criadas)
@@ -27,6 +27,90 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# PROACTIVE MESSAGE SCHEDULER
+# ============================================================================
+
+async def proactive_message_scheduler(telegram_app):
+    """
+    Loop contínuo que verifica e envia mensagens proativas a cada 30 minutos.
+
+    Funcionalidades:
+    - Verifica todos os usuários cadastrados
+    - Identifica usuários inativos (>3h sem enviar mensagem)
+    - Gera mensagens proativas personalizadas usando Jung Proactive Advanced
+    - Envia via Telegram
+    - Respeita cooldown de 6h entre mensagens proativas
+    """
+
+    logger.info("🔄 Scheduler de mensagens proativas iniciado!")
+
+    # Aguardar 1 minuto para garantir que o bot está completamente inicializado
+    await asyncio.sleep(60)
+
+    while True:
+        try:
+            logger.info("🔍 [PROATIVO] Verificando usuários elegíveis para mensagens proativas...")
+
+            # Buscar todos os usuários
+            try:
+                users = bot_state.db.get_all_users()
+                logger.info(f"   📊 Total de usuários cadastrados: {len(users)}")
+            except Exception as e:
+                logger.error(f"   ❌ Erro ao buscar usuários: {e}")
+                await asyncio.sleep(30 * 60)  # Aguardar 30 min e tentar novamente
+                continue
+
+            proactive_sent_count = 0
+
+            for user in users:
+                try:
+                    user_id = user.get('user_id')
+                    user_name = user.get('user_name', 'Usuário')
+
+                    if not user_id:
+                        continue
+
+                    # Verificar e gerar mensagem proativa (sistema já faz todas as validações internas)
+                    message = bot_state.proactive.check_and_generate_advanced_message(
+                        user_id=user_id,
+                        user_name=user_name
+                    )
+
+                    if message:
+                        # Enviar mensagem via Telegram
+                        try:
+                            await telegram_app.bot.send_message(
+                                chat_id=user_id,
+                                text=message,
+                                parse_mode='Markdown'
+                            )
+                            logger.info(f"   ✅ [PROATIVO] Mensagem enviada para {user_name} ({user_id[:8]}...)")
+                            proactive_sent_count += 1
+
+                            # Pequeno delay entre envios para evitar rate limit
+                            await asyncio.sleep(2)
+
+                        except Exception as e:
+                            logger.error(f"   ❌ [PROATIVO] Erro ao enviar para {user_name}: {e}")
+
+                except Exception as e:
+                    logger.error(f"   ❌ [PROATIVO] Erro ao processar usuário: {e}")
+                    continue
+
+            logger.info(f"✅ [PROATIVO] Ciclo completo. Mensagens enviadas: {proactive_sent_count}")
+            logger.info(f"⏰ [PROATIVO] Próxima verificação em 30 minutos...")
+
+            # Aguardar 30 minutos antes de próxima verificação
+            await asyncio.sleep(30 * 60)
+
+        except Exception as e:
+            logger.error(f"❌ [PROATIVO] Erro crítico no scheduler: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            # Em caso de erro, aguardar 5 minutos e tentar novamente
+            await asyncio.sleep(5 * 60)
 
 # ============================================================================
 # LIFECYCLE MANAGER
@@ -63,17 +147,27 @@ async def lifespan(app: FastAPI):
     # Iniciar bot em modo assíncrono
     await telegram_app.initialize()
     await telegram_app.start()
-    
+
     # Iniciar polling (em background task para não bloquear o FastAPI)
     # Nota: Em produção com webhook seria diferente, mas para polling:
     asyncio.create_task(telegram_app.updater.start_polling())
-    
+
     logger.info("✅ Bot Telegram iniciado e rodando!")
-    
+
+    # ✨ Iniciar scheduler de mensagens proativas
+    proactive_task = asyncio.create_task(proactive_message_scheduler(telegram_app))
+    logger.info("✅ Scheduler de mensagens proativas ativado!")
+
     yield
-    
+
     # Shutdown
     logger.info("🛑 Parando Bot Telegram...")
+    proactive_task.cancel()  # Cancelar task proativa
+    try:
+        await proactive_task
+    except asyncio.CancelledError:
+        logger.info("✅ Scheduler proativo cancelado")
+
     await telegram_app.updater.stop()
     await telegram_app.stop()
     await telegram_app.shutdown()
