@@ -940,6 +940,21 @@ class HybridDatabaseManager:
             int: ID da conversa no SQLite
         """
 
+        # 🔍 DEBUG CRÍTICO: Log de salvamento para detectar vazamento
+        logger.info(f"💾 [DEBUG] Salvando conversa para user_id='{user_id}' (type={type(user_id).__name__})")
+        logger.info(f"   User name: '{user_name}'")
+        logger.info(f"   Input preview: '{user_input[:50]}...'")
+
+        # Garantir que user_id é string para consistência
+        user_id_str = str(user_id) if user_id else None
+        if not user_id_str:
+            logger.error("❌ user_id é None ou vazio! Não é possível salvar.")
+            raise ValueError("user_id não pode ser None ou vazio")
+
+        if user_id_str != user_id:
+            logger.warning(f"⚠️ user_id convertido de {type(user_id).__name__} para string: '{user_id}' -> '{user_id_str}'")
+            user_id = user_id_str
+
         with self._lock:
             cursor = self.conn.cursor()
 
@@ -963,6 +978,8 @@ class HybridDatabaseManager:
 
             conversation_id = cursor.lastrowid
             chroma_id = f"conv_{conversation_id}"
+
+            logger.info(f"   SQLite: Conversa salva com ID={conversation_id}, chroma_id='{chroma_id}'")
 
             # 2. Atualizar com chroma_id
             cursor.execute("""
@@ -1008,13 +1025,18 @@ Resposta: {ai_response}
                     "keywords": ",".join(keywords) if keywords else "",
                     "has_conflicts": len(detected_conflicts) > 0 if detected_conflicts else False
                 }
-                
+
+                # 🔍 DEBUG: Log do metadata sendo salvo
+                logger.info(f"   ChromaDB metadata: user_id='{metadata['user_id']}' (type={type(metadata['user_id']).__name__})")
+                logger.info(f"   ChromaDB doc_id: '{chroma_id}'")
+
                 # Criar documento
                 doc = Document(page_content=doc_content, metadata=metadata)
-                
+
                 # ✅ ADICIONAR COM TRATAMENTO DE DUPLICATAS
                 try:
                     self.vectorstore.add_documents([doc], ids=[chroma_id])
+                    logger.info(f"✅ ChromaDB: Documento '{chroma_id}' salvo com user_id='{metadata['user_id']}'")
                     logger.info(f"✅ Conversa salva: SQLite (ID={conversation_id}) + ChromaDB ({chroma_id})")
                     
                 except Exception as add_error:
@@ -1114,30 +1136,55 @@ Resposta: {ai_response}
             return self._fallback_keyword_search(user_id, query, k)
         
         try:
-            logger.info(f"🔍 Busca semântica: '{query[:50]}...' (k={k})")
-            
+            # 🔍 DEBUG CRÍTICO: Logs para detectar vazamento de memória entre usuários
+            logger.info(f"🔍 [DEBUG] Busca semântica para user_id='{user_id}' (type={type(user_id).__name__})")
+            logger.info(f"   Query: '{query[:100]}'")
+            logger.info(f"   ChromaDB enabled: {self.chroma_enabled}")
+
             # Query enriquecida com histórico recente (se disponível)
             enriched_query = query
-            
+
             if chat_history and len(chat_history) > 0:
                 recent_context = " ".join([
-                    msg["content"][:100] 
-                    for msg in chat_history[-3:] 
+                    msg["content"][:100]
+                    for msg in chat_history[-3:]
                     if msg["role"] == "user"
                 ])
                 enriched_query = f"{recent_context} {query}"
-            
-            # Busca vetorial
+
+            # Garantir que user_id é string para consistência
+            user_id_str = str(user_id) if user_id else None
+            if not user_id_str:
+                logger.error("❌ user_id é None ou vazio! Retornando lista vazia.")
+                return []
+
+            # Busca vetorial com filtro explícito
+            chroma_filter = {"user_id": user_id_str}
+            logger.info(f"   Filtro ChromaDB: {chroma_filter}")
+
             results = self.vectorstore.similarity_search_with_score(
                 enriched_query,
                 k=k * 2,  # Buscar mais para filtrar depois
-                filter={"user_id": user_id}
+                filter=chroma_filter
             )
-            
+
+            # 🔍 DEBUG: Validar resultados retornados
+            logger.info(f"   Resultados retornados do ChromaDB: {len(results)}")
+            for i, (doc, score) in enumerate(results[:5], 1):
+                doc_user_id = doc.metadata.get('user_id', 'N/A')
+                logger.info(f"   Resultado {i}: user_id='{doc_user_id}' (type={type(doc_user_id).__name__}), score={score:.3f}")
+                if str(doc_user_id) != user_id_str:
+                    logger.error(f"   🚨 VAZAMENTO DETECTADO! Doc user_id='{doc_user_id}' != Query user_id='{user_id_str}'")
+
             # Processar resultados
             memories = []
-            
+
             for doc, score in results:
+                # 🔍 VALIDAÇÃO EXTRA: Filtrar manualmente qualquer resultado com user_id errado
+                doc_user_id = str(doc.metadata.get('user_id', ''))
+                if doc_user_id != user_id_str:
+                    logger.error(f"🚨 FILTRO EXTRA: Removendo doc com user_id='{doc_user_id}' (esperado='{user_id_str}')")
+                    continue  # PULAR este documento
                 # Extrair input do usuário do documento
                 user_input_match = re.search(r"Input:\s*(.+?)(?:\n|Resposta:|$)", doc.page_content, re.DOTALL)
                 user_input_text = user_input_match.group(1).strip() if user_input_match else ""
