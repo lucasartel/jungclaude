@@ -2702,7 +2702,14 @@ Tensão entre elas: {conflict.tension_level:.2f}/10
             conflict_description=conflict_description,
             complexity=complexity
         )
-        
+
+        # 🔍 DEBUG CRÍTICO: Log do contexto sendo enviado ao LLM
+        logger.info(f"🤖 [DEBUG] ========== PROMPT PARA LLM (CONFLICTED) ==========")
+        logger.info(f"   Semantic context (primeiros 500 chars):\n{semantic_context[:500]}")
+        logger.info(f"   User input: {user_input}")
+        logger.info(f"   Conflicts: {len(conflicts)}")
+        logger.info(f"====================================================")
+
         try:
             if model.startswith("grok"):
                 completion = self.xai_client.chat.completions.create(
@@ -2761,7 +2768,14 @@ Tensão entre elas: {conflict.tension_level:.2f}/10
             user_input=user_input,
             complexity=complexity
         )
-        
+
+        # 🔍 DEBUG CRÍTICO: Log do contexto sendo enviado ao LLM
+        logger.info(f"🤖 [DEBUG] ========== PROMPT PARA LLM (HARMONIOUS) ==========")
+        logger.info(f"   Semantic context (primeiros 500 chars):\n{semantic_context[:500]}")
+        logger.info(f"   User input: {user_input}")
+        logger.info(f"   Dominant voice: {dominant_name}")
+        logger.info(f"====================================================")
+
         try:
             if model.startswith("grok"):
                 completion = self.xai_client.chat.completions.create(
