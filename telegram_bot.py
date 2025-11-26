@@ -87,19 +87,19 @@ class BotState:
         # Componentes principais HÍBRIDOS
         self.db = HybridDatabaseManager()
         self.jung_engine = JungianEngine(db=self.db)
-        
+
         # ✅ Sistema Proativo Avançado
-        self.proactive = None  # Inicializado depois com bot instance
-        
+        self.proactive = ProactiveAdvancedSystem(db=self.db)
+
         # Histórico de chat por usuário (para contexto)
         # telegram_id -> List[Dict{"role": str, "content": str}]
         self.chat_histories: Dict[int, List[Dict]] = {}
-        
+
         # Estatísticas
         self.total_messages_processed = 0
         self.total_semantic_searches = 0
         self.total_proactive_messages_sent = 0
-        
+
         logger.info("✅ BotState HÍBRIDO + PROATIVO inicializado")
     
     def get_chat_history(self, telegram_id: int) -> List[Dict]:
