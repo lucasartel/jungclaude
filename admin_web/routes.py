@@ -574,7 +574,7 @@ async def diagnose_facts(username: str = Depends(verify_credentials)):
 
             cursor.execute("""
                 SELECT fact_category, fact_key, fact_value, is_current, version,
-                       created_at, source_conversation_id
+                       source_conversation_id
                 FROM user_facts
                 WHERE user_id = ?
                 ORDER BY fact_category, fact_key, version DESC
@@ -594,7 +594,6 @@ async def diagnose_facts(username: str = Depends(verify_credentials)):
                     "value": fact['fact_value'],
                     "is_current": bool(fact['is_current']),
                     "version": fact['version'],
-                    "created_at": fact['created_at'],
                     "source_conversation_id": fact['source_conversation_id']
                 })
 
