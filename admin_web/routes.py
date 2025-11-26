@@ -641,3 +641,98 @@ async def diagnose_facts(username: str = Depends(verify_credentials)):
         import traceback
         logger.error(traceback.format_exc())
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.get("/api/diagnose-chromadb")
+async def diagnose_chromadb(username: str = Depends(verify_credentials)):
+    """
+    API para diagnosticar vazamento de memória no ChromaDB.
+    Retorna todas as conversas salvas no ChromaDB com seus metadados.
+    """
+    try:
+        db = get_db()
+
+        # Verificar se ChromaDB está habilitado
+        if not db.chroma_enabled:
+            return JSONResponse({
+                "success": False,
+                "error": "ChromaDB está desabilitado",
+                "chroma_enabled": False
+            })
+
+        # Buscar TODOS os documentos do ChromaDB (sem filtro)
+        # Isso vai revelar se há documentos com user_id errado
+        try:
+            # Get the collection directly
+            collection = db.vectorstore._collection
+
+            # Get all documents
+            all_docs = collection.get(
+                include=["metadatas", "documents"]
+            )
+
+            # Organizar por usuário
+            docs_by_user = {}
+            total_docs = len(all_docs['ids'])
+
+            for i in range(total_docs):
+                doc_id = all_docs['ids'][i]
+                metadata = all_docs['metadatas'][i]
+                document = all_docs['documents'][i]
+
+                user_id = metadata.get('user_id', 'N/A')
+                user_name = metadata.get('user_name', 'N/A')
+
+                if user_id not in docs_by_user:
+                    docs_by_user[user_id] = {
+                        "user_name": user_name,
+                        "document_count": 0,
+                        "documents": []
+                    }
+
+                docs_by_user[user_id]["document_count"] += 1
+                docs_by_user[user_id]["documents"].append({
+                    "doc_id": doc_id,
+                    "user_input": metadata.get('user_input', ''),
+                    "ai_response": metadata.get('ai_response', ''),
+                    "conversation_id": metadata.get('conversation_id', 'N/A'),
+                    "timestamp": metadata.get('timestamp', 'N/A'),
+                    "preview": document[:200] if document else ""
+                })
+
+            # Buscar usuários cadastrados
+            cursor = db.conn.cursor()
+            cursor.execute("SELECT user_id, user_name FROM users")
+            registered_users = {row['user_id']: row['user_name'] for row in cursor.fetchall()}
+
+            # Verificar integridade
+            orphan_docs = []
+            for user_id in docs_by_user.keys():
+                if user_id not in registered_users and user_id != 'N/A':
+                    orphan_docs.append({
+                        "user_id": user_id,
+                        "document_count": docs_by_user[user_id]["document_count"]
+                    })
+
+            return JSONResponse({
+                "success": True,
+                "chroma_enabled": True,
+                "total_documents": total_docs,
+                "registered_users": list(registered_users.keys()),
+                "users_with_documents": list(docs_by_user.keys()),
+                "docs_by_user": docs_by_user,
+                "orphan_docs": orphan_docs,
+                "has_orphans": len(orphan_docs) > 0
+            })
+
+        except Exception as e:
+            logger.error(f"❌ Erro ao acessar ChromaDB: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return JSONResponse({"error": f"Erro ao acessar ChromaDB: {str(e)}"}, status_code=500)
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao diagnosticar ChromaDB: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return JSONResponse({"error": str(e)}, status_code=500)
