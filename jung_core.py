@@ -1265,9 +1265,15 @@ Resposta: {ai_response}
         - Histórico da conversa atual
         """
         
+        # 🔍 DEBUG CRÍTICO: Log INÍCIO da construção de contexto
+        logger.info(f"🏁 [DEBUG] ========== INÍCIO build_rich_context ==========")
+        logger.info(f"🏁 [DEBUG] user_id='{user_id}' (type={type(user_id).__name__})")
+
         user = self.get_user(user_id)
         name = user['user_name'] if user else "Usuário"
-        
+
+        logger.info(f"🏁 [DEBUG] user_name='{name}'")
+
         context_parts = []
         
         # ===== 1. CABEÇALHO =====
@@ -1376,7 +1382,11 @@ Resposta: {ai_response}
         context_parts.append("  2. Use FATOS e PADRÕES para conhecimento de longo prazo")
         context_parts.append("  3. MEMÓRIAS SEMÂNTICAS mostram conversas similares do passado")
         context_parts.append("  4. Conecte o input atual com TODOS esses níveis de memória")
-        
+
+        # 🔍 DEBUG CRÍTICO: Log FIM da construção de contexto
+        logger.info(f"🏁 [DEBUG] ========== FIM build_rich_context ==========")
+        logger.info(f"🏁 [DEBUG] Contexto construído com {len(context_parts)} partes")
+
         return "\n".join(context_parts)
     
     # ========================================
