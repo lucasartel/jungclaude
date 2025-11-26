@@ -1288,30 +1288,38 @@ Resposta: {ai_response}
         
         # ===== 3. FATOS ESTRUTURADOS =====
         cursor = self.conn.cursor()
-        
+
+        # 🔍 DEBUG CRÍTICO: Log de recuperação de fatos
+        logger.info(f"📚 [DEBUG] Recuperando fatos para user_id='{user_id}'")
+
         cursor.execute("""
             SELECT fact_category, fact_key, fact_value
             FROM user_facts
             WHERE user_id = ? AND is_current = 1
             ORDER BY fact_category, fact_key
         """, (user_id,))
-        
+
         facts = cursor.fetchall()
-        
+
+        # 🔍 DEBUG: Log dos fatos recuperados
+        logger.info(f"   Fatos encontrados: {len(facts)}")
+        for i, fact in enumerate(facts[:10], 1):  # Mostrar até 10 primeiros
+            logger.info(f"   Fato {i}: {fact['fact_category']} - {fact['fact_key']}: {fact['fact_value']}")
+
         if facts:
             context_parts.append("📋 FATOS CONHECIDOS:")
-            
+
             facts_by_category = {}
             for fact in facts:
                 category = fact['fact_category']
                 if category not in facts_by_category:
                     facts_by_category[category] = []
                 facts_by_category[category].append(f"{fact['fact_key']}: {fact['fact_value']}")
-            
+
             for category, items in facts_by_category.items():
                 context_parts.append(f"\n{category}:")
                 context_parts.append("\n".join(f"  - {item}" for item in items))
-            
+
             context_parts.append("")
         
         # ===== 4. PADRÕES DETECTADOS =====
@@ -1453,6 +1461,11 @@ Resposta: {ai_response}
     def _save_or_update_fact(self, user_id: str, category: str, key: str,
                             value: str, conversation_id: int):
         """Salva ou atualiza fato (com versionamento)"""
+
+        # 🔍 DEBUG CRÍTICO: Log de salvamento de fato
+        logger.info(f"📝 [DEBUG] Salvando fato para user_id='{user_id}' (type={type(user_id).__name__})")
+        logger.info(f"   Categoria: {category}, Chave: {key}, Valor: {value}")
+
         with self._lock:
             cursor = self.conn.cursor()
 
@@ -1467,6 +1480,8 @@ Resposta: {ai_response}
             if existing:
                 # Se valor mudou, criar nova versão
                 if existing['fact_value'] != value:
+                    logger.info(f"   ✏️  Atualizando fato existente: '{existing['fact_value']}' → '{value}'")
+
                     # Desativar versão antiga
                     cursor.execute("""
                         UPDATE user_facts SET is_current = 0 WHERE id = ?
@@ -1480,7 +1495,10 @@ Resposta: {ai_response}
                         SELECT user_id, fact_category, fact_key, ?, ?, version + 1
                         FROM user_facts WHERE id = ?
                     """, (value, conversation_id, existing['id']))
+                else:
+                    logger.info(f"   ℹ️  Fato já existe com mesmo valor, pulando")
             else:
+                logger.info(f"   ✨ Criando novo fato")
                 # Criar fato novo
                 cursor.execute("""
                     INSERT INTO user_facts
@@ -1489,6 +1507,7 @@ Resposta: {ai_response}
                 """, (user_id, category, key, value, conversation_id))
 
             self.conn.commit()
+            logger.info(f"   ✅ Fato salvo com sucesso")
     
     # ========================================
     # DETECÇÃO DE PADRÕES
