@@ -736,3 +736,45 @@ async def diagnose_chromadb(username: str = Depends(verify_credentials)):
         import traceback
         logger.error(traceback.format_exc())
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.get("/api/conversation/{conversation_id}")
+async def get_conversation_detail(conversation_id: int, username: str = Depends(verify_credentials)):
+    """
+    Retorna detalhes completos de uma conversa específica.
+    """
+    try:
+        db = get_db()
+        cursor = db.conn.cursor()
+
+        cursor.execute("""
+            SELECT c.id, c.user_id, c.user_input, c.ai_response, c.timestamp,
+                   u.user_name, u.platform
+            FROM conversations c
+            LEFT JOIN users u ON c.user_id = u.user_id
+            WHERE c.id = ?
+        """, (conversation_id,))
+
+        conv = cursor.fetchone()
+
+        if not conv:
+            return JSONResponse({"error": "Conversa não encontrada"}, status_code=404)
+
+        return JSONResponse({
+            "success": True,
+            "conversation": {
+                "id": conv['id'],
+                "user_id": conv['user_id'],
+                "user_name": conv['user_name'],
+                "platform": conv['platform'],
+                "timestamp": conv['timestamp'],
+                "user_input": conv['user_input'],
+                "ai_response": conv['ai_response']
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar conversa: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return JSONResponse({"error": str(e)}, status_code=500)
