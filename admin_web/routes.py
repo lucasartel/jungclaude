@@ -540,3 +540,105 @@ async def regenerate_psychometrics(user_id: str, username: str = Depends(verify_
     except Exception as e:
         logger.error(f"❌ Erro ao regenerar psicometria: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
+
+# ============================================================================
+# 🔍 DIAGNÓSTICO DE VAZAMENTO DE MEMÓRIA
+# ============================================================================
+
+@router.get("/api/diagnose-facts")
+async def diagnose_facts(username: str = Depends(verify_credentials)):
+    """
+    API para diagnosticar vazamento de memória entre usuários.
+    Retorna todos os fatos de todos os usuários para análise.
+    """
+    try:
+        db = get_db()
+        cursor = db.conn.cursor()
+
+        # 1. Listar todos os usuários
+        cursor.execute("SELECT user_id, user_name, platform FROM users ORDER BY user_name")
+        users = cursor.fetchall()
+
+        users_list = []
+        for user in users:
+            users_list.append({
+                "user_id": user['user_id'],
+                "user_name": user['user_name'],
+                "platform": user['platform']
+            })
+
+        # 2. Fatos por usuário
+        facts_by_user = {}
+        for user in users:
+            user_id = user['user_id']
+
+            cursor.execute("""
+                SELECT fact_category, fact_key, fact_value, is_current, version,
+                       created_at, source_conversation_id
+                FROM user_facts
+                WHERE user_id = ?
+                ORDER BY fact_category, fact_key, version DESC
+            """, (user_id,))
+
+            facts = cursor.fetchall()
+
+            facts_by_user[user_id] = {
+                "user_name": user['user_name'],
+                "facts": []
+            }
+
+            for fact in facts:
+                facts_by_user[user_id]["facts"].append({
+                    "category": fact['fact_category'],
+                    "key": fact['fact_key'],
+                    "value": fact['fact_value'],
+                    "is_current": bool(fact['is_current']),
+                    "version": fact['version'],
+                    "created_at": fact['created_at'],
+                    "source_conversation_id": fact['source_conversation_id']
+                })
+
+        # 3. Verificar integridade
+        cursor.execute("""
+            SELECT COUNT(*) as count FROM user_facts WHERE user_id IS NULL OR user_id = ''
+        """)
+        null_facts_count = cursor.fetchone()['count']
+
+        # 4. Buscar duplicatas
+        cursor.execute("""
+            SELECT fact_category, fact_key, fact_value, COUNT(DISTINCT user_id) as user_count,
+                   GROUP_CONCAT(DISTINCT user_id) as user_ids
+            FROM user_facts
+            WHERE is_current = 1
+            GROUP BY fact_category, fact_key, fact_value
+            HAVING user_count > 1
+        """)
+
+        duplicates = cursor.fetchall()
+        duplicates_list = []
+        for dup in duplicates:
+            duplicates_list.append({
+                "category": dup['fact_category'],
+                "key": dup['fact_key'],
+                "value": dup['fact_value'],
+                "user_count": dup['user_count'],
+                "user_ids": dup['user_ids'].split(',') if dup['user_ids'] else []
+            })
+
+        return JSONResponse({
+            "success": True,
+            "users": users_list,
+            "facts_by_user": facts_by_user,
+            "integrity": {
+                "null_facts_count": null_facts_count,
+                "has_null_facts": null_facts_count > 0
+            },
+            "duplicates": duplicates_list,
+            "has_leaks": len(duplicates_list) > 0
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao diagnosticar fatos: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return JSONResponse({"error": str(e)}, status_code=500)
