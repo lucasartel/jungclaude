@@ -679,24 +679,31 @@ class HybridDatabaseManager:
         # ========== DESENVOLVIMENTO DO AGENTE ==========
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS agent_development (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+
                 phase INTEGER DEFAULT 1,
                 total_interactions INTEGER DEFAULT 0,
-                
+
                 self_awareness_score REAL DEFAULT 0.0,
                 moral_complexity_score REAL DEFAULT 0.0,
                 emotional_depth_score REAL DEFAULT 0.0,
                 autonomy_score REAL DEFAULT 0.0,
-                
+
                 depth_level REAL DEFAULT 0.0,
                 autonomy_level REAL DEFAULT 0.0,
-                
-                last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+
+                last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
         """)
-        
-        cursor.execute("INSERT OR IGNORE INTO agent_development (id) VALUES (1)")
+
+        # Criar índice único para garantir um registro por usuário
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_dev_user
+            ON agent_development(user_id)
+        """)
         
         # ========== MILESTONES DO AGENTE ==========
         cursor.execute("""
@@ -1089,8 +1096,8 @@ Resposta: {ai_response}
 
                 self.conn.commit()
         
-        # 5. Atualizar desenvolvimento do agente
-        self._update_agent_development()
+        # 5. Atualizar desenvolvimento do agente (isolado por usuário)
+        self._update_agent_development(user_id)
         
         # 6. Extrair fatos do input
         self.extract_and_save_facts(user_id, user_input, conversation_id)
@@ -1610,9 +1617,38 @@ Resposta: {ai_response}
     # ========================================
     # DESENVOLVIMENTO DO AGENTE
     # ========================================
-    
-    def _update_agent_development(self):
-        """Atualiza métricas de desenvolvimento do agente"""
+
+    def _ensure_agent_state(self, user_id: str):
+        """
+        Garante que o usuário tenha um registro de agent_development.
+        Cria um novo registro com valores padrão se não existir.
+
+        Args:
+            user_id: ID do usuário
+        """
+        with self._lock:
+            cursor = self.conn.cursor()
+
+            # Verificar se já existe registro para este usuário
+            cursor.execute("""
+                SELECT id FROM agent_development WHERE user_id = ?
+            """, (user_id,))
+
+            if not cursor.fetchone():
+                # Criar registro inicial para este usuário
+                cursor.execute("""
+                    INSERT INTO agent_development (user_id)
+                    VALUES (?)
+                """, (user_id,))
+
+                self.conn.commit()
+                logger.info(f"✅ Agent state inicializado para user_id={user_id}")
+
+    def _update_agent_development(self, user_id: str):
+        """Atualiza métricas de desenvolvimento do agente para um usuário específico"""
+        # Garantir que o usuário tem registro de agent_development
+        self._ensure_agent_state(user_id)
+
         with self._lock:
             cursor = self.conn.cursor()
 
@@ -1626,20 +1662,26 @@ Resposta: {ai_response}
                     depth_level = (self_awareness_score + moral_complexity_score + emotional_depth_score) / 3,
                     autonomy_level = autonomy_score,
                     last_updated = CURRENT_TIMESTAMP
-                WHERE id = 1
-            """)
+                WHERE user_id = ?
+            """, (user_id,))
 
             self.conn.commit()
-            self._check_phase_progression()
-    
-    def _check_phase_progression(self):
-        """Verifica se agente deve progredir de fase"""
+            self._check_phase_progression(user_id)
+
+    def _check_phase_progression(self, user_id: str):
+        """Verifica se agente deve progredir de fase para um usuário específico"""
         # Note: Pode ser chamado de dentro de _update_agent_development (já locked)
         # ou de forma independente. RLock permite reentrada.
         with self._lock:
             cursor = self.conn.cursor()
-            cursor.execute("SELECT * FROM agent_development WHERE id = 1")
-            state = dict(cursor.fetchone())
+            cursor.execute("SELECT * FROM agent_development WHERE user_id = ?", (user_id,))
+            result = cursor.fetchone()
+
+            if not result:
+                logger.warning(f"⚠️ Agent state não encontrado para user_id={user_id}")
+                return
+
+            state = dict(result)
 
             avg_score = (
                 state['self_awareness_score'] +
@@ -1651,7 +1693,7 @@ Resposta: {ai_response}
             new_phase = min(5, int(avg_score * 5) + 1)
 
             if new_phase > state['phase']:
-                cursor.execute("UPDATE agent_development SET phase = ? WHERE id = 1", (new_phase,))
+                cursor.execute("UPDATE agent_development SET phase = ? WHERE user_id = ?", (new_phase, user_id))
 
                 cursor.execute("""
                     INSERT INTO milestones (milestone_type, description, phase, interaction_count)
@@ -1666,11 +1708,19 @@ Resposta: {ai_response}
                 self.conn.commit()
                 logger.info(f"🎯 AGENTE PROGREDIU PARA FASE {new_phase}!")
     
-    def get_agent_state(self) -> Dict:
-        """Retorna estado atual do agente"""
+    def get_agent_state(self, user_id: str) -> Optional[Dict]:
+        """Retorna estado atual do agente para um usuário específico"""
+        self._ensure_agent_state(user_id)
+
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM agent_development WHERE id = 1")
-        return dict(cursor.fetchone())
+        cursor.execute("SELECT * FROM agent_development WHERE user_id = ?", (user_id,))
+        result = cursor.fetchone()
+
+        if not result:
+            logger.warning(f"⚠️ Agent state não encontrado para user_id={user_id}")
+            return None
+
+        return dict(result)
     
     def get_milestones(self, limit: int = 20) -> List[Dict]:
         """Busca milestones recentes"""
@@ -1844,12 +1894,12 @@ Responda APENAS em JSON válido (sem markdown):
         """
         logger.info(f"💖 Iniciando análise EQ para {user_id}")
 
-        # 1. Autoconsciência - pegar do agent_development
+        # 1. Autoconsciência - pegar do agent_development do usuário
         cursor = self.conn.cursor()
-        cursor.execute("SELECT self_awareness_score FROM agent_development WHERE id = 1")
+        cursor.execute("SELECT self_awareness_score FROM agent_development WHERE user_id = ?", (user_id,))
         agent_state = cursor.fetchone()
-        self_awareness_raw = agent_state['self_awareness_score'] if agent_state else 5.0
-        self_awareness = int(min(100, (self_awareness_raw / 10) * 100))  # Normalizar para 0-100
+        self_awareness_raw = agent_state['self_awareness_score'] if agent_state else 0.0
+        self_awareness = int(min(100, self_awareness_raw * 100))  # Normalizar para 0-100
 
         # 2. Autogestão - analisar variação de tension_level
         conversations = self.get_user_conversations(user_id, limit=50)
