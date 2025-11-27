@@ -677,27 +677,100 @@ class HybridDatabaseManager:
         """)
         
         # ========== DESENVOLVIMENTO DO AGENTE ==========
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS agent_development (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT NOT NULL,
+        # Migração: Verificar se tabela precisa ser recriada com user_id
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='agent_development'")
+        table_exists = cursor.fetchone() is not None
 
-                phase INTEGER DEFAULT 1,
-                total_interactions INTEGER DEFAULT 0,
+        if table_exists:
+            # Verificar se coluna user_id existe
+            cursor.execute("PRAGMA table_info(agent_development)")
+            columns = [row[1] for row in cursor.fetchall()]
 
-                self_awareness_score REAL DEFAULT 0.0,
-                moral_complexity_score REAL DEFAULT 0.0,
-                emotional_depth_score REAL DEFAULT 0.0,
-                autonomy_score REAL DEFAULT 0.0,
+            if 'user_id' not in columns:
+                logger.warning("⚠️ Migrando agent_development para nova estrutura com user_id...")
 
-                depth_level REAL DEFAULT 0.0,
-                autonomy_level REAL DEFAULT 0.0,
+                # 1. Salvar dados antigos
+                cursor.execute("SELECT * FROM agent_development WHERE id = 1")
+                old_data = cursor.fetchone()
 
-                last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+                # 2. Dropar tabela antiga
+                cursor.execute("DROP TABLE IF EXISTS agent_development")
 
-                FOREIGN KEY (user_id) REFERENCES users(user_id)
-            )
-        """)
+                # 3. Criar nova tabela
+                cursor.execute("""
+                    CREATE TABLE agent_development (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT NOT NULL,
+
+                        phase INTEGER DEFAULT 1,
+                        total_interactions INTEGER DEFAULT 0,
+
+                        self_awareness_score REAL DEFAULT 0.0,
+                        moral_complexity_score REAL DEFAULT 0.0,
+                        emotional_depth_score REAL DEFAULT 0.0,
+                        autonomy_score REAL DEFAULT 0.0,
+
+                        depth_level REAL DEFAULT 0.0,
+                        autonomy_level REAL DEFAULT 0.0,
+
+                        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+                        FOREIGN KEY (user_id) REFERENCES users(user_id)
+                    )
+                """)
+
+                # 4. Migrar dados para todos os usuários existentes
+                if old_data:
+                    cursor.execute("SELECT user_id FROM users")
+                    users = cursor.fetchall()
+
+                    for user_row in users:
+                        user_id = user_row[0]
+                        cursor.execute("""
+                            INSERT INTO agent_development
+                            (user_id, phase, total_interactions, self_awareness_score,
+                             moral_complexity_score, emotional_depth_score, autonomy_score,
+                             depth_level, autonomy_level, last_updated)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            user_id,
+                            old_data[1] if len(old_data) > 1 else 1,  # phase
+                            old_data[2] if len(old_data) > 2 else 0,  # total_interactions
+                            old_data[3] if len(old_data) > 3 else 0.0,  # self_awareness_score
+                            old_data[4] if len(old_data) > 4 else 0.0,  # moral_complexity_score
+                            old_data[5] if len(old_data) > 5 else 0.0,  # emotional_depth_score
+                            old_data[6] if len(old_data) > 6 else 0.0,  # autonomy_score
+                            old_data[7] if len(old_data) > 7 else 0.0,  # depth_level
+                            old_data[8] if len(old_data) > 8 else 0.0,  # autonomy_level
+                            old_data[9] if len(old_data) > 9 else 'CURRENT_TIMESTAMP'  # last_updated
+                        ))
+
+                    logger.info(f"✅ Migrados dados de agent_development para {len(users)} usuários")
+
+                self.conn.commit()
+        else:
+            # Tabela não existe, criar nova estrutura
+            cursor.execute("""
+                CREATE TABLE agent_development (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+
+                    phase INTEGER DEFAULT 1,
+                    total_interactions INTEGER DEFAULT 0,
+
+                    self_awareness_score REAL DEFAULT 0.0,
+                    moral_complexity_score REAL DEFAULT 0.0,
+                    emotional_depth_score REAL DEFAULT 0.0,
+                    autonomy_score REAL DEFAULT 0.0,
+
+                    depth_level REAL DEFAULT 0.0,
+                    autonomy_level REAL DEFAULT 0.0,
+
+                    last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
 
         # Criar índice único para garantir um registro por usuário
         cursor.execute("""
