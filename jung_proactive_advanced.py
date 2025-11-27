@@ -54,10 +54,10 @@ INACTIVITY_THRESHOLD_HOURS = 3  # Horas de inatividade antes de enviar proativa
 COOLDOWN_HOURS = 6               # Horas entre mensagens proativas
 MIN_CONVERSATIONS_REQUIRED = 3   # Mínimo de conversas necessárias
 
-print(f"⚙️ Sistema Proativo configurado:")
-print(f"   • Inatividade: {INACTIVITY_THRESHOLD_HOURS}h")
-print(f"   • Cooldown: {COOLDOWN_HOURS}h")
-print(f"   • Conversas mínimas: {MIN_CONVERSATIONS_REQUIRED}")
+logger.info(f"⚙️ Sistema Proativo configurado:")
+logger.info(f"   • Inatividade: {INACTIVITY_THRESHOLD_HOURS}h")
+logger.info(f"   • Cooldown: {COOLDOWN_HOURS}h")
+logger.info(f"   • Conversas mínimas: {MIN_CONVERSATIONS_REQUIRED}")
 
 
 # ============================================================
@@ -343,7 +343,7 @@ class ProactiveAdvancedSystem:
         
         self.db.conn.commit()
         
-        print(f"⏱️  Cronômetro resetado para usuário {user_id[:8]}")
+        logger.info(f"⏱️  Cronômetro resetado para usuário {user_id[:8]}")
     
     def _select_next_archetype_pair(self, user_id: str) -> ArchetypePair:
         """Seleciona próximo par arquetípico (rotação inteligente)"""
@@ -475,12 +475,12 @@ Responda APENAS com o tópico:"""
             # Registrar
             self.proactive_db.record_topic(user_id, final_topic, method='semantic')
             
-            print(f"📌 Tópico extraído semanticamente: {final_topic}")
+            logger.info(f"📌 Tópico extraído semanticamente: {final_topic}")
             
             return final_topic
             
         except Exception as e:
-            print(f"❌ Erro na extração semântica: {e}")
+            logger.info(f"❌ Erro na extração semântica: {e}")
             return self._extract_topic_from_conversations(user_id)
     
     def _extract_topic_from_conversations(self, user_id: str) -> Optional[str]:
@@ -525,7 +525,7 @@ Tópico:"""
             return topic
             
         except Exception as e:
-            print(f"❌ Erro ao extrair tópico: {e}")
+            logger.info(f"❌ Erro ao extrair tópico: {e}")
             return "desenvolvimento pessoal"  # fallback
     
     def _get_relevant_facts(self, user_id: str, topic: str) -> List[str]:
@@ -699,7 +699,7 @@ Tom esperado: {archetype_pair.description}
             return response.strip()
             
         except Exception as e:
-            print(f"❌ Erro ao gerar conhecimento autônomo: {e}")
+            logger.info(f"❌ Erro ao gerar conhecimento autônomo: {e}")
             return None
     
     def _calculate_complexity_score(self, insight: str, facts_used: int) -> float:
@@ -726,36 +726,40 @@ Tom esperado: {archetype_pair.description}
         user_name: str
     ) -> Optional[str]:
         """✅ MÉTODO PRINCIPAL - Gera mensagem proativa avançada HÍBRIDA"""
-        
-        print(f"\n{'='*60}")
-        print(f"🧠 GERAÇÃO PROATIVA AVANÇADA (HÍBRIDO v4.0.1) - {user_name}")
-        print(f"{'='*60}")
-        
+
+        logger.info(f"\n{'='*60}")
+        logger.info(f"🧠 [PROATIVO] GERAÇÃO AVANÇADA para {user_name} ({user_id[:8]}...)")
+        logger.info(f"{'='*60}")
+
         # 1. Checar elegibilidade
         user = self.db.get_user(user_id)
-        
+
         if not user:
-            print(f"❌ Usuário não encontrado")
+            logger.warning(f"❌ [PROATIVO] Usuário não encontrado: {user_id}")
             return None
-        
+
         # Checar quantidade de conversas
         total_convs = len(self.db.get_user_conversations(user_id, limit=1000))
-        
+        logger.info(f"   📊 Total de conversas: {total_convs} (mínimo: {self.min_conversations_required})")
+
         if total_convs < self.min_conversations_required:
-            print(f"⚠️  Conversas insuficientes ({total_convs}/{self.min_conversations_required})")
+            logger.info(f"⚠️  [PROATIVO] Conversas insuficientes ({total_convs}/{self.min_conversations_required})")
             return None
-        
+
         # Checar inatividade
         last_seen = user.get('last_seen')
-        
+
         if last_seen:
             last_dt = datetime.fromisoformat(last_seen)
             delta = datetime.now() - last_dt
-            
+            hours_inactive = delta.total_seconds() / 3600
+
+            logger.info(f"   ⏰ Última atividade: {hours_inactive:.1f}h atrás (mínimo: {self.inactivity_threshold_hours}h)")
+
             if delta.total_seconds() < self.inactivity_threshold_hours * 3600:
-                print(f"⏰ Usuário ainda ativo (última atividade: {delta.total_seconds()/3600:.1f}h atrás)")
+                logger.info(f"⏰ [PROATIVO] Usuário ainda ativo ({hours_inactive:.1f}h / {self.inactivity_threshold_hours}h)")
                 return None
-        
+
         # Checar cooldown de última proativa
         cursor = self.db.conn.cursor()
         cursor.execute("""
@@ -764,41 +768,46 @@ Tom esperado: {archetype_pair.description}
             ORDER BY timestamp DESC
             LIMIT 1
         """, (user_id,))
-        
+
         last_proactive = cursor.fetchone()
-        
+
         if last_proactive:
             last_dt = datetime.fromisoformat(last_proactive['timestamp'])
             delta = datetime.now() - last_dt
-            
+            hours_since_last = delta.total_seconds() / 3600
+
+            logger.info(f"   🔄 Última proativa: {hours_since_last:.1f}h atrás (cooldown: {self.cooldown_hours}h)")
+
             if delta.total_seconds() < self.cooldown_hours * 3600:
-                print(f"⏸️  Em cooldown ({delta.total_seconds()/3600:.1f}h / {self.cooldown_hours}h)")
+                logger.info(f"⏸️  [PROATIVO] Em cooldown ({hours_since_last:.1f}h / {self.cooldown_hours}h)")
                 return None
-        
-        print(f"✅ Usuário elegível!")
-        
+        else:
+            logger.info(f"   🆕 Nunca recebeu mensagem proativa")
+
+        logger.info(f"✅ [PROATIVO] Usuário elegível!")
+
         # 2. Selecionar par arquetípico
         archetype_pair = self._select_next_archetype_pair(user_id)
-        print(f"🎭 Par selecionado: {archetype_pair.primary} + {archetype_pair.secondary}")
-        
+        logger.info(f"   🎭 Par selecionado: {archetype_pair.primary} + {archetype_pair.secondary}")
+
         # 3. Extrair tópico (SEMÂNTICO se ChromaDB ativo)
         topic = self._extract_topic_semantically(user_id)
-        print(f"📌 Tópico extraído: {topic}")
-        
+        logger.info(f"   📌 Tópico extraído: {topic}")
+
         if not topic:
-            print(f"❌ Falha ao extrair tópico")
+            logger.error(f"❌ [PROATIVO] Falha ao extrair tópico")
             return None
-        
+
         # 4. Selecionar domínio de conhecimento
         knowledge_domain = self._select_knowledge_domain(user_id, topic)
-        print(f"📚 Domínio: {knowledge_domain.value}")
+        logger.info(f"   📚 Domínio: {knowledge_domain.value}")
         
         # 5. Buscar fatos relevantes
         relevant_facts = self._get_relevant_facts(user_id, topic)
-        print(f"📋 Fatos relevantes: {len(relevant_facts)}")
+        logger.info(f"📋 Fatos relevantes: {len(relevant_facts)}")
         
         # 6. Gerar conhecimento autônomo (com contexto rico e anti-repetição)
-        print(f"🧠 Gerando insight autônomo com contexto rico...")
+        logger.info(f"🧠 Gerando insight autônomo com contexto rico...")
 
         autonomous_insight = self._generate_autonomous_knowledge(
             user_id=user_id,
@@ -810,17 +819,17 @@ Tom esperado: {archetype_pair.description}
         )
 
         if not autonomous_insight:
-            print(f"❌ Falha ao gerar insight")
+            logger.info(f"❌ Falha ao gerar insight")
             return None
 
-        print(f"✅ Insight gerado ({len(autonomous_insight)} caracteres)")
+        logger.info(f"✅ Insight gerado ({len(autonomous_insight)} caracteres)")
 
         # 7. Calcular complexidade
         complexity_score = self._calculate_complexity_score(
             autonomous_insight,
             len(relevant_facts)
         )
-        print(f"📊 Complexidade: {complexity_score:.2f}")
+        logger.info(f"📊 Complexidade: {complexity_score:.2f}")
 
         # 8. Criar abordagem
         approach = ProactiveApproach(
@@ -835,7 +844,7 @@ Tom esperado: {archetype_pair.description}
 
         # 9. Registrar abordagem no banco
         self.proactive_db.record_approach(approach, user_id)
-        print(f"💾 Abordagem registrada no banco")
+        logger.info(f"💾 Abordagem registrada no banco")
 
         # 10. ✅ NOVO: Salvar mensagem proativa como CONVERSA na memória
         try:
@@ -854,13 +863,13 @@ Tom esperado: {archetype_pair.description}
                 affective_charge=50.0  # Neutro
             )
 
-            print(f"💬 Mensagem salva na memória (conversation_id={conversation_id})")
+            logger.info(f"💬 Mensagem salva na memória (conversation_id={conversation_id})")
 
         except Exception as e:
-            print(f"⚠️  Erro ao salvar na memória: {e}")
+            logger.info(f"⚠️  Erro ao salvar na memória: {e}")
             # Continua mesmo se falhar o salvamento
 
-        print(f"{'='*60}\n")
+        logger.info(f"{'='*60}\n")
 
         # 11. Retornar mensagem
         return autonomous_insight
