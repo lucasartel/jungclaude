@@ -116,10 +116,29 @@ async def proactive_message_scheduler(telegram_app):
 # LIFECYCLE MANAGER
 # ============================================================================
 
+async def setup_bot_commands(telegram_app):
+    """
+    Configura os comandos do bot que aparecem no menu do Telegram.
+    Remove comandos antigos e define apenas os comandos atuais.
+    """
+    from telegram import BotCommand
+
+    commands = [
+        BotCommand("start", "Iniciar conversa com Jung"),
+        BotCommand("help", "Ver comandos disponíveis"),
+        BotCommand("stats", "Ver estatísticas do agente"),
+        BotCommand("mbti", "Ver análise MBTI de personalidade"),
+        BotCommand("desenvolvimento", "Ver estado de desenvolvimento do agente"),
+        BotCommand("reset", "Resetar conversa (apaga todo histórico)")
+    ]
+
+    await telegram_app.bot.set_my_commands(commands)
+    logger.info(f"✅ Comandos do bot configurados: {[cmd.command for cmd in commands]}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gerencia o ciclo de vida da aplicação (Bot + API)"""
-    
+
     # 1. Iniciar Bot Telegram
     telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not telegram_token:
@@ -137,9 +156,9 @@ async def lifespan(app: FastAPI):
     telegram_app.add_handler(CommandHandler("mbti", mbti_command))
     telegram_app.add_handler(CommandHandler("desenvolvimento", desenvolvimento_command))
     telegram_app.add_handler(CommandHandler("reset", reset_command))
-    
-    # Handler de mensagens (precisamos importar a função handle_message se ela existir, 
-    # ou definir aqui se estiver dentro do main no original. 
+
+    # Handler de mensagens (precisamos importar a função handle_message se ela existir,
+    # ou definir aqui se estiver dentro do main no original.
     # Vou assumir que precisamos mover a lógica de main() do telegram_bot.py para cá ou expor o handler)
     from telegram_bot import handle_message
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
@@ -147,6 +166,9 @@ async def lifespan(app: FastAPI):
     # Iniciar bot em modo assíncrono
     await telegram_app.initialize()
     await telegram_app.start()
+
+    # Configurar comandos visíveis no menu do Telegram
+    await setup_bot_commands(telegram_app)
 
     # Iniciar polling (em background task para não bloquear o FastAPI)
     # Nota: Em produção com webhook seria diferente, mas para polling:
