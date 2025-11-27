@@ -2982,36 +2982,35 @@ Tensão entre elas: {conflict.tension_level:.2f}/10
 # FUNÇÕES AUXILIARES (COMPATIBILIDADE)
 # ============================================================
 
-def send_to_xai(prompt: str, model: str = "grok-4-fast-reasoning", 
+def send_to_xai(prompt: str, model: str = "grok-4-fast-reasoning",
                 temperature: float = 0.7, max_tokens: int = 2000) -> str:
     """
-    Envia prompt para API X.AI e retorna resposta
-    (Função auxiliar para compatibilidade)
+    ✅ ATUALIZADO: Usa abstração de LLM providers (Grok ou Claude)
+
+    Envia prompt para o LLM configurado (Grok por padrão, ou Claude se LLM_PROVIDER=claude)
+    (Função auxiliar para compatibilidade com código existente)
+
+    Args:
+        prompt: Texto para o LLM
+        model: IGNORADO (mantido para compatibilidade, usa provider do .env)
+        temperature: Temperatura (0.0 = determinístico, 1.0 = criativo)
+        max_tokens: Máximo de tokens na resposta
+
+    Returns:
+        Resposta do LLM como string
     """
-    
-    xai_api_key = os.getenv("XAI_API_KEY")
-    
-    if not xai_api_key:
-        raise ValueError("XAI_API_KEY não encontrado no ambiente")
-    
-    try:
-        client = OpenAI(
-            api_key=xai_api_key,
-            base_url="https://api.x.ai/v1",
-            timeout=30.0  # 30 segundos de timeout
-        )
-        
-        completion = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature,
-            max_tokens=max_tokens
-        )
-        
-        return completion.choices[0].message.content
-        
-    except Exception as e:
-        raise Exception(f"Erro ao chamar X.AI API: {e}")
+
+    # Importar abstração de providers
+    from llm_providers import get_llm_response
+
+    # O parâmetro 'model' é ignorado - o modelo é definido pelo provider
+    # (Grok: grok-4-fast-reasoning, Claude: claude-3-5-haiku-20241022)
+
+    return get_llm_response(
+        prompt=prompt,
+        temperature=temperature,
+        max_tokens=max_tokens
+    )
 
 def create_user_hash(identifier: str) -> str:
     """Cria hash único para usuário"""
