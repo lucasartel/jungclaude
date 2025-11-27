@@ -68,8 +68,10 @@ async def proactive_message_scheduler(telegram_app):
                 try:
                     user_id = user.get('user_id')
                     user_name = user.get('user_name', 'Usuário')
+                    platform_id = user.get('platform_id')  # ✅ CRÍTICO: Telegram ID real
 
-                    if not user_id:
+                    if not user_id or not platform_id:
+                        logger.warning(f"   ⚠️  [PROATIVO] Usuário sem user_id ou platform_id: {user_name}")
                         continue
 
                     # Verificar e gerar mensagem proativa (sistema já faz todas as validações internas)
@@ -79,21 +81,25 @@ async def proactive_message_scheduler(telegram_app):
                     )
 
                     if message:
-                        # Enviar mensagem via Telegram
+                        # ✅ FIX: Usar platform_id (telegram_id) como chat_id, não user_id (hash)
                         try:
+                            telegram_id = int(platform_id)  # Converter para inteiro
+
                             await telegram_app.bot.send_message(
-                                chat_id=user_id,
+                                chat_id=telegram_id,  # ✅ CORRIGIDO: usa telegram_id real
                                 text=message,
                                 parse_mode='Markdown'
                             )
-                            logger.info(f"   ✅ [PROATIVO] Mensagem enviada para {user_name} ({user_id[:8]}...)")
+                            logger.info(f"   ✅ [PROATIVO] Mensagem enviada para {user_name} (telegram_id={telegram_id})")
                             proactive_sent_count += 1
 
                             # Pequeno delay entre envios para evitar rate limit
                             await asyncio.sleep(2)
 
+                        except ValueError as e:
+                            logger.error(f"   ❌ [PROATIVO] platform_id inválido para {user_name}: {platform_id} - {e}")
                         except Exception as e:
-                            logger.error(f"   ❌ [PROATIVO] Erro ao enviar para {user_name}: {e}")
+                            logger.error(f"   ❌ [PROATIVO] Erro ao enviar para {user_name} (telegram_id={platform_id}): {e}")
 
                 except Exception as e:
                     logger.error(f"   ❌ [PROATIVO] Erro ao processar usuário: {e}")
