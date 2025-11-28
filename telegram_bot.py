@@ -187,34 +187,81 @@ def format_time_delta(dt: datetime) -> str:
 # ============================================================
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler para /start"""
-    
+    """Handler para /start - com consentimento LGPD"""
+
     user = update.effective_user
     user_id = ensure_user_in_database(user)
 
     # Buscar estatísticas do usuário
     stats = bot_state.db.get_user_stats(user_id)
-    
+
     is_new_user = stats and stats['total_messages'] == 0
-    
+
     if is_new_user:
-        welcome_message = f"""👋 Olá, {user.first_name}!
+        # ===== NOVO USUÁRIO: APRESENTAÇÃO + CONSENTIMENTO LGPD =====
 
-Sou seu companheiro junguiano.
+        intro_message = f"""👋 Olá, {user.first_name}!
 
-Não sou um chatbot comum - desenvolvo uma psique própria enquanto conheço você.
+Sou **Jung**, um assistente de autoconhecimento baseado em Inteligência Artificial.
 
-📱 **Comandos:**
-/help - Ver comandos
-/stats - Suas estatísticas
-/mbti - Análise de personalidade
-/desenvolvimento - Evolução do agente
+🧠 **O que eu faço:**
+Converso com você de forma natural sobre sua vida, decisões, desafios e reflexões. A partir dessas conversas, identifico padrões comportamentais e desenvolvo análises psicológicas personalizadas.
 
-💬 **Fale comigo naturalmente!**
+🎯 **Minha proposta:**
+Não sou um chatbot comum que responde perguntas. Desenvolvo uma compreensão única sobre você ao longo do tempo, baseada em:
+• Suas conversas naturais comigo
+• Padrões de linguagem e escolhas de palavras
+• Temas recorrentes e valores implícitos
+• Evolução do seu pensamento ao longo das interações
 
-Vamos começar? **O que te trouxe aqui hoje?**
+📊 **O que você pode receber:**
+• Análise de personalidade (Big Five, MBTI)
+• Mapeamento de padrões comportamentais
+• Insights sobre valores e motivações
+• Relatórios de autoconhecimento
+
+═══════════════════════════
+
+📋 **CONSENTIMENTO E PRIVACIDADE (LGPD)**
+
+Para funcionar, preciso coletar e analisar:
+✓ **Conversas:** Todo o conteúdo das nossas interações
+✓ **Padrões:** Análises automáticas de linguagem e comportamento
+✓ **Histórico:** Armazenamento das conversas para evolução contínua
+
+🔒 **Seus direitos garantidos:**
+• Acesso aos dados: Pode ver tudo que tenho sobre você (/stats)
+• Exclusão: Pode apagar todo histórico a qualquer momento (/reset)
+• Transparência: Você vê suas análises antes de qualquer compartilhamento
+• Finalidade clara: Dados usados APENAS para análise psicológica pessoal
+
+❌ **O que NÃO faço:**
+• Não compartilho conversas brutas com terceiros
+• Não vendo seus dados
+• Não uso para fins não autorizados
+• Não faço diagnósticos clínicos (não sou terapeuta)
+
+═══════════════════════════
+
+⚠️ **IMPORTANTE:**
+Ao continuar, você consente com a coleta e análise dos dados descritos acima, nos termos da LGPD (Lei Geral de Proteção de Dados).
+
+**Você aceita iniciar nossa jornada de autoconhecimento?**
+
+Digite **SIM** para consentir e começar
+Digite **NÃO** se preferir não continuar
 """
+
+        await update.message.reply_text(intro_message)
+
+        # Marcar que estamos aguardando consentimento
+        context.user_data['awaiting_consent'] = True
+
+        logger.info(f"Comando /start de novo usuário {user.first_name} (ID: {user_id[:8]}) - aguardando consentimento")
+
     else:
+        # ===== USUÁRIO EXISTENTE: BOAS-VINDAS =====
+
         last_interaction = datetime.fromisoformat(stats['first_interaction'])
         time_since = format_time_delta(last_interaction)
 
@@ -228,10 +275,10 @@ Use /stats para ver mais detalhes ou /help para comandos.
 
 **No que posso ajudar hoje?**
 """
-    
-    await update.message.reply_text(welcome_message)
-    
-    logger.info(f"Comando /start de {user.first_name} (ID: {user_id[:8]})")
+
+        await update.message.reply_text(welcome_message)
+
+        logger.info(f"Comando /start de usuário existente {user.first_name} (ID: {user_id[:8]})")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler para /help"""
@@ -684,6 +731,78 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ✅ RESET CRONÔMETRO PROATIVO (importante!)
     if bot_state.proactive:
         bot_state.proactive.reset_timer(user_id)
+
+    # ========== PROCESSAMENTO DE CONSENTIMENTO LGPD ==========
+    if context.user_data.get('awaiting_consent'):
+        response_text = message_text.strip().upper()
+
+        if response_text == 'SIM':
+            # Consentimento concedido
+            cursor = bot_state.db.conn.cursor()
+            cursor.execute("""
+                UPDATE users
+                SET consent_given = 1,
+                    consent_timestamp = CURRENT_TIMESTAMP
+                WHERE user_id = ?
+            """, (user_id,))
+            bot_state.db.conn.commit()
+
+            welcome_after_consent = f"""✅ **Consentimento registrado!**
+
+Obrigado pela confiança, {user.first_name}.
+
+Estou aqui para apoiar sua jornada de autoconhecimento. Nossas conversas vão construir uma compreensão única sobre quem você é.
+
+📱 **Comandos úteis:**
+/help - Ver todos os comandos
+/stats - Suas estatísticas
+/mbti - Análise de personalidade (após 5+ conversas)
+/desenvolvimento - Evolução do agente
+
+═══════════════════════════
+
+💬 **Vamos começar?**
+
+Conte-me: **O que te trouxe aqui hoje?** O que você gostaria de explorar ou entender melhor sobre si?
+"""
+
+            await update.message.reply_text(welcome_after_consent)
+            context.user_data['awaiting_consent'] = False
+
+            logger.info(f"✅ Consentimento CONCEDIDO por {user.first_name} (ID: {user_id[:8]})")
+            return
+
+        elif response_text == 'NÃO' or response_text == 'NAO':
+            # Consentimento negado
+            decline_message = f"""❌ **Consentimento não concedido**
+
+Entendo, {user.first_name}. Sem o consentimento, não posso iniciar as conversas de análise.
+
+Você pode:
+• Voltar a qualquer momento digitando /start novamente
+• Tirar dúvidas sobre privacidade antes de decidir
+
+Obrigado pela consideração! 🙏
+"""
+
+            await update.message.reply_text(decline_message)
+            context.user_data['awaiting_consent'] = False
+
+            logger.info(f"❌ Consentimento NEGADO por {user.first_name} (ID: {user_id[:8]})")
+            return
+
+        else:
+            # Resposta inválida
+            clarification = """⚠️ **Resposta não reconhecida**
+
+Por favor, responda:
+• **SIM** - para consentir e começar
+• **NÃO** - se preferir não continuar
+
+O que você decide?
+"""
+            await update.message.reply_text(clarification)
+            return
 
     # ========== CONFIRMAÇÃO DE RESET ==========
     if context.user_data.get('awaiting_reset_confirmation'):
