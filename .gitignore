@@ -133,6 +133,9 @@ dist/
 docs/_build/
 site/
 
+# Documentação de desenvolvimento (não versionada)
+docs/
+
 
 # IDEs
 .vscode/
