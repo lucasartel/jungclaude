@@ -237,11 +237,23 @@ async def test_proactive():
     - Elegibilidade para mensagens proativas
     - Mensagens geradas (sem enviar)
     - Erros encontrados
+    - Timezone e cálculos de tempo
     """
 
     results = []
+    from datetime import datetime
 
     try:
+        # Informações de timezone
+        now_local = datetime.now()
+        now_utc = datetime.utcnow()
+
+        timezone_info = {
+            "server_time_local": now_local.strftime("%Y-%m-%d %H:%M:%S"),
+            "server_time_utc": now_utc.strftime("%Y-%m-%d %H:%M:%S"),
+            "timezone_offset_hours": round((now_local - now_utc).total_seconds() / 3600, 1)
+        }
+
         # Buscar todos os usuários
         users = bot_state.db.get_all_users()
 
@@ -256,13 +268,31 @@ async def test_proactive():
             user_id = user.get('user_id')
             user_name = user.get('user_name', 'Usuário')
             platform_id = user.get('platform_id')
+            last_seen_str = user.get('last_seen')
+
+            # Calcular tempo de inatividade MANUALMENTE
+            hours_inactive = None
+            if last_seen_str:
+                try:
+                    last_seen_dt = datetime.fromisoformat(last_seen_str)
+                    # SQLite retorna UTC, comparar com UTC
+                    delta = now_utc - last_seen_dt
+                    hours_inactive = round(delta.total_seconds() / 3600, 2)
+                except Exception as e:
+                    logger.error(f"Error parsing last_seen for {user_name}: {e}")
 
             user_result = {
                 "user_name": user_name,
-                "user_id": user_id[:8] if user_id else None,  # Primeiros 8 chars do hash
+                "user_id": user_id[:8] if user_id else None,
                 "platform_id": platform_id,
-                "last_seen": user.get('last_seen'),
-                "total_messages": user.get('total_messages', 0)
+                "last_seen_utc": last_seen_str,
+                "hours_inactive": hours_inactive,
+                "total_messages": user.get('total_messages', 0),
+                "requirements": {
+                    "min_conversations": 3,
+                    "min_inactivity_hours": 3,
+                    "cooldown_hours": 6
+                }
             }
 
             # Verificar campos obrigatórios
@@ -271,30 +301,61 @@ async def test_proactive():
                 results.append(user_result)
                 continue
 
-            # Tentar gerar mensagem proativa (SEM ENVIAR)
-            try:
-                message = bot_state.proactive.check_and_generate_advanced_message(
-                    user_id=user_id,
-                    user_name=user_name
-                )
+            # Verificar elegibilidade MANUALMENTE
+            # (sem chamar check_and_generate para evitar logs confusos)
 
-                if message:
-                    user_result["eligible"] = True
-                    user_result["message_preview"] = message[:100] + "..."
-                    user_result["message_length"] = len(message)
-                else:
-                    user_result["eligible"] = False
-                    user_result["reason"] = "Not eligible (check logs for detailed reason)"
+            # 1. Conversas suficientes?
+            total_convs = len(bot_state.db.get_user_conversations(user_id, limit=1000))
+            user_result["total_conversations"] = total_convs
+            user_result["has_enough_conversations"] = total_convs >= 3
 
-            except Exception as e:
-                user_result["error"] = str(e)
-                logger.error(f"Error testing proactive for {user_name}: {e}", exc_info=True)
+            # 2. Inatividade suficiente?
+            user_result["has_enough_inactivity"] = hours_inactive and hours_inactive >= 3
+
+            # 3. Cooldown OK?
+            cursor = bot_state.db.conn.cursor()
+            cursor.execute("""
+                SELECT timestamp FROM proactive_approaches
+                WHERE user_id = ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, (user_id,))
+            last_proactive = cursor.fetchone()
+
+            if last_proactive:
+                last_proactive_dt = datetime.fromisoformat(last_proactive['timestamp'])
+                hours_since_proactive = round((now_utc - last_proactive_dt).total_seconds() / 3600, 2)
+                user_result["hours_since_last_proactive"] = hours_since_proactive
+                user_result["cooldown_ok"] = hours_since_proactive >= 6
+            else:
+                user_result["hours_since_last_proactive"] = None
+                user_result["cooldown_ok"] = True  # Nunca recebeu = OK
+
+            # Resultado final
+            is_eligible = (
+                user_result["has_enough_conversations"] and
+                user_result["has_enough_inactivity"] and
+                user_result["cooldown_ok"]
+            )
+            user_result["eligible"] = is_eligible
+
+            if is_eligible:
+                user_result["status"] = "ELIGIBLE - Ready to receive proactive message"
+            else:
+                blockers = []
+                if not user_result["has_enough_conversations"]:
+                    blockers.append(f"Only {total_convs}/3 conversations")
+                if not user_result["has_enough_inactivity"]:
+                    blockers.append(f"Only {hours_inactive:.1f}h/3h inactive")
+                if not user_result["cooldown_ok"]:
+                    blockers.append(f"Cooldown {user_result['hours_since_last_proactive']:.1f}h/6h")
+                user_result["status"] = f"NOT ELIGIBLE: {', '.join(blockers)}"
 
             results.append(user_result)
 
         return {
             "status": "success",
-            "timestamp": bot_state.db._get_current_timestamp(),
+            "timezone": timezone_info,
             "results": results
         }
 
