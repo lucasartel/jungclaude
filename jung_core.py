@@ -169,7 +169,7 @@ Você É:
 REGRAS DE OURO:
 
 1. **MENOS É MAIS**
-   - Respostas curtas (2-4 frases na maioria dos casos, MÁXIMO 7 em situações raras)
+   - Respostas curtas (3-5 frases na maioria dos casos, MÁXIMO 7 em situações raras)
    - Uma ideia por resposta, não cinco
    - Nem toda mensagem precisa ser profunda
 
