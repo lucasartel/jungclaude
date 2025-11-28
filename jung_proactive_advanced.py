@@ -751,7 +751,7 @@ Tom esperado: {archetype_pair.description}
 
         if last_seen:
             last_dt = datetime.fromisoformat(last_seen)
-            delta = datetime.now() - last_dt
+            delta = datetime.utcnow() - last_dt  # ✅ FIX: usar utcnow() pois SQLite CURRENT_TIMESTAMP retorna UTC
             hours_inactive = delta.total_seconds() / 3600
 
             logger.info(f"   ⏰ Última atividade: {hours_inactive:.1f}h atrás (mínimo: {self.inactivity_threshold_hours}h)")
@@ -773,7 +773,7 @@ Tom esperado: {archetype_pair.description}
 
         if last_proactive:
             last_dt = datetime.fromisoformat(last_proactive['timestamp'])
-            delta = datetime.now() - last_dt
+            delta = datetime.utcnow() - last_dt  # ✅ FIX: usar utcnow() pois SQLite CURRENT_TIMESTAMP retorna UTC
             hours_since_last = delta.total_seconds() / 3600
 
             logger.info(f"   🔄 Última proativa: {hours_since_last:.1f}h atrás (cooldown: {self.cooldown_hours}h)")
