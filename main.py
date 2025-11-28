@@ -225,6 +225,87 @@ async def health_check():
         "bot_running": True
     }
 
+@app.get("/test/proactive")
+async def test_proactive():
+    """
+    ENDPOINT DE DIAGNÓSTICO DO SISTEMA PROATIVO
+
+    Acesse: https://seu-railway-url/test/proactive
+
+    Retorna informações detalhadas sobre:
+    - Usuários cadastrados
+    - Elegibilidade para mensagens proativas
+    - Mensagens geradas (sem enviar)
+    - Erros encontrados
+    """
+
+    results = []
+
+    try:
+        # Buscar todos os usuários
+        users = bot_state.db.get_all_users()
+
+        results.append({
+            "step": "get_users",
+            "status": "success",
+            "total_users": len(users)
+        })
+
+        # Testar cada usuário
+        for user in users:
+            user_id = user.get('user_id')
+            user_name = user.get('user_name', 'Usuário')
+            platform_id = user.get('platform_id')
+
+            user_result = {
+                "user_name": user_name,
+                "user_id": user_id[:8] if user_id else None,  # Primeiros 8 chars do hash
+                "platform_id": platform_id,
+                "last_seen": user.get('last_seen'),
+                "total_messages": user.get('total_messages', 0)
+            }
+
+            # Verificar campos obrigatórios
+            if not user_id or not platform_id:
+                user_result["error"] = "Missing user_id or platform_id"
+                results.append(user_result)
+                continue
+
+            # Tentar gerar mensagem proativa (SEM ENVIAR)
+            try:
+                message = bot_state.proactive.check_and_generate_advanced_message(
+                    user_id=user_id,
+                    user_name=user_name
+                )
+
+                if message:
+                    user_result["eligible"] = True
+                    user_result["message_preview"] = message[:100] + "..."
+                    user_result["message_length"] = len(message)
+                else:
+                    user_result["eligible"] = False
+                    user_result["reason"] = "Not eligible (check logs for detailed reason)"
+
+            except Exception as e:
+                user_result["error"] = str(e)
+                logger.error(f"Error testing proactive for {user_name}: {e}", exc_info=True)
+
+            results.append(user_result)
+
+        return {
+            "status": "success",
+            "timestamp": bot_state.db._get_current_timestamp(),
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Error in test_proactive endpoint: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "error": str(e),
+            "results": results
+        }
+
 # Montar arquivos estáticos (apenas se o diretório existir)
 static_dir = "admin_web/static"
 if os.path.exists(static_dir) and os.path.isdir(static_dir):
