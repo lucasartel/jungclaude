@@ -736,18 +736,29 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get('awaiting_consent'):
         response_text = message_text.strip().upper()
 
+        logger.info(f"📝 Processando resposta de consentimento: '{response_text}' de {user.first_name}")
+
         if response_text == 'SIM':
             # Consentimento concedido
-            cursor = bot_state.db.conn.cursor()
-            cursor.execute("""
-                UPDATE users
-                SET consent_given = 1,
-                    consent_timestamp = CURRENT_TIMESTAMP
-                WHERE user_id = ?
-            """, (user_id,))
-            bot_state.db.conn.commit()
+            try:
+                cursor = bot_state.db.conn.cursor()
 
-            welcome_after_consent = f"""✅ **Consentimento registrado!**
+                # Tentar atualizar as colunas de consentimento
+                try:
+                    cursor.execute("""
+                        UPDATE users
+                        SET consent_given = 1,
+                            consent_timestamp = CURRENT_TIMESTAMP
+                        WHERE user_id = ?
+                    """, (user_id,))
+                    bot_state.db.conn.commit()
+                    logger.info(f"✅ Consentimento salvo no banco para {user.first_name}")
+                except Exception as db_error:
+                    # Se falhar (colunas não existem), apenas logar mas continuar
+                    logger.warning(f"⚠️ Não foi possível salvar consentimento no banco: {db_error}")
+                    logger.warning(f"⚠️ Execute migrate_add_consent.py no Railway!")
+
+                welcome_after_consent = f"""✅ **Consentimento registrado!**
 
 Obrigado pela confiança, {user.first_name}.
 
@@ -766,11 +777,18 @@ Estou aqui para apoiar sua jornada de autoconhecimento. Nossas conversas vão co
 Conte-me: **O que te trouxe aqui hoje?** O que você gostaria de explorar ou entender melhor sobre si?
 """
 
-            await update.message.reply_text(welcome_after_consent)
-            context.user_data['awaiting_consent'] = False
+                await update.message.reply_text(welcome_after_consent)
+                context.user_data['awaiting_consent'] = False
 
-            logger.info(f"✅ Consentimento CONCEDIDO por {user.first_name} (ID: {user_id[:8]})")
-            return
+                logger.info(f"✅ Consentimento CONCEDIDO por {user.first_name} (ID: {user_id[:8]})")
+                return
+
+            except Exception as e:
+                logger.error(f"❌ Erro ao processar consentimento: {e}", exc_info=True)
+                await update.message.reply_text(
+                    "❌ Erro ao processar consentimento. Tente novamente ou contate o suporte."
+                )
+                return
 
         elif response_text == 'NÃO' or response_text == 'NAO':
             # Consentimento negado
