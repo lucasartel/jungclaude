@@ -50,8 +50,8 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 # Valores padrão para testes (podem ser alterados conforme necessário)
-INACTIVITY_THRESHOLD_HOURS = 3  # Horas de inatividade antes de enviar proativa
-COOLDOWN_HOURS = 6               # Horas entre mensagens proativas
+INACTIVITY_THRESHOLD_HOURS = 6  # Horas de inatividade antes de enviar proativa
+COOLDOWN_HOURS = 12               # Horas entre mensagens proativas
 MIN_CONVERSATIONS_REQUIRED = 3   # Mínimo de conversas necessárias
 
 logger.info(f"⚙️ Sistema Proativo configurado:")

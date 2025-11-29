@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: Add API endpoint to diagnose memory leak between users\n\nISSUE: Need to inspect SQLite user_facts table to identify leak source\nSOLUTION: New API endpoint at /admin/api/diagnose-facts\n\nENDPOINT: GET /admin/api/diagnose-facts\n- Requires authentication (admin/admin)\n- Returns complete diagnostic of user_facts table\n\nRESPONSE INCLUDES:\n1. All users with their user_id\n2. All facts for each user (category, key, value, is_current, version)\n3. Integrity check (facts with NULL user_id)\n4. Duplicate detection (same fact appearing in multiple users)\n\nUSAGE:\nAccess: https://your-railway-url/admin/api/diagnose-facts\n(Will prompt for username/password: admin/admin)\n\nThis will reveal:\n- If facts are being saved with wrong user_id\n- If same facts appear for different users (LEAK!)\n- If there are orphan facts without user_id\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
