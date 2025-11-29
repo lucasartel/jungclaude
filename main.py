@@ -460,6 +460,85 @@ async def test_consent():
             "error": str(e)
         }
 
+@app.post("/admin/migrate/consent")
+async def migrate_consent():
+    """
+    ENDPOINT PARA EXECUTAR A MIGRAÇÃO DE CONSENTIMENTO
+
+    Acesse: POST https://seu-railway-url/admin/migrate/consent
+
+    Adiciona as colunas consent_given e consent_timestamp ao banco
+    e marca usuários existentes como tendo consentido (grandfathering).
+    """
+
+    try:
+        cursor = bot_state.db.conn.cursor()
+
+        # Verificar se as colunas já existem
+        cursor.execute("PRAGMA table_info(users)")
+        columns = [col[1] for col in cursor.fetchall()]
+
+        if 'consent_given' in columns and 'consent_timestamp' in columns:
+            return {
+                "status": "success",
+                "message": "Colunas de consentimento já existem. Nada a fazer.",
+                "migration_executed": False
+            }
+
+        logger.info("🔧 Executando migração de consentimento...")
+
+        changes_made = []
+
+        # Adicionar consent_given
+        if 'consent_given' not in columns:
+            cursor.execute("""
+                ALTER TABLE users
+                ADD COLUMN consent_given INTEGER DEFAULT 0
+            """)
+            changes_made.append("consent_given column added")
+            logger.info("  ✓ Coluna 'consent_given' adicionada")
+
+        # Adicionar consent_timestamp
+        if 'consent_timestamp' not in columns:
+            cursor.execute("""
+                ALTER TABLE users
+                ADD COLUMN consent_timestamp DATETIME
+            """)
+            changes_made.append("consent_timestamp column added")
+            logger.info("  ✓ Coluna 'consent_timestamp' adicionada")
+
+        # Marcar usuários existentes como tendo consentido (grandfathering)
+        cursor.execute("""
+            UPDATE users
+            SET consent_given = 1,
+                consent_timestamp = registration_date
+            WHERE consent_given = 0
+        """)
+
+        updated = cursor.rowcount
+        changes_made.append(f"{updated} existing users marked as consented (grandfathering)")
+        logger.info(f"  ✓ {updated} usuários existentes marcados como tendo consentido")
+
+        bot_state.db.conn.commit()
+        logger.info("✅ Migração de consentimento concluída com sucesso!")
+
+        return {
+            "status": "success",
+            "message": "Migration executed successfully",
+            "migration_executed": True,
+            "changes": changes_made,
+            "users_updated": updated
+        }
+
+    except Exception as e:
+        logger.error(f"Error in migrate_consent endpoint: {e}", exc_info=True)
+        bot_state.db.conn.rollback()
+        return {
+            "status": "error",
+            "error": str(e),
+            "message": "Migration failed - database rolled back"
+        }
+
 # Montar arquivos estáticos (apenas se o diretório existir)
 static_dir = "admin_web/static"
 if os.path.exists(static_dir) and os.path.isdir(static_dir):
