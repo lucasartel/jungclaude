@@ -248,8 +248,8 @@ Ao continuar, você consente com a coleta e análise dos dados descritos acima, 
 
 **Você aceita iniciar nossa jornada de autoconhecimento?**
 
-Digite **SIM** para consentir e começar
-Digite **NÃO** se preferir não continuar
+Digite SIM para consentir e começar
+Digite NÃO se preferir não continuar
 """
 
         await update.message.reply_text(intro_message)
@@ -796,8 +796,8 @@ Obrigado pela consideração! 🙏
             clarification = """⚠️ **Resposta não reconhecida**
 
 Por favor, responda:
-• **SIM** - para consentir e começar
-• **NÃO** - se preferir não continuar
+• SIM - para consentir e começar
+• NÃO - se preferir não continuar
 
 O que você decide?
 """
