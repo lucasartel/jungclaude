@@ -367,6 +367,99 @@ async def test_proactive():
             "results": results
         }
 
+@app.get("/test/consent")
+async def test_consent():
+    """
+    ENDPOINT DE DIAGNÓSTICO DO SISTEMA DE CONSENTIMENTO
+
+    Acesse: https://seu-railway-url/test/consent
+
+    Verifica:
+    - Se as colunas de consentimento existem no banco
+    - Estado do consentimento de cada usuário
+    - Última atividade de cada usuário
+    """
+
+    try:
+        from datetime import datetime
+        import sqlite3
+
+        cursor = bot_state.db.conn.cursor()
+
+        # Verificar se as colunas existem
+        cursor.execute("PRAGMA table_info(users)")
+        columns = [col[1] for col in cursor.fetchall()]
+
+        columns_exist = {
+            "consent_given": "consent_given" in columns,
+            "consent_timestamp": "consent_timestamp" in columns
+        }
+
+        # Buscar todos os usuários
+        if columns_exist["consent_given"] and columns_exist["consent_timestamp"]:
+            cursor.execute("""
+                SELECT
+                    user_id,
+                    user_name,
+                    platform_id,
+                    registration_date,
+                    last_seen,
+                    consent_given,
+                    consent_timestamp
+                FROM users
+                ORDER BY last_seen DESC
+            """)
+        else:
+            cursor.execute("""
+                SELECT
+                    user_id,
+                    user_name,
+                    platform_id,
+                    registration_date,
+                    last_seen
+                FROM users
+                ORDER BY last_seen DESC
+            """)
+
+        users = []
+        for row in cursor.fetchall():
+            user_data = {
+                "user_id": row[0][:8] + "...",
+                "user_name": row[1],
+                "telegram_id": row[2],
+                "registration_date": row[3],
+                "last_seen": row[4]
+            }
+
+            if columns_exist["consent_given"] and columns_exist["consent_timestamp"]:
+                user_data["consent_given"] = bool(row[5]) if row[5] is not None else None
+                user_data["consent_timestamp"] = row[6]
+            else:
+                user_data["consent_given"] = "COLUMN_MISSING"
+                user_data["consent_timestamp"] = "COLUMN_MISSING"
+
+            # Buscar total de mensagens
+            stats = bot_state.db.get_user_stats(row[0])
+            user_data["total_messages"] = stats.get("total_messages", 0) if stats else 0
+
+            users.append(user_data)
+
+        return {
+            "status": "success",
+            "database_columns": columns_exist,
+            "migration_needed": not all(columns_exist.values()),
+            "migration_command": "python migrate_add_consent.py",
+            "total_users": len(users),
+            "users": users
+        }
+
+    except Exception as e:
+        logger.error(f"Error in test_consent endpoint: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
 # Montar arquivos estáticos (apenas se o diretório existir)
 static_dir = "admin_web/static"
 if os.path.exists(static_dir) and os.path.isdir(static_dir):
