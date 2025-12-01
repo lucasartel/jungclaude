@@ -586,11 +586,14 @@ async def download_psychometrics_pdf(user_id: str, username: str = Depends(verif
         # Preparar resposta
         filename = f"relatorio_psicometrico_{user['user_name'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
 
+        # Garantir que o buffer está no início
+        pdf_buffer.seek(0)
+
         return StreamingResponse(
-            pdf_buffer,
+            iter([pdf_buffer.read()]),
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f"attachment; filename={filename}"
+                "Content-Disposition": f'attachment; filename="{filename}"'
             }
         )
 
