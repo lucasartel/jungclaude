@@ -28,3 +28,9 @@ python-multipart>=0.0.6
 
 # Anthropic (para Claude)
 anthropic>=0.40.0
+
+# PDF Generation
+reportlab>=4.0.0
+
+# Security (bcrypt para autenticação)
+bcrypt>=4.0.0
