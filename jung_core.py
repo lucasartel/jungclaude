@@ -1926,22 +1926,27 @@ Responda APENAS em JSON válido (sem markdown):
 """
 
         try:
-            response = send_to_xai(prompt, model="grok-4-fast-reasoning", temperature=0.7, max_tokens=1500)
+            # Usar Claude Sonnet para análises psicométricas (melhor precisão)
+            from llm_providers import create_llm_provider
 
-            # Parse JSON
-            import json as json_lib
-            result = json_lib.loads(response.strip())
+            claude_provider = create_llm_provider("claude")
+            response = claude_provider.get_response(prompt, temperature=0.5, max_tokens=1500)
+
+            # Usar parser robusto
+            result = self._parse_json_response(response)
 
             # Adicionar metadados
             result["conversations_analyzed"] = len(conversations)
             result["analysis_date"] = datetime.now().isoformat()
+            result["model_used"] = claude_provider.get_model_name()
 
-            logger.info(f"✅ Big Five analisado: O={result['openness']['score']}, C={result['conscientiousness']['score']}, E={result['extraversion']['score']}, A={result['agreeableness']['score']}, N={result['neuroticism']['score']}")
+            logger.info(f"✅ Big Five analisado (Claude): O={result['openness']['score']}, C={result['conscientiousness']['score']}, E={result['extraversion']['score']}, A={result['agreeableness']['score']}, N={result['neuroticism']['score']}")
 
             return result
 
         except Exception as e:
             logger.error(f"❌ Erro ao analisar Big Five: {e}")
+            logger.error(f"Resposta bruta do LLM: {response if 'response' in locals() else 'N/A'}")
             return {
                 "error": str(e),
                 "conversations_analyzed": len(conversations)
@@ -2073,6 +2078,42 @@ Responda APENAS em JSON válido (sem markdown):
         else:
             return "Muito Baixo"
 
+    def _parse_json_response(self, response: str) -> Dict:
+        """
+        Parse robusto de resposta JSON do LLM
+        Remove markdown code blocks e trata erros comuns
+        """
+        import json as json_lib
+        import re
+
+        # Remover espaços em branco nas extremidades
+        response = response.strip()
+
+        # Remover markdown code blocks (```json ... ``` ou ``` ... ```)
+        if response.startswith("```"):
+            # Encontrar o conteúdo entre ``` e ```
+            match = re.search(r'```(?:json)?\s*(.*?)\s*```', response, re.DOTALL)
+            if match:
+                response = match.group(1).strip()
+
+        # Tentar remover texto antes do JSON (às vezes o LLM adiciona explicações)
+        if not response.startswith('{') and not response.startswith('['):
+            # Procurar o primeiro { ou [
+            json_start = min(
+                response.find('{') if response.find('{') != -1 else len(response),
+                response.find('[') if response.find('[') != -1 else len(response)
+            )
+            if json_start < len(response):
+                response = response[json_start:]
+
+        # Tentar parse
+        try:
+            return json_lib.loads(response)
+        except json_lib.JSONDecodeError as e:
+            logger.error(f"❌ Erro ao fazer parse de JSON: {e}")
+            logger.error(f"Resposta recebida: {response[:500]}...")
+            raise ValueError(f"Resposta LLM não é JSON válido: {str(e)}")
+
     def analyze_learning_style(self, user_id: str, min_conversations: int = 20) -> Dict:
         """
         Analisa Estilos de Aprendizagem (VARK) via Grok AI
@@ -2136,20 +2177,26 @@ IMPORTANTE: Os 4 scores devem somar aproximadamente 100.
 """
 
         try:
-            response = send_to_xai(prompt, model="grok-4-fast-reasoning", temperature=0.6, max_tokens=800)
+            # Usar Claude Sonnet para análises psicométricas (melhor precisão)
+            from llm_providers import create_llm_provider
 
-            import json as json_lib
-            result = json_lib.loads(response.strip())
+            claude_provider = create_llm_provider("claude")
+            response = claude_provider.get_response(prompt, temperature=0.5, max_tokens=800)
+
+            # Usar parser robusto
+            result = self._parse_json_response(response)
 
             result["conversations_analyzed"] = len(conversations)
             result["analysis_date"] = datetime.now().isoformat()
+            result["model_used"] = claude_provider.get_model_name()
 
-            logger.info(f"✅ VARK analisado: Dominante={result['dominant_style']}")
+            logger.info(f"✅ VARK analisado (Claude): Dominante={result['dominant_style']}")
 
             return result
 
         except Exception as e:
             logger.error(f"❌ Erro ao analisar VARK: {e}")
+            logger.error(f"Resposta bruta do LLM: {response if 'response' in locals() else 'N/A'}")
             return {
                 "error": str(e),
                 "conversations_analyzed": len(conversations)
@@ -2229,21 +2276,27 @@ Responda APENAS em JSON válido (sem markdown):
 """
 
             try:
-                response = send_to_xai(prompt, model="grok-4-fast-reasoning", temperature=0.7, max_tokens=1800)
+                # Usar Claude Sonnet para análises psicométricas (melhor precisão)
+                from llm_providers import create_llm_provider
 
-                import json as json_lib
-                result = json_lib.loads(response.strip())
+                claude_provider = create_llm_provider("claude")
+                response = claude_provider.get_response(prompt, temperature=0.5, max_tokens=1800)
+
+                # Usar parser robusto
+                result = self._parse_json_response(response)
 
                 result["conversations_analyzed"] = len(conversations)
                 result["analysis_date"] = datetime.now().isoformat()
-                result["source"] = "grok_inference"
+                result["source"] = "claude_inference"
+                result["model_used"] = claude_provider.get_model_name()
 
-                logger.info(f"✅ Valores analisados (Grok): Top 3={result['top_3_values']}")
+                logger.info(f"✅ Valores analisados (Claude): Top 3={result['top_3_values']}")
 
                 return result
 
             except Exception as e:
                 logger.error(f"❌ Erro ao analisar valores: {e}")
+                logger.error(f"Resposta bruta do LLM: {response if 'response' in locals() else 'N/A'}")
                 return {
                     "error": str(e),
                     "conversations_analyzed": len(conversations)

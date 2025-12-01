@@ -112,14 +112,15 @@ class GrokProvider(LLMProvider):
 class ClaudeProvider(LLMProvider):
     """Provedor Claude (Anthropic) - Alternativa"""
 
-    def __init__(self):
+    def __init__(self, model: str = "claude-3-5-sonnet-20241022"):
         self.api_key = os.getenv("ANTHROPIC_API_KEY")
 
         if not self.api_key:
             raise ValueError("❌ ANTHROPIC_API_KEY não encontrado no .env")
 
-        # Modelo mais barato do Claude
-        self.model = "claude-3-5-haiku-20241022"
+        # Usar Sonnet por padrão (melhor para análises complexas)
+        # Haiku disponível como alternativa: "claude-3-5-haiku-20241022"
+        self.model = model
 
         logger.info(f"✅ ClaudeProvider inicializado (modelo: {self.model})")
 
