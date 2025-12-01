@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Request, Depends, HTTPException, status
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-import secrets
 import os
 from typing import Dict, List, Optional
 import logging
+
+# Importar autenticação segura
+from admin_web.auth import verify_credentials
 
 # Importar core do Jung (opcional - pode falhar se dependências não estiverem disponíveis)
 JUNG_CORE_ERROR = None
@@ -24,7 +25,6 @@ except Exception as e:
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 templates = Jinja2Templates(directory="admin_web/templates")
-security = HTTPBasic()
 logger = logging.getLogger(__name__)
 
 # Inicializar componentes (Singleton pattern simples)
@@ -44,22 +44,8 @@ def get_db():
 # ============================================================================
 # AUTENTICAÇÃO
 # ============================================================================
-
-def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
-    """Verifica credenciais básicas (admin/admin por padrão ou via ENV)"""
-    correct_username = os.getenv("ADMIN_USER", "admin")
-    correct_password = os.getenv("ADMIN_PASSWORD", "admin")
-    
-    is_correct_username = secrets.compare_digest(credentials.username, correct_username)
-    is_correct_password = secrets.compare_digest(credentials.password, correct_password)
-    
-    if not (is_correct_username and is_correct_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciais inválidas",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
+# A autenticação agora é gerenciada por admin_web/auth.py
+# A função verify_credentials foi importada acima e usa bcrypt para senhas hashadas
 
 # ============================================================================
 # ROTAS DE PÁGINA (HTML)
@@ -540,6 +526,78 @@ async def regenerate_psychometrics(user_id: str, username: str = Depends(verify_
     except Exception as e:
         logger.error(f"❌ Erro ao regenerar psicometria: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
+
+@router.get("/user/{user_id}/psychometrics/download-pdf")
+async def download_psychometrics_pdf(user_id: str, username: str = Depends(verify_credentials)):
+    """
+    Download de relatório psicométrico em PDF
+
+    Gera PDF profissional com todas as 4 análises:
+    - Big Five (OCEAN)
+    - Inteligência Emocional (EQ)
+    - VARK (Estilos de Aprendizagem)
+    - Valores de Schwartz
+    """
+    from fastapi.responses import StreamingResponse
+    from pdf_generator import generate_psychometric_pdf
+    import json as json_lib
+
+    db = get_db()
+
+    try:
+        # Buscar usuário
+        user = db.get_user(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+        # Buscar análises psicométricas
+        psychometrics_data = db.get_psychometrics(user_id)
+
+        if not psychometrics_data:
+            raise HTTPException(
+                status_code=404,
+                detail="Análises psicométricas não encontradas. Gere as análises primeiro."
+            )
+
+        # Extrair dados de cada análise
+        big_five = json_lib.loads(psychometrics_data.get('big_five_data', '{}'))
+        eq_data = {
+            'eq_score': psychometrics_data.get('eq_score'),
+            'eq_level': psychometrics_data.get('eq_level'),
+            'eq_details': json_lib.loads(psychometrics_data.get('eq_details', '{}'))
+        }
+        vark_data = json_lib.loads(psychometrics_data.get('vark_data', '{}'))
+        schwartz_data = json_lib.loads(psychometrics_data.get('schwartz_values', '{}'))
+
+        # Contar conversas
+        total_conversations = db.count_conversations(user_id)
+
+        # Gerar PDF
+        pdf_buffer = generate_psychometric_pdf(
+            user_name=user['user_name'],
+            total_conversations=total_conversations,
+            big_five=big_five,
+            eq=eq_data,
+            vark=vark_data,
+            values=schwartz_data
+        )
+
+        # Preparar resposta
+        filename = f"relatorio_psicometrico_{user['user_name'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
+
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erro ao gerar PDF: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar PDF: {str(e)}")
 
 # ============================================================================
 # 🔍 DIAGNÓSTICO DE VAZAMENTO DE MEMÓRIA

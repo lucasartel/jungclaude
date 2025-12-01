@@ -12,6 +12,15 @@
             <a href="/admin/user/{{ user_id }}/analysis" class="text-sm text-indigo-600 hover:text-indigo-500">
                 ← Voltar para Análise MBTI
             </a>
+            {% if not error %}
+            <a
+                href="/admin/user/{{ user_id }}/psychometrics/download-pdf"
+                class="px-4 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 inline-flex items-center"
+                download
+            >
+                📥 Baixar PDF
+            </a>
+            {% endif %}
             <button
                 hx-post="/admin/api/user/{{ user_id }}/regenerate-psychometrics"
                 hx-target="#regenerate-result"
