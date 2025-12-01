@@ -112,14 +112,17 @@ class GrokProvider(LLMProvider):
 class ClaudeProvider(LLMProvider):
     """Provedor Claude (Anthropic) - Alternativa"""
 
-    def __init__(self, model: str = "claude-3-5-sonnet-20241022"):
+    def __init__(self, model: str = "claude-sonnet-4-5-20250929"):
         self.api_key = os.getenv("ANTHROPIC_API_KEY")
 
         if not self.api_key:
             raise ValueError("❌ ANTHROPIC_API_KEY não encontrado no .env")
 
-        # Usar Sonnet por padrão (melhor para análises complexas)
-        # Haiku disponível como alternativa: "claude-3-5-haiku-20241022"
+        # Modelos Claude disponíveis (família 4.x):
+        # - claude-sonnet-4-5-20250929: Sonnet 4.5 (recomendado - melhor balanço inteligência/velocidade/custo)
+        # - claude-haiku-4-5-20251001: Haiku 4.5 (mais rápido e barato)
+        # - claude-opus-4-5-20251101: Opus 4.5 (mais poderoso)
+        # - claude-opus-4-1-20250805: Opus 4.1
         self.model = model
 
         logger.info(f"✅ ClaudeProvider inicializado (modelo: {self.model})")
