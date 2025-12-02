@@ -840,3 +840,218 @@ async def get_conversation_detail(conversation_id: int, username: str = Depends(
         import traceback
         logger.error(traceback.format_exc())
         return JSONResponse({"error": str(e)}, status_code=500)
+
+# ============================================================================
+# 🔍 SISTEMA DE EVIDÊNCIAS (Evidence System 2.0)
+# ============================================================================
+
+@router.get("/user/{user_id}/psychometrics/{dimension}/evidence")
+async def get_dimension_evidence(
+    user_id: str,
+    dimension: str,
+    username: str = Depends(verify_credentials)
+):
+    """
+    Retorna evidências (citações literais) que embasam um score específico
+
+    Dimensões válidas:
+    - openness
+    - conscientiousness
+    - extraversion
+    - agreeableness
+    - neuroticism
+    """
+    try:
+        from evidence_extractor import EvidenceExtractor
+        from llm_providers import create_llm_provider
+        import json as json_lib
+
+        db = get_db()
+
+        # Validar dimensão
+        valid_dimensions = ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism']
+        if dimension not in valid_dimensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Dimensão inválida. Use: {', '.join(valid_dimensions)}"
+            )
+
+        # Buscar análise psicométrica do usuário
+        psychometrics = db.get_psychometrics(user_id)
+        if not psychometrics:
+            raise HTTPException(
+                status_code=404,
+                detail="Análise psicométrica não encontrada para este usuário"
+            )
+
+        # Criar extrator de evidências
+        claude_provider = create_llm_provider("claude")
+        extractor = EvidenceExtractor(db, claude_provider)
+
+        # Verificar se evidências já existem
+        existing_evidence = extractor.get_evidence_for_dimension(
+            user_id=user_id,
+            dimension=dimension,
+            psychometric_version=psychometrics.get('version')
+        )
+
+        # Se evidências não existem, extrair on-demand
+        if not existing_evidence:
+            logger.info(f"🔍 Evidências não encontradas para {user_id}/{dimension}. Extraindo...")
+
+            # Buscar conversas
+            conversations = db.get_user_conversations(user_id, limit=50)
+
+            if len(conversations) < 10:
+                return JSONResponse({
+                    "dimension": dimension,
+                    "score": psychometrics.get(f'{dimension}_score', 0),
+                    "level": psychometrics.get(f'{dimension}_level', 'N/A'),
+                    "evidence_available": False,
+                    "message": f"Dados insuficientes ({len(conversations)} conversas, mínimo 10)"
+                })
+
+            # Extrair evidências para esta dimensão
+            big_five_scores = {
+                dimension: {
+                    'score': psychometrics.get(f'{dimension}_score', 50),
+                    'level': psychometrics.get(f'{dimension}_level', 'Médio')
+                }
+            }
+
+            evidence_list = extractor._extract_dimension_evidence(
+                dimension=dimension,
+                conversations=conversations,
+                expected_score=big_five_scores[dimension]['score']
+            )
+
+            # Salvar evidências
+            if evidence_list:
+                all_evidence = {dimension: evidence_list}
+                extractor.save_evidence_to_db(
+                    user_id=user_id,
+                    psychometric_version=psychometrics.get('version', 1),
+                    all_evidence=all_evidence
+                )
+
+                existing_evidence = extractor.get_evidence_for_dimension(
+                    user_id=user_id,
+                    dimension=dimension,
+                    psychometric_version=psychometrics.get('version')
+                )
+
+        # Formatar resposta
+        return JSONResponse({
+            "dimension": dimension,
+            "score": psychometrics.get(f'{dimension}_score', 0),
+            "level": psychometrics.get(f'{dimension}_level', 'N/A'),
+            "description": psychometrics.get(f'{dimension}_description', ''),
+            "evidence_available": len(existing_evidence) > 0,
+            "num_evidence": len(existing_evidence),
+            "evidence": existing_evidence[:10],  # Top 10 evidências
+            "total_evidence": len(existing_evidence),
+            "extraction_cached": len(existing_evidence) > 0
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar evidências: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.post("/user/{user_id}/psychometrics/extract-evidence")
+async def extract_all_evidence(
+    user_id: str,
+    username: str = Depends(verify_credentials)
+):
+    """
+    Extrai evidências para todas as dimensões do Big Five
+    (Processo pode demorar ~30-60s)
+    """
+    try:
+        from evidence_extractor import EvidenceExtractor
+        from llm_providers import create_llm_provider
+        import json as json_lib
+
+        db = get_db()
+
+        # Buscar análise psicométrica
+        psychometrics = db.get_psychometrics(user_id)
+        if not psychometrics:
+            raise HTTPException(
+                status_code=404,
+                detail="Análise psicométrica não encontrada"
+            )
+
+        # Buscar conversas
+        conversations = db.get_user_conversations(user_id, limit=50)
+
+        if len(conversations) < 10:
+            return JSONResponse({
+                "success": False,
+                "message": f"Dados insuficientes ({len(conversations)} conversas, mínimo 10)"
+            })
+
+        # Criar extrator
+        claude_provider = create_llm_provider("claude")
+        extractor = EvidenceExtractor(db, claude_provider)
+
+        # Preparar scores Big Five
+        big_five_scores = {
+            'openness': {
+                'score': psychometrics.get('openness_score', 50),
+                'level': psychometrics.get('openness_level', 'Médio')
+            },
+            'conscientiousness': {
+                'score': psychometrics.get('conscientiousness_score', 50),
+                'level': psychometrics.get('conscientiousness_level', 'Médio')
+            },
+            'extraversion': {
+                'score': psychometrics.get('extraversion_score', 50),
+                'level': psychometrics.get('extraversion_level', 'Médio')
+            },
+            'agreeableness': {
+                'score': psychometrics.get('agreeableness_score', 50),
+                'level': psychometrics.get('agreeableness_level', 'Médio')
+            },
+            'neuroticism': {
+                'score': psychometrics.get('neuroticism_score', 50),
+                'level': psychometrics.get('neuroticism_level', 'Médio')
+            }
+        }
+
+        # Extrair evidências
+        logger.info(f"🔍 Extraindo evidências para {user_id}...")
+        all_evidence = extractor.extract_evidence_for_user(
+            user_id=user_id,
+            psychometric_version=psychometrics.get('version', 1),
+            conversations=conversations,
+            big_five_scores=big_five_scores
+        )
+
+        # Salvar no banco
+        total_saved = extractor.save_evidence_to_db(
+            user_id=user_id,
+            psychometric_version=psychometrics.get('version', 1),
+            all_evidence=all_evidence
+        )
+
+        # Contar evidências por dimensão
+        evidence_counts = {
+            dimension: len(evidence_list)
+            for dimension, evidence_list in all_evidence.items()
+        }
+
+        return JSONResponse({
+            "success": True,
+            "total_evidence_extracted": total_saved,
+            "evidence_by_dimension": evidence_counts,
+            "message": f"Evidências extraídas com sucesso para {len(all_evidence)} dimensões"
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erro ao extrair evidências: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
