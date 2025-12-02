@@ -539,12 +539,12 @@ async def migrate_consent():
             "message": "Migration failed - database rolled back"
         }
 
-@app.post("/admin/migrate/evidence")
+@app.api_route("/admin/migrate/evidence", methods=["GET", "POST"])
 async def migrate_evidence():
     """
     ENDPOINT PARA EXECUTAR A MIGRAÇÃO DO SISTEMA DE EVIDÊNCIAS 2.0
 
-    Acesse: POST https://seu-railway-url/admin/migrate/evidence
+    Acesse via GET ou POST: https://seu-railway-url/admin/migrate/evidence
 
     Cria a tabela psychometric_evidence e adiciona colunas em user_psychometrics
     para rastreabilidade de evidências.
