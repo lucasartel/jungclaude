@@ -544,9 +544,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     {% endif %}
+});
+</script>
 
-    // Evidence Modal Functions
-    function showEvidence(dimension) {
+<!-- Evidence Modal Functions (Global Scope) -->
+<script>
+function showEvidence(dimension) {
         const modal = document.getElementById('evidenceModal');
         const modalTitle = document.getElementById('evidenceModalTitle');
         const modalContent = document.getElementById('evidenceModalContent');
@@ -688,11 +691,10 @@ document.addEventListener('DOMContentLoaded', function() {
         modalContent.innerHTML = html;
     }
 
-    function closeEvidenceModal() {
-        const modal = document.getElementById('evidenceModal');
-        modal.classList.add('hidden');
-    }
-});
+function closeEvidenceModal() {
+    const modal = document.getElementById('evidenceModal');
+    modal.classList.add('hidden');
+}
 </script>
 
 <!-- Evidence Modal -->
