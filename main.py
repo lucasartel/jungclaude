@@ -539,6 +539,153 @@ async def migrate_consent():
             "message": "Migration failed - database rolled back"
         }
 
+@app.post("/admin/migrate/evidence")
+async def migrate_evidence():
+    """
+    ENDPOINT PARA EXECUTAR A MIGRAÇÃO DO SISTEMA DE EVIDÊNCIAS 2.0
+
+    Acesse: POST https://seu-railway-url/admin/migrate/evidence
+
+    Cria a tabela psychometric_evidence e adiciona colunas em user_psychometrics
+    para rastreabilidade de evidências.
+    """
+
+    try:
+        cursor = bot_state.db.conn.cursor()
+
+        # Verificar se tabela já existe
+        cursor.execute("""
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name='psychometric_evidence'
+        """)
+
+        if cursor.fetchone():
+            return {
+                "status": "success",
+                "message": "Tabela 'psychometric_evidence' já existe. Nada a fazer.",
+                "migration_executed": False
+            }
+
+        logger.info("🔧 Executando migração do Sistema de Evidências 2.0...")
+
+        changes_made = []
+
+        # Criar tabela de evidências
+        cursor.execute("""
+            CREATE TABLE psychometric_evidence (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                -- Relacionamentos
+                user_id TEXT NOT NULL,
+                psychometric_version INTEGER NOT NULL,
+                conversation_id INTEGER NOT NULL,
+
+                -- Tipo de evidência
+                dimension TEXT NOT NULL,
+                trait_indicator TEXT,
+
+                -- A evidência em si
+                quote TEXT NOT NULL,
+                context_before TEXT,
+                context_after TEXT,
+
+                -- Scoring
+                relevance_score REAL DEFAULT 0.5,
+                direction TEXT CHECK(direction IN ('positive', 'negative', 'neutral')),
+                weight REAL DEFAULT 1.0,
+
+                -- Metadados
+                conversation_timestamp DATETIME,
+                extracted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+                -- Qualidade
+                confidence REAL DEFAULT 0.5,
+                is_ambiguous BOOLEAN DEFAULT 0,
+                extraction_method TEXT DEFAULT 'claude',
+
+                -- Explicação
+                explanation TEXT,
+
+                FOREIGN KEY (user_id) REFERENCES users(user_id),
+                FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+            )
+        """)
+        changes_made.append("psychometric_evidence table created")
+        logger.info("  ✓ Tabela 'psychometric_evidence' criada")
+
+        # Criar índices
+        cursor.execute("""
+            CREATE INDEX idx_evidence_user_dimension
+            ON psychometric_evidence(user_id, dimension)
+        """)
+        changes_made.append("idx_evidence_user_dimension index created")
+        logger.info("  ✓ Índice: idx_evidence_user_dimension")
+
+        cursor.execute("""
+            CREATE INDEX idx_evidence_conversation
+            ON psychometric_evidence(conversation_id)
+        """)
+        changes_made.append("idx_evidence_conversation index created")
+        logger.info("  ✓ Índice: idx_evidence_conversation")
+
+        cursor.execute("""
+            CREATE INDEX idx_evidence_version
+            ON psychometric_evidence(psychometric_version)
+        """)
+        changes_made.append("idx_evidence_version index created")
+        logger.info("  ✓ Índice: idx_evidence_version")
+
+        cursor.execute("""
+            CREATE INDEX idx_evidence_direction
+            ON psychometric_evidence(direction)
+        """)
+        changes_made.append("idx_evidence_direction index created")
+        logger.info("  ✓ Índice: idx_evidence_direction")
+
+        # Adicionar colunas à tabela user_psychometrics
+        cursor.execute("PRAGMA table_info(user_psychometrics)")
+        existing_columns = {col[1] for col in cursor.fetchall()}
+
+        columns_to_add = {
+            'conversations_used': 'TEXT',
+            'evidence_extracted': 'BOOLEAN DEFAULT 0',
+            'evidence_extraction_date': 'DATETIME',
+            'red_flags': 'TEXT'
+        }
+
+        for column_name, column_type in columns_to_add.items():
+            if column_name not in existing_columns:
+                cursor.execute(f"""
+                    ALTER TABLE user_psychometrics
+                    ADD COLUMN {column_name} {column_type}
+                """)
+                changes_made.append(f"{column_name} column added to user_psychometrics")
+                logger.info(f"  ✓ Coluna '{column_name}' adicionada")
+
+        bot_state.db.conn.commit()
+        logger.info("✅ Migração do Sistema de Evidências 2.0 concluída com sucesso!")
+
+        return {
+            "status": "success",
+            "message": "Evidence System 2.0 migration executed successfully",
+            "migration_executed": True,
+            "changes": changes_made,
+            "next_steps": [
+                "1. Sistema de evidências está pronto",
+                "2. Evidências serão extraídas on-demand quando visualizadas",
+                "3. Cache automático para visualizações futuras"
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Error in migrate_evidence endpoint: {e}", exc_info=True)
+        bot_state.db.conn.rollback()
+        return {
+            "status": "error",
+            "error": str(e),
+            "message": "Migration failed - database rolled back"
+        }
+
 # Montar arquivos estáticos (apenas se o diretório existir)
 static_dir = "admin_web/static"
 if os.path.exists(static_dir) and os.path.isdir(static_dir):
