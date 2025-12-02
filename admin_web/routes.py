@@ -489,6 +489,31 @@ async def user_psychometrics_page(request: Request, user_id: str, username: str 
     # Stats
     total_conversations = db.count_conversations(user_id)
 
+    # Análise de Qualidade
+    quality_analysis = None
+    try:
+        from quality_detector import QualityDetector
+
+        detector = QualityDetector(db)
+        conversations = db.get_user_conversations(user_id, limit=100)
+
+        quality_analysis = detector.analyze_quality(
+            user_id=user_id,
+            psychometrics=psychometrics_data,
+            conversations=conversations
+        )
+
+        # Salvar análise de qualidade no banco
+        version = psychometrics_data.get('version', 1)
+        detector.save_quality_analysis(user_id, version, quality_analysis)
+
+        logger.info(f"✓ Análise de qualidade: {quality_analysis['overall_quality']} ({quality_analysis['quality_score']}%)")
+
+    except Exception as e:
+        logger.warning(f"⚠ Erro ao gerar análise de qualidade: {e}")
+        # Não falha se análise de qualidade der erro
+        pass
+
     # Renderizar template
     return templates.TemplateResponse("user_psychometrics.html", {
         "request": request,
@@ -497,7 +522,8 @@ async def user_psychometrics_page(request: Request, user_id: str, username: str 
         "psychometrics": psychometrics_data,
         "schwartz_values": schwartz_values,
         "eq_details": eq_details,
-        "total_conversations": total_conversations
+        "total_conversations": total_conversations,
+        "quality_analysis": quality_analysis
     })
 
 @router.post("/api/user/{user_id}/regenerate-psychometrics")

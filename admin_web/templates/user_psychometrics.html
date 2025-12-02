@@ -89,6 +89,83 @@
     </div>
     {% endif %}
 
+    <!-- Quality Indicator Card -->
+    {% if quality_analysis %}
+    <div class="bg-white shadow rounded-lg border-l-4
+        {% if quality_analysis.overall_quality == 'excellent' %}border-green-500
+        {% elif quality_analysis.overall_quality == 'good' %}border-blue-500
+        {% elif quality_analysis.overall_quality == 'fair' %}border-yellow-500
+        {% else %}border-red-500
+        {% endif %}">
+        <div class="px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="text-3xl">
+                        {% if quality_analysis.overall_quality == 'excellent' %}✓
+                        {% elif quality_analysis.overall_quality == 'good' %}✓
+                        {% elif quality_analysis.overall_quality == 'fair' %}⚠
+                        {% else %}⚠
+                        {% endif %}
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">Qualidade da Análise</h3>
+                        <p class="text-sm text-gray-600">
+                            {% if quality_analysis.overall_quality == 'excellent' %}Excelente - Alta confiabilidade
+                            {% elif quality_analysis.overall_quality == 'good' %}Boa - Confiável para uso
+                            {% elif quality_analysis.overall_quality == 'fair' %}Razoável - Usar com cautela
+                            {% else %}Baixa - Dados insuficientes
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="text-3xl font-bold
+                        {% if quality_analysis.overall_quality == 'excellent' %}text-green-600
+                        {% elif quality_analysis.overall_quality == 'good' %}text-blue-600
+                        {% elif quality_analysis.overall_quality == 'fair' %}text-yellow-600
+                        {% else %}text-red-600
+                        {% endif %}">
+                        {{ quality_analysis.quality_score }}
+                    </div>
+                    <div class="text-xs text-gray-500">Score de Qualidade</div>
+                </div>
+            </div>
+
+            <!-- Red Flags -->
+            {% if quality_analysis.red_flags %}
+            <div class="mt-4 space-y-2">
+                {% for flag in quality_analysis.red_flags %}
+                <div class="flex items-start space-x-2 text-sm
+                    {% if flag.severity == 'critical' %}text-red-700 bg-red-50
+                    {% elif flag.severity == 'high' %}text-orange-700 bg-orange-50
+                    {% elif flag.severity == 'medium' %}text-yellow-700 bg-yellow-50
+                    {% else %}text-blue-700 bg-blue-50
+                    {% endif %} p-3 rounded">
+                    <span class="font-bold">⚠</span>
+                    <div class="flex-1">
+                        <div class="font-semibold">{{ flag.title }}</div>
+                        <div class="text-xs mt-1">{{ flag.description }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Recommendations -->
+            {% if quality_analysis.recommendations %}
+            <div class="mt-4 bg-gray-50 border border-gray-200 rounded p-3">
+                <div class="font-semibold text-gray-900 text-sm mb-2">💡 Recomendações:</div>
+                <ul class="text-xs text-gray-700 space-y-1">
+                    {% for rec in quality_analysis.recommendations %}
+                    <li>• {{ rec }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Big Five Section -->
     <div class="bg-white shadow rounded-lg">
         <div class="px-6 py-5 border-b border-gray-200">
@@ -122,12 +199,6 @@
                         </div>
                         <p class="text-sm text-gray-600 mt-1">{{ psychometrics.openness_level }}</p>
                         <p class="text-xs text-gray-500 mt-2">{{ psychometrics.openness_description }}</p>
-                        <button
-                            onclick="showEvidence('openness')"
-                            class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium"
-                        >
-                            🔍 Ver Evidências
-                        </button>
                     </div>
 
                     <!-- Conscientiousness -->
@@ -138,12 +209,6 @@
                         </div>
                         <p class="text-sm text-gray-600 mt-1">{{ psychometrics.conscientiousness_level }}</p>
                         <p class="text-xs text-gray-500 mt-2">{{ psychometrics.conscientiousness_description }}</p>
-                        <button
-                            onclick="showEvidence('conscientiousness')"
-                            class="mt-2 text-xs text-green-600 hover:text-green-800 font-medium"
-                        >
-                            🔍 Ver Evidências
-                        </button>
                     </div>
 
                     <!-- Extraversion -->
@@ -154,12 +219,6 @@
                         </div>
                         <p class="text-sm text-gray-600 mt-1">{{ psychometrics.extraversion_level }}</p>
                         <p class="text-xs text-gray-500 mt-2">{{ psychometrics.extraversion_description }}</p>
-                        <button
-                            onclick="showEvidence('extraversion')"
-                            class="mt-2 text-xs text-yellow-600 hover:text-yellow-800 font-medium"
-                        >
-                            🔍 Ver Evidências
-                        </button>
                     </div>
 
                     <!-- Agreeableness -->
@@ -170,12 +229,6 @@
                         </div>
                         <p class="text-sm text-gray-600 mt-1">{{ psychometrics.agreeableness_level }}</p>
                         <p class="text-xs text-gray-500 mt-2">{{ psychometrics.agreeableness_description }}</p>
-                        <button
-                            onclick="showEvidence('agreeableness')"
-                            class="mt-2 text-xs text-pink-600 hover:text-pink-800 font-medium"
-                        >
-                            🔍 Ver Evidências
-                        </button>
                     </div>
 
                     <!-- Neuroticism -->
@@ -186,12 +239,6 @@
                         </div>
                         <p class="text-sm text-gray-600 mt-1">{{ psychometrics.neuroticism_level }}</p>
                         <p class="text-xs text-gray-500 mt-2">{{ psychometrics.neuroticism_description }}</p>
-                        <button
-                            onclick="showEvidence('neuroticism')"
-                            class="mt-2 text-xs text-red-600 hover:text-red-800 font-medium"
-                        >
-                            🔍 Ver Evidências
-                        </button>
                     </div>
                 </div>
             </div>
@@ -546,175 +593,5 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
 });
 </script>
-
-<!-- Evidence Modal Functions (Global Scope) -->
-<script>
-function showEvidence(dimension) {
-        const modal = document.getElementById('evidenceModal');
-        const modalTitle = document.getElementById('evidenceModalTitle');
-        const modalContent = document.getElementById('evidenceModalContent');
-
-        // Dimension names mapping
-        const dimensionNames = {
-            'openness': 'Abertura (Openness)',
-            'conscientiousness': 'Conscienciosidade (Conscientiousness)',
-            'extraversion': 'Extroversão (Extraversion)',
-            'agreeableness': 'Amabilidade (Agreeableness)',
-            'neuroticism': 'Neuroticismo (Neuroticism)'
-        };
-
-        // Show modal and loading state
-        modal.classList.remove('hidden');
-        modalTitle.textContent = dimensionNames[dimension] || dimension;
-        modalContent.innerHTML = `
-            <div class="flex items-center justify-center py-12">
-                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                <span class="ml-3 text-gray-600">Carregando evidências...</span>
-            </div>
-        `;
-
-        // Fetch evidence from API
-        const userId = '{{ user_id }}';
-        fetch(`/admin/user/${userId}/psychometrics/${dimension}/evidence`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to fetch evidence');
-                }
-                return response.json();
-            })
-            .then(data => {
-                displayEvidence(data);
-            })
-            .catch(error => {
-                console.error('Error fetching evidence:', error);
-                modalContent.innerHTML = `
-                    <div class="text-center py-12">
-                        <p class="text-red-600 font-semibold">Erro ao carregar evidências</p>
-                        <p class="text-gray-600 text-sm mt-2">${error.message}</p>
-                        <button onclick="closeEvidenceModal()" class="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
-                            Fechar
-                        </button>
-                    </div>
-                `;
-            });
-    }
-
-    function displayEvidence(data) {
-        const modalContent = document.getElementById('evidenceModalContent');
-
-        if (!data.evidence || data.evidence.length === 0) {
-            modalContent.innerHTML = `
-                <div class="text-center py-12">
-                    <p class="text-gray-600 font-semibold">Nenhuma evidência encontrada</p>
-                    <p class="text-gray-500 text-sm mt-2">Esta dimensão ainda não possui evidências extraídas das conversas.</p>
-                </div>
-            `;
-            return;
-        }
-
-        // Build evidence cards HTML
-        let html = `
-            <div class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div class="flex justify-between items-center">
-                    <div>
-                        <span class="text-sm font-semibold text-gray-700">Score:</span>
-                        <span class="text-2xl font-bold text-blue-600 ml-2">${data.score}</span>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-sm text-gray-600">
-                            ${data.evidence.length} evidência(s) encontrada(s)
-                        </div>
-                        ${data.extraction_cached ? '<div class="text-xs text-green-600 mt-1">✓ Cache</div>' : '<div class="text-xs text-blue-600 mt-1">• Extraído agora</div>'}
-                    </div>
-                </div>
-            </div>
-
-            <div class="space-y-4 max-h-96 overflow-y-auto">
-        `;
-
-        data.evidence.forEach((evidence, index) => {
-            const directionColor = evidence.direction === 'positive' ? 'green' : evidence.direction === 'negative' ? 'red' : 'gray';
-            const directionIcon = evidence.direction === 'positive' ? '↑' : evidence.direction === 'negative' ? '↓' : '•';
-            const relevancePercent = Math.round(evidence.relevance_score * 100);
-            const confidencePercent = Math.round(evidence.confidence * 100);
-
-            html += `
-                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div class="flex items-start justify-between mb-2">
-                        <div class="flex items-center space-x-2">
-                            <span class="text-${directionColor}-600 font-bold text-xl">${directionIcon}</span>
-                            <span class="text-xs font-semibold text-${directionColor}-600 uppercase">${evidence.direction}</span>
-                            ${evidence.trait_indicator ? `<span class="text-xs text-gray-500">• ${evidence.trait_indicator}</span>` : ''}
-                        </div>
-                        <a href="/admin/conversation/${evidence.conversation_id}" target="_blank" class="text-xs text-blue-600 hover:text-blue-800">
-                            Ver conversa →
-                        </a>
-                    </div>
-
-                    <div class="bg-gray-50 border-l-4 border-${directionColor}-400 p-3 mb-3">
-                        <p class="text-sm text-gray-800 italic">"${evidence.quote}"</p>
-                    </div>
-
-                    ${evidence.context_before || evidence.context_after ? `
-                        <div class="text-xs text-gray-600 mb-3">
-                            ${evidence.context_before ? `<p class="mb-1"><strong>Antes:</strong> ${evidence.context_before}</p>` : ''}
-                            ${evidence.context_after ? `<p><strong>Depois:</strong> ${evidence.context_after}</p>` : ''}
-                        </div>
-                    ` : ''}
-
-                    ${evidence.explanation ? `
-                        <div class="bg-blue-50 p-2 rounded text-xs text-gray-700 mb-3">
-                            <strong>Análise:</strong> ${evidence.explanation}
-                        </div>
-                    ` : ''}
-
-                    <div class="flex items-center justify-between text-xs text-gray-500">
-                        <div class="flex items-center space-x-4">
-                            <span>
-                                <strong>Relevância:</strong>
-                                <span class="font-semibold text-blue-600">${relevancePercent}%</span>
-                            </span>
-                            <span>
-                                <strong>Confiança:</strong>
-                                <span class="font-semibold text-green-600">${confidencePercent}%</span>
-                            </span>
-                        </div>
-                        <span class="text-gray-400">
-                            ${new Date(evidence.conversation_timestamp).toLocaleDateString('pt-BR')}
-                        </span>
-                    </div>
-                </div>
-            `;
-        });
-
-        html += '</div>';
-        modalContent.innerHTML = html;
-    }
-
-function closeEvidenceModal() {
-    const modal = document.getElementById('evidenceModal');
-    modal.classList.add('hidden');
-}
-</script>
-
-<!-- Evidence Modal -->
-<div id="evidenceModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-    <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-2/3 shadow-lg rounded-md bg-white">
-        <div class="flex items-center justify-between border-b pb-3 mb-4">
-            <h3 id="evidenceModalTitle" class="text-xl font-bold text-gray-900">Evidências</h3>
-            <button onclick="closeEvidenceModal()" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">
-                &times;
-            </button>
-        </div>
-        <div id="evidenceModalContent">
-            <!-- Content will be loaded here -->
-        </div>
-        <div class="mt-4 text-right">
-            <button onclick="closeEvidenceModal()" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
-                Fechar
-            </button>
-        </div>
-    </div>
-</div>
 
 {% endblock %}
