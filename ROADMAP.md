@@ -278,27 +278,60 @@
 
 ---
 
-## 🎬 Ações Imediatas (Esta Semana)
+## 🎬 Ações Imediatas (Esta Semana) - ATUALIZADO 03/12/2025
 
-### Segunda-feira
-1. Implementar exportação de PDF dos relatórios
-2. Melhorar autenticação do admin web
+### Segunda-feira, 02/12 ✅ COMPLETO
+1. ✅ Implementar exportação de PDF dos relatórios
+2. ✅ Melhorar autenticação do admin web (bcrypt)
 
-### Terça-feira
-3. Adicionar sistema de evidências nas análises
-4. Criar dashboard específico para RH
+### Terça-feira, 02/12 ✅ COMPLETO
+3. ✅ Sistema de Evidências 2.0 (interno, privacy-first)
+4. ✅ Sistema de Detecção de Qualidade (5 red flags)
+5. ⏭️ Dashboard RH (ADIADO - não prioritário)
 
-### Quarta-feira
-5. Coletar feedback de 3-5 usuários internos
-6. Ajustar prompts baseado em feedback
+### Quarta-feira, 03/12 🚀 HOJE - PROATIVIDADE ESTRATÉGICA
+**NOVA PRIORIDADE**: Sistema Proativo de Perfilamento Conversacional
 
-### Quinta-feira
-7. Testes de ponta a ponta do fluxo completo
-8. Correções de bugs identificados
+**Objetivo**: Transformar proatividade em questionário conversacional inteligente
 
-### Sexta-feira
-9. Revisão de compliance LGPD
-10. Preparar apresentação/demo para RH
+**Tarefas** (8h):
+6. ✅ Criar `profile_gap_analyzer.py` - Identifica gaps na análise (2h)
+7. ✅ Criar `strategic_question_generator.py` - Gera perguntas naturais (3h)
+8. ✅ Banco de templates de perguntas por dimensão Big Five (1h)
+9. ✅ Testes com perfis reais (1h)
+10. ✅ Documentação técnica (1h)
+
+**Entregáveis**:
+- ProfileGapAnalyzer: Detecta incompletude de perfis
+- StrategicQuestionGenerator: Gera perguntas adaptativas
+- 50+ templates de perguntas (10 por dimensão Big Five)
+- Testes automatizados
+
+### Quinta-feira, 04/12 - INTEGRAÇÃO E DEPLOY
+**Tarefas** (6h):
+11. ⏳ Modificar `jung_proactive_advanced.py` para decisão insight/pergunta (2h)
+12. ⏳ Criar tabela `strategic_questions` para tracking (30min)
+13. ⏳ Migração no Railway (30min)
+14. ⏳ Testes end-to-end com usuários reais (1h)
+15. ⏳ Ajustes e refinamentos baseados em testes (1h)
+16. ⏳ Deploy e monitoramento inicial (1h)
+
+**Métricas a Monitorar**:
+- Taxa de resposta às perguntas (meta: > 60%)
+- Melhoria de completude de perfil (meta: 55% → 80%)
+- Aumento de confidence scores (meta: +15 pontos)
+
+### Sexta-feira, 05/12 - ANALYTICS E VALIDAÇÃO
+**Tarefas** (4h):
+17. ⏳ Dashboard de analytics de perguntas estratégicas (2h)
+18. ⏳ Documentação final do sistema (1h)
+19. ⏳ Apresentação de resultados preliminares (1h)
+
+### Próxima Semana (09-13/12) - OTIMIZAÇÃO
+20. ⏳ A/B testing de diferentes tipos de perguntas
+21. ⏳ Coletar feedback de usuários sobre perguntas
+22. ⏳ Revisão de compliance LGPD do novo sistema
+23. ⏳ Preparar apresentação/demo para RH com novo sistema
 
 ---
 
