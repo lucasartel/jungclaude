@@ -786,7 +786,19 @@ Tom esperado: {archetype_pair.description}
 
         logger.info(f"✅ [PROATIVO] Usuário elegível!")
 
-        # 2. Selecionar par arquetípico
+        # ============================================================
+        # 2. DECISÃO: INSIGHT vs PERGUNTA ESTRATÉGICA
+        # ============================================================
+
+        message_type = self._decide_message_type(user_id)
+        logger.info(f"   🎯 Tipo de mensagem: {message_type}")
+
+        if message_type == "strategic_question":
+            # Usar sistema de perfilamento estratégico
+            return self._generate_strategic_question(user_id, user_name)
+
+        # 3. Continuar com sistema de insights (existente)
+        # Selecionar par arquetípico
         archetype_pair = self._select_next_archetype_pair(user_id)
         logger.info(f"   🎭 Par selecionado: {archetype_pair.primary} + {archetype_pair.secondary}")
 
@@ -873,6 +885,246 @@ Tom esperado: {archetype_pair.description}
 
         # 11. Retornar mensagem
         return autonomous_insight
+
+    # ============================================================
+    # STRATEGIC PROFILING METHODS (NEW v5.0)
+    # ============================================================
+
+    def _decide_message_type(self, user_id: str) -> str:
+        """
+        Decide se envia pergunta estratégica ou insight
+
+        Regras:
+        1. Se completude < 70% → strategic_question (80% chance)
+        2. Se completude >= 70% → insight (modo atual)
+        3. Se últimas 2 proativas foram perguntas → insight (variedade)
+        4. Se não tem análise psicométrica → insight
+
+        Returns:
+            "strategic_question" ou "insight"
+        """
+
+        try:
+            from profile_gap_analyzer import ProfileGapAnalyzer
+
+            # Verificar se tem análise psicométrica
+            psychometrics = self.db.get_psychometrics(user_id)
+            if not psychometrics:
+                logger.info("   ⚡ Sem análise psicométrica → insight")
+                return "insight"
+
+            # Analisar gaps
+            analyzer = ProfileGapAnalyzer(self.db)
+            gaps = analyzer.analyze_gaps(user_id)
+
+            completeness = gaps.get("overall_completeness", 1.0)
+            logger.info(f"   📊 Completude do perfil: {completeness:.1%}")
+
+            # Verificar últimas 2 proativas
+            cursor = self.db.conn.cursor()
+            cursor.execute("""
+                SELECT message_type FROM proactive_approaches
+                WHERE user_id = ?
+                ORDER BY timestamp DESC
+                LIMIT 2
+            """, (user_id,))
+
+            recent_types = [row[0] for row in cursor.fetchall() if row[0]]
+
+            # Se últimas 2 foram perguntas, fazer insight para variedade
+            if len(recent_types) >= 2 and all(t == "strategic_question" for t in recent_types):
+                logger.info("   🔄 Últimas 2 foram perguntas → insight (variedade)")
+                return "insight"
+
+            # Decisão baseada em completude
+            if completeness < 0.7:
+                # 80% chance de pergunta estratégica
+                import random
+                if random.random() < 0.8:
+                    logger.info(f"   🎯 Completude baixa ({completeness:.1%}) → pergunta estratégica")
+                    return "strategic_question"
+                else:
+                    logger.info(f"   🎲 Completude baixa mas sorteio → insight")
+                    return "insight"
+            else:
+                logger.info(f"   ✅ Completude boa ({completeness:.1%}) → insight")
+                return "insight"
+
+        except Exception as e:
+            logger.warning(f"⚠️  Erro ao decidir tipo de mensagem: {e}")
+            # Fallback para insight em caso de erro
+            return "insight"
+
+    def _generate_strategic_question(self, user_id: str, user_name: str) -> Optional[str]:
+        """
+        Gera pergunta estratégica para preencher gaps no perfil
+
+        Returns:
+            str: Pergunta estratégica
+            None: Se não conseguir gerar
+        """
+
+        try:
+            from profile_gap_analyzer import ProfileGapAnalyzer
+            from strategic_question_generator import StrategicQuestionGenerator
+
+            logger.info(f"🎯 [STRATEGIC QUESTION] Gerando pergunta estratégica...")
+
+            # Analisar gaps
+            analyzer = ProfileGapAnalyzer(self.db)
+            gaps = analyzer.analyze_gaps(user_id)
+
+            if not gaps.get("priority_questions"):
+                logger.warning("⚠️  Sem perguntas prioritárias → fallback para insight")
+                return None
+
+            # Pegar dimensão prioritária
+            priority = gaps["priority_questions"][0]
+            target_dimension = priority["dimension"]
+            context_hint = priority.get("suggested_context")
+
+            logger.info(f"   📌 Dimensão alvo: {target_dimension}")
+            logger.info(f"   🏷️  Contexto: {context_hint}")
+
+            # Gerar pergunta
+            generator = StrategicQuestionGenerator(self.db)
+            question_data = generator.generate_question(
+                target_dimension=target_dimension,
+                user_id=user_id,
+                user_name=user_name,
+                context_hint=context_hint
+            )
+
+            question_text = question_data["question"]
+
+            logger.info(f"   ✅ Pergunta gerada: {question_data['type']} / {question_data['tone']}")
+
+            # Salvar pergunta estratégica no banco
+            self._save_strategic_question(
+                user_id=user_id,
+                question_text=question_text,
+                target_dimension=target_dimension,
+                question_type=question_data["type"],
+                reveals=question_data["reveals"],
+                gap_info=priority
+            )
+
+            # Salvar como conversa na memória
+            try:
+                session_id = f"strategic_question_{datetime.now().isoformat()}"
+
+                self.db.save_conversation(
+                    user_id=user_id,
+                    user_name=user_name,
+                    user_input="[PERGUNTA ESTRATÉGICA INICIADA]",
+                    ai_response=question_text,
+                    session_id=session_id,
+                    platform="strategic_question",
+                    keywords=[target_dimension, question_data["type"]],
+                    complexity="strategic",
+                    tension_level=0.0,
+                    affective_charge=50.0
+                )
+
+                logger.info(f"💬 Pergunta salva na memória")
+
+            except Exception as e:
+                logger.warning(f"⚠️  Erro ao salvar na memória: {e}")
+
+            return question_text
+
+        except Exception as e:
+            logger.error(f"❌ Erro ao gerar pergunta estratégica: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
+
+    def _save_strategic_question(
+        self,
+        user_id: str,
+        question_text: str,
+        target_dimension: str,
+        question_type: str,
+        reveals: List[str],
+        gap_info: Dict
+    ):
+        """
+        Salva pergunta estratégica no banco para tracking
+
+        Note: Requer tabela strategic_questions (criar via migration)
+        """
+
+        try:
+            cursor = self.db.conn.cursor()
+
+            # Verificar se tabela existe
+            cursor.execute("""
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name='strategic_questions'
+            """)
+
+            if not cursor.fetchone():
+                logger.warning("⚠️  Tabela 'strategic_questions' não existe. Criando...")
+
+                # Criar tabela inline
+                cursor.execute("""
+                    CREATE TABLE strategic_questions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT NOT NULL,
+                        question_text TEXT NOT NULL,
+                        target_dimension TEXT NOT NULL,
+                        question_type TEXT,
+                        gap_type TEXT,
+                        gap_priority REAL,
+                        reveals TEXT,
+                        asked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        answered BOOLEAN DEFAULT 0,
+                        answer_timestamp DATETIME,
+                        answer_quality_score REAL,
+                        improved_analysis BOOLEAN DEFAULT 0,
+                        FOREIGN KEY (user_id) REFERENCES users(user_id)
+                    )
+                """)
+
+                logger.info("✅ Tabela 'strategic_questions' criada")
+
+            # Inserir pergunta
+            cursor.execute("""
+                INSERT INTO strategic_questions (
+                    user_id,
+                    question_text,
+                    target_dimension,
+                    question_type,
+                    gap_type,
+                    gap_priority,
+                    reveals
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                user_id,
+                question_text,
+                target_dimension,
+                question_type,
+                gap_info.get("reason", "unknown"),
+                gap_info.get("priority", 0.5),
+                json.dumps(reveals, ensure_ascii=False)
+            ))
+
+            # Atualizar proactive_approaches com tipo de mensagem
+            cursor.execute("""
+                UPDATE proactive_approaches
+                SET message_type = 'strategic_question'
+                WHERE user_id = ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, (user_id,))
+
+            self.db.conn.commit()
+
+            logger.info(f"💾 Pergunta estratégica salva no banco")
+
+        except Exception as e:
+            logger.warning(f"⚠️  Erro ao salvar pergunta estratégica: {e}")
+            # Não falhar se não conseguir salvar
 
 
 # ============================================================
