@@ -277,21 +277,18 @@ async def user_agent_data_page(request: Request, user_id: str, username: str = D
     # ============================================================
     # 3. MENSAGENS PROATIVAS (últimas 10)
     # ============================================================
+    # Por enquanto, apenas mensagens de insights (sem JOIN com strategic_questions que pode não existir)
     cursor.execute("""
         SELECT
-            pa.autonomous_insight,
-            pa.timestamp,
-            pa.archetype_primary,
-            pa.archetype_secondary,
-            pa.topic_extracted,
-            pa.knowledge_domain,
-            sq.target_dimension
-        FROM proactive_approaches pa
-        LEFT JOIN strategic_questions sq
-            ON pa.user_id = sq.user_id
-            AND datetime(pa.timestamp) = datetime(sq.asked_at)
-        WHERE pa.user_id = ?
-        ORDER BY pa.timestamp DESC
+            autonomous_insight,
+            timestamp,
+            archetype_primary,
+            archetype_secondary,
+            topic_extracted,
+            knowledge_domain
+        FROM proactive_approaches
+        WHERE user_id = ?
+        ORDER BY timestamp DESC
         LIMIT 10
     """, (user_id,))
 
@@ -300,8 +297,8 @@ async def user_agent_data_page(request: Request, user_id: str, username: str = D
         # Montar o par arquetípico
         archetype_pair = f"{row.get('archetype_primary', '')} + {row.get('archetype_secondary', '')}" if row.get('archetype_primary') else None
 
-        # Determinar tipo: se tem target_dimension é pergunta estratégica, senão é insight
-        message_type = 'strategic_question' if row.get('target_dimension') else 'insight'
+        # Por enquanto, todas são insights (perguntas estratégicas serão implementadas depois)
+        message_type = 'insight'
 
         proactive_messages.append({
             "message": row.get('autonomous_insight', '') or "",
@@ -309,7 +306,7 @@ async def user_agent_data_page(request: Request, user_id: str, username: str = D
             "message_type": message_type,
             "archetype_pair": archetype_pair,
             "topic": row.get('topic_extracted'),
-            "target_dimension": row.get('target_dimension')
+            "target_dimension": None  # Será preenchido quando strategic_questions existir
         })
 
     return templates.TemplateResponse("user_agent_data.html", {
