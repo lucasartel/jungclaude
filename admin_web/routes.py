@@ -256,7 +256,7 @@ async def user_agent_data_page(request: Request, user_id: str, username: str = D
     cursor.execute("""
         SELECT
             user_input,
-            bot_response,
+            ai_response,
             timestamp,
             keywords
         FROM conversations
@@ -269,7 +269,7 @@ async def user_agent_data_page(request: Request, user_id: str, username: str = D
     for row in cursor.fetchall():
         reactive_messages.append({
             "user_input": row.get('user_input', '') or "",
-            "bot_response": row.get('bot_response', '') or "",
+            "bot_response": row.get('ai_response', '') or "",
             "timestamp": row.get('timestamp', '')[:16] if row.get('timestamp') else "N/A",
             "keywords": row.get('keywords', '').split(',') if row.get('keywords') else []
         })
