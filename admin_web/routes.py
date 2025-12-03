@@ -175,40 +175,42 @@ async def user_agent_data_page(request: Request, user_id: str, username: str = D
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
     cursor = db.conn.cursor()
+    # Configurar row_factory para acessar colunas por nome
+    cursor.row_factory = lambda cursor, row: {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
 
     # ============================================================
     # 1. RELATÓRIO RESUMIDO
     # ============================================================
 
     # Total de conversas
-    cursor.execute("SELECT COUNT(*) FROM conversations WHERE user_id = ?", (user_id,))
-    total_conversations = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) as count FROM conversations WHERE user_id = ?", (user_id,))
+    total_conversations = cursor.fetchone()['count']
 
     # Conversas reativas (todas exceto plataforma 'proactive')
     cursor.execute("""
-        SELECT COUNT(*) FROM conversations
+        SELECT COUNT(*) as count FROM conversations
         WHERE user_id = ? AND platform != 'proactive'
     """, (user_id,))
-    reactive_count = cursor.fetchone()[0]
+    reactive_count = cursor.fetchone()['count']
 
     # Mensagens proativas (tabela proactive_approaches)
     cursor.execute("""
-        SELECT COUNT(*) FROM proactive_approaches
+        SELECT COUNT(*) as count FROM proactive_approaches
         WHERE user_id = ? AND sent = 1
     """, (user_id,))
-    proactive_count = cursor.fetchone()[0]
+    proactive_count = cursor.fetchone()['count']
 
     # Primeira interação
     cursor.execute("""
-        SELECT MIN(timestamp) FROM conversations WHERE user_id = ?
+        SELECT MIN(timestamp) as first_ts FROM conversations WHERE user_id = ?
     """, (user_id,))
-    first_interaction = cursor.fetchone()[0] or "N/A"
+    first_interaction = cursor.fetchone()['first_ts'] or "N/A"
 
     # Última atividade
     cursor.execute("""
-        SELECT MAX(timestamp) FROM conversations WHERE user_id = ?
+        SELECT MAX(timestamp) as last_ts FROM conversations WHERE user_id = ?
     """, (user_id,))
-    last_activity = cursor.fetchone()[0] or "N/A"
+    last_activity = cursor.fetchone()['last_ts'] or "N/A"
 
     # Status proativo (última proativa + cooldown)
     cursor.execute("""
@@ -222,7 +224,7 @@ async def user_agent_data_page(request: Request, user_id: str, username: str = D
     if last_proactive:
         from datetime import datetime
         now = datetime.now()
-        cooldown_until_str = last_proactive[1] if last_proactive[1] else None
+        cooldown_until_str = last_proactive.get('cooldown_until')
 
         if cooldown_until_str:
             cooldown_until = datetime.fromisoformat(cooldown_until_str)
@@ -267,10 +269,10 @@ async def user_agent_data_page(request: Request, user_id: str, username: str = D
     reactive_messages = []
     for row in cursor.fetchall():
         reactive_messages.append({
-            "user_input": row[0] or "",
-            "bot_response": row[1] or "",
-            "timestamp": row[2][:16] if row[2] else "N/A",
-            "keywords": row[3].split(',') if row[3] else []
+            "user_input": row.get('user_input', '') or "",
+            "bot_response": row.get('bot_response', '') or "",
+            "timestamp": row.get('timestamp', '')[:16] if row.get('timestamp') else "N/A",
+            "keywords": row.get('keywords', '').split(',') if row.get('keywords') else []
         })
 
     # ============================================================
@@ -296,12 +298,12 @@ async def user_agent_data_page(request: Request, user_id: str, username: str = D
     proactive_messages = []
     for row in cursor.fetchall():
         proactive_messages.append({
-            "message": row[0] or "",
-            "timestamp": row[1][:16] if row[1] else "N/A",
-            "message_type": row[2] or 'insight',
-            "archetype_pair": row[3],
-            "topic": row[4],
-            "target_dimension": row[5]
+            "message": row.get('message', '') or "",
+            "timestamp": row.get('sent_at', '')[:16] if row.get('sent_at') else "N/A",
+            "message_type": row.get('message_type') or 'insight',
+            "archetype_pair": row.get('archetype_pair'),
+            "topic": row.get('topic'),
+            "target_dimension": row.get('target_dimension')
         })
 
     return templates.TemplateResponse("user_agent_data.html", {
