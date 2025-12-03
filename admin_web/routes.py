@@ -157,9 +157,16 @@ async def user_analysis_page(request: Request, user_id: str, username: str = Dep
         "conversations": conversations[:10]  # Últimas 10 para preview
     })
 
-@router.get("/user/{user_id}/development", response_class=HTMLResponse)
-async def user_development_page(request: Request, user_id: str, username: str = Depends(verify_credentials)):
-    """Página de desenvolvimento do agente do usuário"""
+@router.get("/user/{user_id}/agent-data", response_class=HTMLResponse)
+async def user_agent_data_page(request: Request, user_id: str, username: str = Depends(verify_credentials)):
+    """
+    Página de Dados do Agente
+
+    Mostra:
+    - Relatório resumido (total conversas, reativas, proativas, status)
+    - 10 últimas mensagens reativas (conversação normal)
+    - 10 últimas mensagens proativas (sistema proativo)
+    """
     db = get_db()
 
     # Buscar usuário
@@ -167,39 +174,143 @@ async def user_development_page(request: Request, user_id: str, username: str = 
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-    # Buscar milestones
     cursor = db.conn.cursor()
-    cursor.execute("""
-        SELECT * FROM user_milestones
-        WHERE user_id = ?
-        ORDER BY achieved_at DESC
-        LIMIT 20
-    """, (user_id,))
-    milestones = [dict(row) for row in cursor.fetchall()]
 
-    # Buscar padrões
+    # ============================================================
+    # 1. RELATÓRIO RESUMIDO
+    # ============================================================
+
+    # Total de conversas
+    cursor.execute("SELECT COUNT(*) FROM conversations WHERE user_id = ?", (user_id,))
+    total_conversations = cursor.fetchone()[0]
+
+    # Conversas reativas (todas exceto plataforma 'proactive')
     cursor.execute("""
-        SELECT * FROM user_patterns
-        WHERE user_id = ?
-        ORDER BY confidence_score DESC, frequency_count DESC
+        SELECT COUNT(*) FROM conversations
+        WHERE user_id = ? AND platform != 'proactive'
+    """, (user_id,))
+    reactive_count = cursor.fetchone()[0]
+
+    # Mensagens proativas (tabela proactive_approaches)
+    cursor.execute("""
+        SELECT COUNT(*) FROM proactive_approaches
+        WHERE user_id = ? AND sent = 1
+    """, (user_id,))
+    proactive_count = cursor.fetchone()[0]
+
+    # Primeira interação
+    cursor.execute("""
+        SELECT MIN(timestamp) FROM conversations WHERE user_id = ?
+    """, (user_id,))
+    first_interaction = cursor.fetchone()[0] or "N/A"
+
+    # Última atividade
+    cursor.execute("""
+        SELECT MAX(timestamp) FROM conversations WHERE user_id = ?
+    """, (user_id,))
+    last_activity = cursor.fetchone()[0] or "N/A"
+
+    # Status proativo (última proativa + cooldown)
+    cursor.execute("""
+        SELECT sent_at, cooldown_until FROM proactive_approaches
+        WHERE user_id = ? AND sent = 1
+        ORDER BY sent_at DESC
+        LIMIT 1
+    """, (user_id,))
+    last_proactive = cursor.fetchone()
+
+    if last_proactive:
+        from datetime import datetime
+        now = datetime.now()
+        cooldown_until_str = last_proactive[1] if last_proactive[1] else None
+
+        if cooldown_until_str:
+            cooldown_until = datetime.fromisoformat(cooldown_until_str)
+            if cooldown_until > now:
+                hours_left = (cooldown_until - now).total_seconds() / 3600
+                proactive_status = f"⏸️  Cooldown ({hours_left:.1f}h restantes)"
+            else:
+                proactive_status = "✅ Ativo (pode receber mensagem)"
+        else:
+            proactive_status = "✅ Ativo (pode receber mensagem)"
+    else:
+        proactive_status = "🆕 Nunca recebeu mensagem proativa"
+
+    # Taxa de resposta (aproximada - conversas reativas / total)
+    response_rate = int((reactive_count / total_conversations * 100)) if total_conversations > 0 else 0
+
+    summary = {
+        "total_conversations": total_conversations,
+        "reactive_count": reactive_count,
+        "proactive_count": proactive_count,
+        "first_interaction": first_interaction[:16] if first_interaction != "N/A" else "N/A",
+        "last_activity": last_activity[:16] if last_activity != "N/A" else "N/A",
+        "proactive_status": proactive_status,
+        "response_rate": response_rate
+    }
+
+    # ============================================================
+    # 2. MENSAGENS REATIVAS (últimas 10)
+    # ============================================================
+    cursor.execute("""
+        SELECT
+            user_input,
+            bot_response,
+            timestamp,
+            keywords
+        FROM conversations
+        WHERE user_id = ? AND platform != 'proactive'
+        ORDER BY timestamp DESC
         LIMIT 10
     """, (user_id,))
-    patterns = [dict(row) for row in cursor.fetchall()]
 
-    # Buscar conflitos recentes
-    conflicts = db.get_user_conflicts(user_id, limit=10)
+    reactive_messages = []
+    for row in cursor.fetchall():
+        reactive_messages.append({
+            "user_input": row[0] or "",
+            "bot_response": row[1] or "",
+            "timestamp": row[2][:16] if row[2] else "N/A",
+            "keywords": row[3].split(',') if row[3] else []
+        })
 
-    # Stats
-    total_conversations = db.count_conversations(user_id)
+    # ============================================================
+    # 3. MENSAGENS PROATIVAS (últimas 10)
+    # ============================================================
+    cursor.execute("""
+        SELECT
+            pa.message,
+            pa.sent_at,
+            pa.message_type,
+            pa.archetype_pair,
+            pa.topic,
+            sq.target_dimension
+        FROM proactive_approaches pa
+        LEFT JOIN strategic_questions sq
+            ON pa.user_id = sq.user_id
+            AND datetime(pa.sent_at) = datetime(sq.asked_at)
+        WHERE pa.user_id = ? AND pa.sent = 1
+        ORDER BY pa.sent_at DESC
+        LIMIT 10
+    """, (user_id,))
 
-    return templates.TemplateResponse("user_development.html", {
+    proactive_messages = []
+    for row in cursor.fetchall():
+        proactive_messages.append({
+            "message": row[0] or "",
+            "timestamp": row[1][:16] if row[1] else "N/A",
+            "message_type": row[2] or 'insight',
+            "archetype_pair": row[3],
+            "topic": row[4],
+            "target_dimension": row[5]
+        })
+
+    return templates.TemplateResponse("user_agent_data.html", {
         "request": request,
         "user": user,
         "user_id": user_id,
-        "total_conversations": total_conversations,
-        "milestones": milestones,
-        "patterns": patterns,
-        "conflicts": conflicts
+        "summary": summary,
+        "reactive_messages": reactive_messages,
+        "proactive_messages": proactive_messages
     })
 
 # ============================================================================
