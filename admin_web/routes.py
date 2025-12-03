@@ -196,7 +196,7 @@ async def user_agent_data_page(request: Request, user_id: str, username: str = D
     # Mensagens proativas (tabela proactive_approaches)
     cursor.execute("""
         SELECT COUNT(*) as count FROM proactive_approaches
-        WHERE user_id = ? AND sent = 1
+        WHERE user_id = ?
     """, (user_id,))
     proactive_count = cursor.fetchone()['count']
 
@@ -212,27 +212,26 @@ async def user_agent_data_page(request: Request, user_id: str, username: str = D
     """, (user_id,))
     last_activity = cursor.fetchone()['last_ts'] or "N/A"
 
-    # Status proativo (última proativa + cooldown)
+    # Status proativo (última proativa + timestamp)
     cursor.execute("""
-        SELECT sent_at, cooldown_until FROM proactive_approaches
-        WHERE user_id = ? AND sent = 1
-        ORDER BY sent_at DESC
+        SELECT timestamp FROM proactive_approaches
+        WHERE user_id = ?
+        ORDER BY timestamp DESC
         LIMIT 1
     """, (user_id,))
     last_proactive = cursor.fetchone()
 
     if last_proactive:
-        from datetime import datetime
+        from datetime import datetime, timedelta
         now = datetime.now()
-        cooldown_until_str = last_proactive.get('cooldown_until')
+        last_timestamp = datetime.fromisoformat(last_proactive.get('timestamp'))
+        hours_since = (now - last_timestamp).total_seconds() / 3600
 
-        if cooldown_until_str:
-            cooldown_until = datetime.fromisoformat(cooldown_until_str)
-            if cooldown_until > now:
-                hours_left = (cooldown_until - now).total_seconds() / 3600
-                proactive_status = f"⏸️  Cooldown ({hours_left:.1f}h restantes)"
-            else:
-                proactive_status = "✅ Ativo (pode receber mensagem)"
+        # Cooldown de 12h (mesmo do sistema proativo)
+        cooldown_hours = 12
+        if hours_since < cooldown_hours:
+            hours_left = cooldown_hours - hours_since
+            proactive_status = f"⏸️  Cooldown ({hours_left:.1f}h restantes)"
         else:
             proactive_status = "✅ Ativo (pode receber mensagem)"
     else:
@@ -280,29 +279,36 @@ async def user_agent_data_page(request: Request, user_id: str, username: str = D
     # ============================================================
     cursor.execute("""
         SELECT
-            pa.message,
-            pa.sent_at,
-            pa.message_type,
-            pa.archetype_pair,
-            pa.topic,
+            pa.autonomous_insight,
+            pa.timestamp,
+            pa.archetype_primary,
+            pa.archetype_secondary,
+            pa.topic_extracted,
+            pa.knowledge_domain,
             sq.target_dimension
         FROM proactive_approaches pa
         LEFT JOIN strategic_questions sq
             ON pa.user_id = sq.user_id
-            AND datetime(pa.sent_at) = datetime(sq.asked_at)
-        WHERE pa.user_id = ? AND pa.sent = 1
-        ORDER BY pa.sent_at DESC
+            AND datetime(pa.timestamp) = datetime(sq.asked_at)
+        WHERE pa.user_id = ?
+        ORDER BY pa.timestamp DESC
         LIMIT 10
     """, (user_id,))
 
     proactive_messages = []
     for row in cursor.fetchall():
+        # Montar o par arquetípico
+        archetype_pair = f"{row.get('archetype_primary', '')} + {row.get('archetype_secondary', '')}" if row.get('archetype_primary') else None
+
+        # Determinar tipo: se tem target_dimension é pergunta estratégica, senão é insight
+        message_type = 'strategic_question' if row.get('target_dimension') else 'insight'
+
         proactive_messages.append({
-            "message": row.get('message', '') or "",
-            "timestamp": row.get('sent_at', '')[:16] if row.get('sent_at') else "N/A",
-            "message_type": row.get('message_type') or 'insight',
-            "archetype_pair": row.get('archetype_pair'),
-            "topic": row.get('topic'),
+            "message": row.get('autonomous_insight', '') or "",
+            "timestamp": row.get('timestamp', '')[:16] if row.get('timestamp') else "N/A",
+            "message_type": message_type,
+            "archetype_pair": archetype_pair,
+            "topic": row.get('topic_extracted'),
             "target_dimension": row.get('target_dimension')
         })
 
