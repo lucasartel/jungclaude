@@ -937,7 +937,7 @@ Tom esperado: {archetype_pair.description}
                 return "insight"
 
             # Decisão baseada em completude
-            if completeness < 0.7:
+            if completeness < 0.99:
                 # 80% chance de pergunta estratégica
                 import random
                 if random.random() < 0.8:
