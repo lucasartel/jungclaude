@@ -1168,7 +1168,25 @@ Resposta: {ai_response}
         
         # 6. Extrair fatos do input
         self.extract_and_save_facts(user_id, user_input, conversation_id)
-        
+
+        # 7. HOOK: Sistema de Ruminação (só para admin)
+        try:
+            from rumination_config import ADMIN_USER_ID
+            if user_id == ADMIN_USER_ID and platform == "telegram":
+                from jung_rumination import RuminationEngine
+                rumination = RuminationEngine(self)
+                rumination.ingest({
+                    "user_id": user_id,
+                    "user_input": user_input,
+                    "ai_response": ai_response,
+                    "conversation_id": conversation_id,
+                    "tension_level": tension_level,
+                    "affective_charge": affective_charge
+                })
+                logger.info("🧠 Ruminação: Ingestão executada")
+        except Exception as e:
+            logger.warning(f"⚠️ Erro no hook de ruminação: {e}")
+
         return conversation_id
     
     def get_user_conversations(self, user_id: str, limit: int = 10) -> List[Dict]:
