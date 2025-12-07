@@ -305,10 +305,10 @@
                         {% for frag in fragments %}
                         <tr>
                             <td>#{{ frag.id }}</td>
-                            <td><span class="badge badge-{{ frag.type }}">{{ frag.type }}</span></td>
+                            <td><span class="badge badge-{{ frag.fragment_type }}">{{ frag.fragment_type }}</span></td>
                             <td>
                                 {{ frag.content }}
-                                <div class="quote">"{{ frag.quote }}"</div>
+                                <div class="quote">"{{ frag.source_quote }}"</div>
                             </td>
                             <td>
                                 {{ "%.1f"|format(frag.emotional_weight * 10) }}/10
@@ -346,11 +346,11 @@
                         {% for tension in tensions %}
                         <tr>
                             <td>#{{ tension.id }}</td>
-                            <td>{{ tension.type.replace('_', ' ').title() }}</td>
+                            <td>{{ tension.tension_type.replace('_', ' ').title() }}</td>
                             <td>
                                 <strong>A:</strong> {{ tension.pole_a_content }}<br>
                                 <strong>B:</strong> {{ tension.pole_b_content }}<br>
-                                <div class="quote">{{ tension.description }}</div>
+                                <div class="quote">{{ tension.tension_description }}</div>
                             </td>
                             <td>
                                 {{ "%.0f"|format(tension.intensity * 100) }}%
@@ -359,9 +359,9 @@
                                 </div>
                             </td>
                             <td>
-                                {{ "%.0f"|format(tension.maturity * 100) }}%
+                                {{ "%.0f"|format(tension.maturity_score * 100) }}%
                                 <div class="progress-bar">
-                                    <div class="progress-fill" style="width: {{ tension.maturity * 100 }}%"></div>
+                                    <div class="progress-fill" style="width: {{ tension.maturity_score * 100 }}%"></div>
                                 </div>
                             </td>
                             <td><span class="badge badge-{{ tension.status }}">{{ tension.status }}</span></td>
@@ -394,10 +394,10 @@
                         {% for insight in insights %}
                         <tr>
                             <td>#{{ insight.id }}</td>
-                            <td>{{ insight.symbol }}</td>
+                            <td>{{ insight.symbol_content }}</td>
                             <td>
                                 {{ insight.full_message }}
-                                <div class="quote">Pergunta: {{ insight.question }}</div>
+                                <div class="quote">Pergunta: {{ insight.question_content }}</div>
                             </td>
                             <td>
                                 {{ "%.0f"|format(insight.depth_score * 100) }}%

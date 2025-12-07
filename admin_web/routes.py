@@ -1222,7 +1222,7 @@ async def jung_lab_dashboard(
     # Buscar últimos fragmentos
     cursor = db.conn.cursor()
     cursor.execute("""
-        SELECT id, type, content, quote, emotional_weight,
+        SELECT id, fragment_type, content, source_quote, emotional_weight,
                datetime(created_at, 'localtime') as created_at
         FROM rumination_fragments
         WHERE user_id = ?
@@ -1233,25 +1233,25 @@ async def jung_lab_dashboard(
 
     # Buscar tensões ativas
     cursor.execute("""
-        SELECT id, type, pole_a_content, pole_b_content,
-               description, intensity, maturity, status,
-               datetime(created_at, 'localtime') as created_at,
-               datetime(last_revisit, 'localtime') as last_revisit
+        SELECT id, tension_type, pole_a_content, pole_b_content,
+               tension_description, intensity, maturity_score, status,
+               datetime(first_detected_at, 'localtime') as created_at,
+               datetime(last_revisited_at, 'localtime') as last_revisit
         FROM rumination_tensions
         WHERE user_id = ? AND status != 'archived'
-        ORDER BY maturity DESC, created_at DESC
+        ORDER BY maturity_score DESC, first_detected_at DESC
         LIMIT 10
     """, (ADMIN_USER_ID,))
     tensions = [dict(row) for row in cursor.fetchall()]
 
     # Buscar insights (ready e delivered)
     cursor.execute("""
-        SELECT id, symbol, question, full_message, depth_score, status,
-               datetime(created_at, 'localtime') as created_at,
+        SELECT id, symbol_content, question_content, full_message, depth_score, status,
+               datetime(crystallized_at, 'localtime') as created_at,
                datetime(delivered_at, 'localtime') as delivered_at
         FROM rumination_insights
         WHERE user_id = ?
-        ORDER BY created_at DESC
+        ORDER BY crystallized_at DESC
         LIMIT 10
     """, (ADMIN_USER_ID,))
     insights = [dict(row) for row in cursor.fetchall()]
