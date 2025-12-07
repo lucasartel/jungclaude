@@ -1197,3 +1197,199 @@ async def extract_all_evidence(
     except Exception as e:
         logger.error(f"❌ Erro ao extrair evidências: {e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ============================================================
+# JUNG LAB - SISTEMA DE RUMINAÇÃO (Admin Dashboard)
+# ============================================================
+
+@router.get("/jung-lab", response_class=HTMLResponse)
+async def jung_lab_dashboard(
+    request: Request,
+    username: str = Depends(verify_credentials)
+):
+    """Dashboard do Sistema de Ruminação Cognitiva (Admin only)"""
+    from rumination_config import ADMIN_USER_ID
+    from jung_rumination import RuminationEngine
+    import os
+
+    db = get_db()
+    rumination = RuminationEngine(db)
+
+    # Buscar estatísticas gerais
+    stats = rumination.get_stats(ADMIN_USER_ID)
+
+    # Buscar últimos fragmentos
+    cursor = db.conn.cursor()
+    cursor.execute("""
+        SELECT id, type, content, quote, emotional_weight,
+               datetime(created_at, 'localtime') as created_at
+        FROM rumination_fragments
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 10
+    """, (ADMIN_USER_ID,))
+    fragments = [dict(row) for row in cursor.fetchall()]
+
+    # Buscar tensões ativas
+    cursor.execute("""
+        SELECT id, type, pole_a_content, pole_b_content,
+               description, intensity, maturity, status,
+               datetime(created_at, 'localtime') as created_at,
+               datetime(last_revisit, 'localtime') as last_revisit
+        FROM rumination_tensions
+        WHERE user_id = ? AND status != 'archived'
+        ORDER BY maturity DESC, created_at DESC
+        LIMIT 10
+    """, (ADMIN_USER_ID,))
+    tensions = [dict(row) for row in cursor.fetchall()]
+
+    # Buscar insights (ready e delivered)
+    cursor.execute("""
+        SELECT id, symbol, question, full_message, depth_score, status,
+               datetime(created_at, 'localtime') as created_at,
+               datetime(delivered_at, 'localtime') as delivered_at
+        FROM rumination_insights
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 10
+    """, (ADMIN_USER_ID,))
+    insights = [dict(row) for row in cursor.fetchall()]
+
+    # Verificar se scheduler está rodando
+    scheduler_running = os.path.exists("rumination_scheduler.pid")
+    scheduler_pid = None
+    if scheduler_running:
+        try:
+            with open("rumination_scheduler.pid", "r") as f:
+                scheduler_pid = int(f.read().strip())
+        except:
+            scheduler_running = False
+
+    return templates.TemplateResponse(
+        "jung_lab.html",
+        {
+            "request": request,
+            "username": username,
+            "stats": stats,
+            "fragments": fragments,
+            "tensions": tensions,
+            "insights": insights,
+            "scheduler_running": scheduler_running,
+            "scheduler_pid": scheduler_pid
+        }
+    )
+
+
+@router.post("/api/jung-lab/digest")
+async def run_manual_digest(
+    username: str = Depends(verify_credentials)
+):
+    """Executa digestão manual do sistema de ruminação"""
+    from rumination_config import ADMIN_USER_ID
+    from jung_rumination import RuminationEngine
+
+    try:
+        db = get_db()
+        rumination = RuminationEngine(db)
+
+        # Executar digestão
+        digest_stats = rumination.digest(ADMIN_USER_ID)
+
+        # Verificar se há insights para entregar
+        delivered_id = rumination.check_and_deliver(ADMIN_USER_ID)
+
+        # Obter estatísticas atualizadas
+        stats = rumination.get_stats(ADMIN_USER_ID)
+
+        return JSONResponse({
+            "success": True,
+            "digest_stats": digest_stats,
+            "delivered_insight_id": delivered_id,
+            "current_stats": stats,
+            "message": "Digestão executada com sucesso"
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Erro na digestão manual: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.post("/api/jung-lab/scheduler/{action}")
+async def control_scheduler(
+    action: str,
+    username: str = Depends(verify_credentials)
+):
+    """Controla o scheduler de ruminação (start/stop)"""
+    import subprocess
+    import os
+    import signal
+    import sys
+
+    pid_file = "rumination_scheduler.pid"
+
+    try:
+        if action == "start":
+            # Verificar se já está rodando
+            if os.path.exists(pid_file):
+                return JSONResponse({
+                    "success": False,
+                    "message": "Scheduler já está rodando"
+                }, status_code=400)
+
+            # Iniciar processo em background
+            python_exe = sys.executable
+            process = subprocess.Popen(
+                [python_exe, "rumination_scheduler.py"],
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+
+            # Salvar PID
+            with open(pid_file, "w") as f:
+                f.write(str(process.pid))
+
+            return JSONResponse({
+                "success": True,
+                "pid": process.pid,
+                "message": "Scheduler iniciado com sucesso"
+            })
+
+        elif action == "stop":
+            # Verificar se está rodando
+            if not os.path.exists(pid_file):
+                return JSONResponse({
+                    "success": False,
+                    "message": "Scheduler não está rodando"
+                }, status_code=400)
+
+            # Ler PID e matar processo
+            with open(pid_file, "r") as f:
+                pid = int(f.read().strip())
+
+            try:
+                os.kill(pid, signal.SIGTERM)
+                os.remove(pid_file)
+
+                return JSONResponse({
+                    "success": True,
+                    "message": "Scheduler parado com sucesso"
+                })
+            except ProcessLookupError:
+                # Processo já morreu, apenas remove PID file
+                os.remove(pid_file)
+                return JSONResponse({
+                    "success": True,
+                    "message": "Scheduler não estava rodando (PID file removido)"
+                })
+
+        else:
+            return JSONResponse({
+                "success": False,
+                "message": f"Ação inválida: {action}"
+            }, status_code=400)
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao controlar scheduler: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)

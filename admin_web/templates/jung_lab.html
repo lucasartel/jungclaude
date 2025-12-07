@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jung Lab - Sistema de Ruminação</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0e27;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        header {
+            background: linear-gradient(135deg, #1a1f3a 0%, #2d1b4e 100%);
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            font-size: 2.2em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #a78bfa 0%, #ec4899 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            color: #9ca3af;
+            font-size: 0.95em;
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4);
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+            color: white;
+        }
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(220, 38, 38, 0.4);
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            color: white;
+        }
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(5, 150, 105, 0.4);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .stat-card h3 {
+            color: #a78bfa;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        .stat-card .value {
+            font-size: 2.5em;
+            font-weight: 700;
+            color: #e0e0e0;
+        }
+        .stat-card .detail {
+            color: #9ca3af;
+            font-size: 0.85em;
+            margin-top: 8px;
+        }
+        .section {
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .section h2 {
+            color: #ec4899;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            background: #0f172a;
+            padding: 12px;
+            text-align: left;
+            color: #a78bfa;
+            font-weight: 600;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        td {
+            padding: 15px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        tr:hover {
+            background: rgba(167, 139, 250, 0.05);
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-valor { background: #3b82f6; color: white; }
+        .badge-desejo { background: #f59e0b; color: white; }
+        .badge-medo { background: #ef4444; color: white; }
+        .badge-comportamento { background: #10b981; color: white; }
+        .badge-contradição { background: #8b5cf6; color: white; }
+        .badge-emoção { background: #ec4899; color: white; }
+        .badge-crença { background: #06b6d4; color: white; }
+        .badge-dúvida { background: #64748b; color: white; }
+        .badge-open { background: #3b82f6; color: white; }
+        .badge-maturing { background: #f59e0b; color: white; }
+        .badge-ready { background: #10b981; color: white; }
+        .badge-synthesized { background: #8b5cf6; color: white; }
+        .badge-delivered { background: #ec4899; color: white; }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #0f172a;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #7c3aed 0%, #ec4899 100%);
+            transition: width 0.3s;
+        }
+        .scheduler-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        .status-running {
+            background: #10b981;
+            box-shadow: 0 0 10px #10b981;
+        }
+        .status-stopped {
+            background: #64748b;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .quote {
+            font-style: italic;
+            color: #9ca3af;
+            margin-top: 8px;
+            padding-left: 12px;
+            border-left: 3px solid #7c3aed;
+        }
+        .message-box {
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        .message-success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid #10b981;
+            color: #10b981;
+        }
+        .message-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid #ef4444;
+            color: #ef4444;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧠 Jung Lab</h1>
+            <p class="subtitle">Sistema de Ruminação Cognitiva - Processamento Profundo ao Longo do Tempo</p>
+
+            <div class="scheduler-status">
+                <div class="status-dot {% if scheduler_running %}status-running{% else %}status-stopped{% endif %}"></div>
+                <span>
+                    Scheduler: <strong>{% if scheduler_running %}Rodando{% else %}Parado{% endif %}</strong>
+                    {% if scheduler_pid %} (PID: {{ scheduler_pid }}){% endif %}
+                </span>
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-primary" onclick="runDigest()">▶ Executar Digestão Manual</button>
+                {% if scheduler_running %}
+                    <button class="btn btn-danger" onclick="controlScheduler('stop')">⏸ Parar Scheduler</button>
+                {% else %}
+                    <button class="btn btn-success" onclick="controlScheduler('start')">▶ Iniciar Scheduler</button>
+                {% endif %}
+            </div>
+
+            <div id="message" class="message-box"></div>
+        </header>
+
+        <!-- Estatísticas Gerais -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>📝 Fragmentos</h3>
+                <div class="value">{{ stats.fragments_total }}</div>
+                <div class="detail">{{ stats.fragments_unprocessed }} não processados</div>
+            </div>
+            <div class="stat-card">
+                <h3>⚡ Tensões Ativas</h3>
+                <div class="value">{{ stats.tensions_total }}</div>
+                <div class="detail">
+                    Open: {{ stats.tensions_open }} |
+                    Maturing: {{ stats.tensions_maturing }} |
+                    Ready: {{ stats.tensions_ready }}
+                </div>
+            </div>
+            <div class="stat-card">
+                <h3>💎 Insights</h3>
+                <div class="value">{{ stats.insights_total }}</div>
+                <div class="detail">
+                    Ready: {{ stats.insights_ready }} |
+                    Delivered: {{ stats.insights_delivered }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Fragmentos Recentes -->
+        <div class="section">
+            <h2>📝 Fragmentos Recentes</h2>
+            {% if fragments %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Tipo</th>
+                            <th>Conteúdo</th>
+                            <th>Peso Emocional</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for frag in fragments %}
+                        <tr>
+                            <td>#{{ frag.id }}</td>
+                            <td><span class="badge badge-{{ frag.type }}">{{ frag.type }}</span></td>
+                            <td>
+                                {{ frag.content }}
+                                <div class="quote">"{{ frag.quote }}"</div>
+                            </td>
+                            <td>
+                                {{ "%.1f"|format(frag.emotional_weight * 10) }}/10
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: {{ frag.emotional_weight * 100 }}%"></div>
+                                </div>
+                            </td>
+                            <td>{{ frag.created_at }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="empty-state">Nenhum fragmento extraído ainda</div>
+            {% endif %}
+        </div>
+
+        <!-- Tensões Ativas -->
+        <div class="section">
+            <h2>⚡ Tensões em Processamento</h2>
+            {% if tensions %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Tipo</th>
+                            <th>Tensão</th>
+                            <th>Intensidade</th>
+                            <th>Maturidade</th>
+                            <th>Status</th>
+                            <th>Última Revisita</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tension in tensions %}
+                        <tr>
+                            <td>#{{ tension.id }}</td>
+                            <td>{{ tension.type.replace('_', ' ').title() }}</td>
+                            <td>
+                                <strong>A:</strong> {{ tension.pole_a_content }}<br>
+                                <strong>B:</strong> {{ tension.pole_b_content }}<br>
+                                <div class="quote">{{ tension.description }}</div>
+                            </td>
+                            <td>
+                                {{ "%.0f"|format(tension.intensity * 100) }}%
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: {{ tension.intensity * 100 }}%"></div>
+                                </div>
+                            </td>
+                            <td>
+                                {{ "%.0f"|format(tension.maturity * 100) }}%
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: {{ tension.maturity * 100 }}%"></div>
+                                </div>
+                            </td>
+                            <td><span class="badge badge-{{ tension.status }}">{{ tension.status }}</span></td>
+                            <td>{{ tension.last_revisit or 'Nunca' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="empty-state">Nenhuma tensão detectada ainda</div>
+            {% endif %}
+        </div>
+
+        <!-- Insights -->
+        <div class="section">
+            <h2>💎 Insights Gerados</h2>
+            {% if insights %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Símbolo</th>
+                            <th>Mensagem</th>
+                            <th>Profundidade</th>
+                            <th>Status</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for insight in insights %}
+                        <tr>
+                            <td>#{{ insight.id }}</td>
+                            <td>{{ insight.symbol }}</td>
+                            <td>
+                                {{ insight.full_message }}
+                                <div class="quote">Pergunta: {{ insight.question }}</div>
+                            </td>
+                            <td>
+                                {{ "%.0f"|format(insight.depth_score * 100) }}%
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: {{ insight.depth_score * 100 }}%"></div>
+                                </div>
+                            </td>
+                            <td><span class="badge badge-{{ insight.status }}">{{ insight.status }}</span></td>
+                            <td>
+                                Criado: {{ insight.created_at }}<br>
+                                {% if insight.delivered_at %}Entregue: {{ insight.delivered_at }}{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="empty-state">Nenhum insight gerado ainda</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        function showMessage(text, type) {
+            const msgBox = document.getElementById('message');
+            msgBox.className = 'message-box message-' + type;
+            msgBox.textContent = text;
+            msgBox.style.display = 'block';
+            setTimeout(() => {
+                msgBox.style.display = 'none';
+            }, 5000);
+        }
+
+        async function runDigest() {
+            try {
+                const response = await fetch('/admin/api/jung-lab/digest', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage('Digestão executada com sucesso!', 'success');
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    showMessage('Erro: ' + (data.error || 'Desconhecido'), 'error');
+                }
+            } catch (error) {
+                showMessage('Erro ao executar digestão: ' + error.message, 'error');
+            }
+        }
+
+        async function controlScheduler(action) {
+            try {
+                const response = await fetch(`/admin/api/jung-lab/scheduler/${action}`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage(data.message, 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showMessage('Erro: ' + data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('Erro ao controlar scheduler: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
