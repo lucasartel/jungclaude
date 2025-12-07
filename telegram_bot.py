@@ -25,7 +25,7 @@ import os
 import logging
 import asyncio
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List
+from typing import Optional
 
 from telegram import Update, BotCommand
 from telegram.ext import (
@@ -81,8 +81,8 @@ ADMIN_IDS = Config.TELEGRAM_ADMIN_IDS
 # ============================================================
 
 class BotState:
-    """Gerencia estado global do bot HÍBRIDO + PROATIVO"""
-    
+    """Gerencia estado global do bot HÍBRIDO + PROATIVO - VERSÃO JUST-IN-TIME"""
+
     def __init__(self):
         # Componentes principais HÍBRIDOS
         self.db = HybridDatabaseManager()
@@ -91,40 +91,18 @@ class BotState:
         # ✅ Sistema Proativo Avançado
         self.proactive = ProactiveAdvancedSystem(db=self.db)
 
-        # Histórico de chat por usuário (para contexto)
-        # telegram_id -> List[Dict{"role": str, "content": str}]
-        self.chat_histories: Dict[int, List[Dict]] = {}
-
         # Estatísticas
         self.total_messages_processed = 0
         self.total_semantic_searches = 0
         self.total_proactive_messages_sent = 0
 
-        logger.info("✅ BotState HÍBRIDO + PROATIVO inicializado")
-    
-    def get_chat_history(self, telegram_id: int) -> List[Dict]:
-        """Retorna histórico de chat do usuário"""
-        return self.chat_histories.get(telegram_id, [])
-    
-    def add_to_chat_history(self, telegram_id: int, role: str, content: str):
-        """Adiciona mensagem ao histórico"""
-        if telegram_id not in self.chat_histories:
-            self.chat_histories[telegram_id] = []
-        
-        self.chat_histories[telegram_id].append({
-            "role": role,
-            "content": content
-        })
-        
-        # Limitar histórico a últimas 20 mensagens
-        if len(self.chat_histories[telegram_id]) > 20:
-            self.chat_histories[telegram_id] = self.chat_histories[telegram_id][-20:]
-    
-    def clear_chat_history(self, telegram_id: int):
-        """Limpa histórico de chat"""
-        if telegram_id in self.chat_histories:
-            del self.chat_histories[telegram_id]
-            logger.info(f"🗑️ Histórico limpo para telegram_id={telegram_id}")
+        logger.info("✅ BotState HÍBRIDO + PROATIVO (Just-in-Time) inicializado")
+
+    # ❌ REMOVIDO: chat_histories (cache em memória)
+    # ❌ REMOVIDO: get_chat_history()
+    # ❌ REMOVIDO: add_to_chat_history()
+    # ❌ REMOVIDO: clear_chat_history()
+    # ✅ Histórico agora é buscado do banco em tempo real (Just-in-Time)
 
 # Instância global do estado
 bot_state = BotState()
@@ -852,8 +830,7 @@ O que você decide?
                 except Exception as e:
                     logger.error(f"❌ Erro ao deletar do ChromaDB: {e}")
 
-            # Limpar histórico de chat
-            bot_state.clear_chat_history(telegram_id)
+            # ✅ Não precisa limpar cache (Just-in-Time busca do banco)
 
             await update.message.reply_text(
                 "🔄 **Reset executado!**\n\n"
@@ -872,14 +849,24 @@ O que você decide?
 
     await update.message.chat.send_action(action="typing")
 
-    # Adicionar ao histórico
-    bot_state.add_to_chat_history(telegram_id, "user", message_text)
-
-    # Buscar histórico completo
-    chat_history = bot_state.get_chat_history(telegram_id)
-
     try:
-        # Processar com JungianEngine (passa chat_history)
+        # 🆕 BUSCAR HISTÓRICO DO BANCO (incluindo proativas) - JUST-IN-TIME
+        conversations = bot_state.db.get_user_conversations(
+            user_id,
+            limit=10,  # Últimas 10 conversas
+            include_proactive=True  # ✅ INCLUIR PROATIVAS
+        )
+
+        # 🆕 CONVERTER PARA FORMATO CHAT_HISTORY
+        chat_history = bot_state.db.conversations_to_chat_history(conversations)
+
+        # Adicionar mensagem atual
+        chat_history.append({
+            "role": "user",
+            "content": message_text
+        })
+
+        # Processar com JungianEngine
         result = bot_state.jung_engine.process_message(
             user_id=user_id,
             message=message_text,
@@ -888,9 +875,6 @@ O que você decide?
         )
 
         response = result['response']
-
-        # Adicionar resposta ao histórico
-        bot_state.add_to_chat_history(telegram_id, "assistant", response)
 
         # Enviar resposta
         await update.message.reply_text(response)
@@ -906,7 +890,7 @@ O que você decide?
         if result.get('conflicts'):
             conflict_info = f" | Conflitos: {len(result['conflicts'])}"
 
-        logger.info(f"✅ Mensagem processada de {user.first_name}: {message_text[:50]}...{conflict_info}")
+        logger.info(f"✅ Mensagem processada (JIT): {message_text[:50]}...{conflict_info}")
 
     except Exception as e:
         logger.error(f"❌ Erro ao processar mensagem: {e}", exc_info=True)

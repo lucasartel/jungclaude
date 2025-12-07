@@ -1189,25 +1189,105 @@ Resposta: {ai_response}
 
         return conversation_id
     
-    def get_user_conversations(self, user_id: str, limit: int = 10) -> List[Dict]:
-        """Busca últimas conversas do usuário (SQLite)"""
+    def get_user_conversations(
+        self,
+        user_id: str,
+        limit: int = 10,
+        include_proactive: bool = False
+    ) -> List[Dict]:
+        """
+        Busca últimas conversas do usuário (SQLite)
+
+        Args:
+            user_id: ID do usuário
+            limit: Número máximo de conversas
+            include_proactive: Se True, inclui conversas com platform='proactive' ou 'proactive_rumination'
+
+        Returns:
+            Lista de conversas ordenadas por timestamp DESC
+        """
         cursor = self.conn.cursor()
-        
-        cursor.execute("""
-            SELECT * FROM conversations
-            WHERE user_id = ?
-            ORDER BY timestamp DESC
-            LIMIT ?
-        """, (user_id, limit))
-        
-        return [dict(row) for row in cursor.fetchall()]
+
+        if include_proactive:
+            # Incluir TODAS as conversas (reativas + proativas)
+            query = """
+                SELECT * FROM conversations
+                WHERE user_id = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """
+            params = (user_id, limit)
+        else:
+            # Comportamento padrão: excluir proativas
+            query = """
+                SELECT * FROM conversations
+                WHERE user_id = ?
+                  AND (platform IS NULL OR platform NOT IN ('proactive', 'proactive_rumination'))
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """
+            params = (user_id, limit)
+
+        cursor.execute(query, params)
+
+        conversations = []
+        for row in cursor.fetchall():
+            conv = dict(row)
+
+            # Parse keywords se for JSON string
+            if conv.get('keywords') and isinstance(conv['keywords'], str):
+                try:
+                    conv['keywords'] = json.loads(conv['keywords'])
+                except:
+                    conv['keywords'] = []
+
+            conversations.append(conv)
+
+        return conversations
     
     def count_conversations(self, user_id: str) -> int:
         """Conta conversas do usuário"""
         cursor = self.conn.cursor()
         cursor.execute("SELECT COUNT(*) as count FROM conversations WHERE user_id = ?", (user_id,))
         return cursor.fetchone()['count']
-    
+
+    def conversations_to_chat_history(self, conversations: List[Dict]) -> List[Dict]:
+        """
+        Converte conversas do banco para formato chat_history.
+
+        Args:
+            conversations: Lista de conversas do banco (ORDER BY timestamp DESC)
+
+        Returns:
+            Lista de dicts {"role": "user"/"assistant", "content": str}
+            em ordem cronológica (mais antiga primeiro)
+        """
+        history = []
+
+        # Inverter para ordem cronológica (mais antiga → mais recente)
+        for conv in reversed(conversations):
+            user_input = conv.get('user_input', '')
+
+            # Filtrar marcadores de sistema proativo
+            if user_input not in [
+                "[SISTEMA PROATIVO INICIOU CONTATO]",
+                "[INSIGHT RUMINADO - SISTEMA PROATIVO]"
+            ]:
+                history.append({
+                    "role": "user",
+                    "content": user_input
+                })
+
+            # Resposta do agente (sempre incluir)
+            ai_response = conv.get('ai_response', '')
+            if ai_response:
+                history.append({
+                    "role": "assistant",
+                    "content": ai_response
+                })
+
+        return history
+
     # ========================================
     # BUSCA SEMÂNTICA (ChromaDB)
     # ========================================
