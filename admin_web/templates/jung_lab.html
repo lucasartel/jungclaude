@@ -252,6 +252,7 @@
             <div class="controls">
                 <button class="btn btn-primary" onclick="runDigest()">▶ Executar Digestão Manual</button>
                 <button class="btn btn-primary" onclick="runDiagnosis()" style="background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);">🔍 Diagnóstico</button>
+                <button class="btn btn-primary" onclick="fixPlatform()" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">🔧 Fix Platform</button>
                 {% if scheduler_running %}
                     <button class="btn btn-danger" onclick="controlScheduler('stop')">⏸ Parar Scheduler</button>
                 {% else %}
@@ -499,6 +500,14 @@
                     message += `  Última: ${data.conversations.last.timestamp} [${data.conversations.last.platform}]\n`;
                 }
 
+                if (data.conversations.recent_samples) {
+                    message += `\n  Últimas 5 conversas:\n`;
+                    data.conversations.recent_samples.forEach((conv, i) => {
+                        message += `    ${i+1}. [${conv.platform || 'NULL'}] ${conv.timestamp}\n`;
+                        message += `       "${conv.preview}..."\n`;
+                    });
+                }
+
                 if (data.rumination_tables.found) {
                     message += `\n🗄️  TABELAS:\n`;
                     for (const [table, info] of Object.entries(data.rumination_tables)) {
@@ -539,6 +548,40 @@
 
             } catch (error) {
                 showMessage('Erro ao executar diagnóstico: ' + error.message, 'error');
+            }
+        }
+
+        async function fixPlatform() {
+            if (!confirm('Isso vai atualizar conversas antigas para platform="telegram".\n\nContinuar?')) {
+                return;
+            }
+
+            try {
+                showMessage('Executando fix...', 'info');
+
+                const response = await fetch('/admin/api/jung-lab/fix-platform', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage(data.message, 'success');
+
+                    // Mostrar detalhes
+                    if (data.updated > 0) {
+                        alert(`✅ FIX EXECUTADO COM SUCESSO!\n\n${data.updated} conversas foram atualizadas para platform='telegram'.\n\nAgora:\n1. Envie uma nova mensagem no Telegram\n2. Execute o Diagnóstico novamente\n3. Verifique se fragmentos foram criados`);
+
+                        // Recarregar página após 2 segundos
+                        setTimeout(() => location.reload(), 2000);
+                    } else {
+                        alert('ℹ️ Nenhuma conversa precisou ser atualizada.\n\nTodas as conversas já têm platform correto.');
+                    }
+                } else {
+                    showMessage('Erro: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showMessage('Erro ao executar fix: ' + error.message, 'error');
             }
         }
     </script>

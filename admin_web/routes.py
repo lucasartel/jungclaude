@@ -1454,6 +1454,23 @@ async def diagnose_rumination(
                     "platform": last[1],
                     "preview": last[2][:100] if last[2] else None
                 }
+
+            # Últimas 5 conversas com plataforma (para debug)
+            cursor.execute('''
+                SELECT timestamp, platform, user_input
+                FROM conversations
+                WHERE user_id = ?
+                ORDER BY timestamp DESC
+                LIMIT 5
+            ''', (ADMIN_USER_ID,))
+            diagnosis["conversations"]["recent_samples"] = [
+                {
+                    "timestamp": row[0],
+                    "platform": row[1],
+                    "preview": row[2][:60] if row[2] else None
+                }
+                for row in cursor.fetchall()
+            ]
         else:
             diagnosis["problems"].append({
                 "severity": "CRITICAL",
@@ -1508,19 +1525,41 @@ async def diagnose_rumination(
             tension_count = diagnosis["rumination_tables"].get("rumination_tensions", {}).get("count", 0)
 
             if admin_conversations > 0 and frag_count == 0:
-                diagnosis["problems"].append({
-                    "severity": "HIGH",
-                    "issue": "Há conversas mas não há fragmentos",
-                    "details": "O hook de ruminação pode não estar sendo chamado ou a LLM não está extraindo fragmentos"
-                })
-                diagnosis["recommendations"].append({
-                    "action": "Verificar logs do bot para erros no hook de ruminação",
-                    "steps": [
-                        "1. Verificar se platform='telegram' nas conversas",
-                        "2. Verificar logs para warnings do hook",
-                        "3. Testar enviar nova mensagem e verificar se cria fragmentos"
-                    ]
-                })
+                # Verificar se tem conversas telegram
+                cursor.execute('''
+                    SELECT COUNT(*) FROM conversations
+                    WHERE user_id = ? AND platform = 'telegram'
+                ''', (ADMIN_USER_ID,))
+                telegram_count = cursor.fetchone()[0]
+
+                if telegram_count == 0:
+                    diagnosis["problems"].append({
+                        "severity": "HIGH",
+                        "issue": "Há conversas mas NENHUMA tem platform='telegram'",
+                        "details": f"Hook de ruminação só processa platform='telegram'. Conversas: {admin_conversations}, Telegram: {telegram_count}"
+                    })
+                    diagnosis["recommendations"].append({
+                        "action": "FIX: Atualizar conversas antigas para platform='telegram'",
+                        "steps": [
+                            "1. Executar SQL: UPDATE conversations SET platform='telegram' WHERE user_id='367f9e509e396d51' AND (platform IS NULL OR platform != 'telegram')",
+                            "2. Enviar nova mensagem no Telegram",
+                            "3. Verificar se agora cria fragmentos"
+                        ]
+                    })
+                else:
+                    diagnosis["problems"].append({
+                        "severity": "HIGH",
+                        "issue": "Há conversas mas não há fragmentos",
+                        "details": f"O hook de ruminação pode não estar sendo chamado ou a LLM não está extraindo fragmentos. Telegram: {telegram_count}/{admin_conversations}"
+                    })
+                    diagnosis["recommendations"].append({
+                        "action": "Verificar logs do bot para erros no hook de ruminação",
+                        "steps": [
+                            "1. Verificar logs Railway para warnings: '⚠️ Erro no hook de ruminação'",
+                            "2. Verificar se há mensagem '🧠 Ruminação: Ingestão executada' nos logs",
+                            "3. Testar enviar nova mensagem e verificar se cria fragmentos"
+                        ]
+                    })
 
             if frag_count > 0 and tension_count == 0:
                 diagnosis["problems"].append({
@@ -1561,4 +1600,58 @@ async def diagnose_rumination(
                 "issue": "Erro ao executar diagnóstico",
                 "details": str(e)
             }]
+        }, status_code=500)
+
+
+@router.post("/api/jung-lab/fix-platform")
+async def fix_platform_issue(
+    username: str = Depends(verify_credentials)
+):
+    """
+    FIX automático: Atualiza conversas antigas para platform='telegram'
+    Resolve o problema de conversas sem platform definido
+    """
+    from rumination_config import ADMIN_USER_ID
+
+    try:
+        db = get_db()
+        cursor = db.conn.cursor()
+
+        # Verificar quantas conversas serão atualizadas
+        cursor.execute('''
+            SELECT COUNT(*) FROM conversations
+            WHERE user_id = ?
+            AND (platform IS NULL OR platform NOT IN ('telegram', 'proactive', 'proactive_rumination'))
+        ''', (ADMIN_USER_ID,))
+        count_to_update = cursor.fetchone()[0]
+
+        if count_to_update == 0:
+            return JSONResponse({
+                "success": True,
+                "updated": 0,
+                "message": "Nenhuma conversa precisa ser atualizada"
+            })
+
+        # Atualizar conversas
+        cursor.execute('''
+            UPDATE conversations
+            SET platform = 'telegram'
+            WHERE user_id = ?
+            AND (platform IS NULL OR platform NOT IN ('telegram', 'proactive', 'proactive_rumination'))
+        ''', (ADMIN_USER_ID,))
+        db.conn.commit()
+
+        logger.info(f"✅ Platform fix: {count_to_update} conversas atualizadas para platform='telegram'")
+
+        return JSONResponse({
+            "success": True,
+            "updated": count_to_update,
+            "message": f"✅ {count_to_update} conversas atualizadas. Agora envie uma nova mensagem no Telegram para testar."
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Erro no fix de platform: {e}", exc_info=True)
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
         }, status_code=500)
