@@ -175,9 +175,12 @@ class RuminationEngine:
             return []
 
         # Verificar se conversa tem tensão mínima
-        if conversation_data.get('tension_level', 0) < MIN_TENSION_LEVEL:
-            logger.debug(f"⏭️  Conversa com tensão baixa ({conversation_data.get('tension_level')}) - pulando ingestão")
+        tension = conversation_data.get('tension_level', 0)
+        if tension < MIN_TENSION_LEVEL:
+            logger.info(f"⏭️  Conversa com tensão baixa ({tension:.1f} < {MIN_TENSION_LEVEL}) - pulando ingestão")
             return []
+
+        logger.info(f"✅ Tensão suficiente ({tension:.1f}) - iniciando extração de fragmentos...")
 
         user_input = conversation_data['user_input']
 
