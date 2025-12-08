@@ -1393,3 +1393,172 @@ async def control_scheduler(
     except Exception as e:
         logger.error(f"❌ Erro ao controlar scheduler: {e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.get("/api/jung-lab/diagnose")
+async def diagnose_rumination(
+    username: str = Depends(verify_credentials)
+):
+    """
+    Diagnóstico completo do sistema de ruminação
+    Verifica conversas, fragmentos, tensões e possíveis problemas
+    """
+    from rumination_config import ADMIN_USER_ID
+    from jung_rumination import RuminationEngine
+
+    try:
+        db = get_db()
+        cursor = db.conn.cursor()
+
+        diagnosis = {
+            "admin_user_id": ADMIN_USER_ID,
+            "conversations": {},
+            "rumination_tables": {},
+            "problems": [],
+            "recommendations": []
+        }
+
+        # 1. VERIFICAR CONVERSAS
+        cursor.execute('SELECT COUNT(*) FROM conversations')
+        total_conversations = cursor.fetchone()[0]
+        diagnosis["conversations"]["total"] = total_conversations
+
+        cursor.execute('SELECT COUNT(*) FROM conversations WHERE user_id = ?', (ADMIN_USER_ID,))
+        admin_conversations = cursor.fetchone()[0]
+        diagnosis["conversations"]["admin_total"] = admin_conversations
+
+        if admin_conversations > 0:
+            # Conversas por plataforma
+            cursor.execute('''
+                SELECT platform, COUNT(*) as count
+                FROM conversations
+                WHERE user_id = ?
+                GROUP BY platform
+            ''', (ADMIN_USER_ID,))
+            diagnosis["conversations"]["by_platform"] = {
+                row[0] or "NULL": row[1] for row in cursor.fetchall()
+            }
+
+            # Última conversa
+            cursor.execute('''
+                SELECT timestamp, platform, user_input
+                FROM conversations
+                WHERE user_id = ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+            ''', (ADMIN_USER_ID,))
+            last = cursor.fetchone()
+            if last:
+                diagnosis["conversations"]["last"] = {
+                    "timestamp": last[0],
+                    "platform": last[1],
+                    "preview": last[2][:100] if last[2] else None
+                }
+        else:
+            diagnosis["problems"].append({
+                "severity": "CRITICAL",
+                "issue": "Não há conversas do admin no banco de dados",
+                "details": f"User ID configurado: {ADMIN_USER_ID}"
+            })
+            diagnosis["recommendations"].append({
+                "action": "Verificar se o bot está rodando e recebendo mensagens",
+                "steps": [
+                    "1. Enviar mensagem de teste no Telegram",
+                    "2. Verificar logs do Railway para erros",
+                    f"3. Confirmar que seu Telegram ID é: {ADMIN_USER_ID}",
+                    "4. Verificar se o bot está salvando conversas corretamente"
+                ]
+            })
+
+        # 2. VERIFICAR TABELAS DE RUMINAÇÃO
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%rumination%'")
+        tables = [row[0] for row in cursor.fetchall()]
+
+        if not tables:
+            diagnosis["problems"].append({
+                "severity": "HIGH",
+                "issue": "Tabelas de ruminação não existem",
+                "details": "As tabelas deveriam ser criadas automaticamente"
+            })
+            diagnosis["recommendations"].append({
+                "action": "Reiniciar o serviço web para criar as tabelas",
+                "steps": [
+                    "1. Fazer deploy no Railway",
+                    "2. Aguardar inicialização completa",
+                    "3. Acessar /admin/jung-lab novamente"
+                ]
+            })
+        else:
+            diagnosis["rumination_tables"]["found"] = tables
+
+            for table in tables:
+                cursor.execute(f'SELECT COUNT(*) FROM {table} WHERE user_id = ?', (ADMIN_USER_ID,))
+                count = cursor.fetchone()[0]
+                diagnosis["rumination_tables"][table] = {
+                    "count": count
+                }
+
+                if count > 0:
+                    # Get sample
+                    cursor.execute(f'SELECT * FROM {table} WHERE user_id = ? LIMIT 1', (ADMIN_USER_ID,))
+                    diagnosis["rumination_tables"][table]["has_data"] = True
+
+            # Verificar problemas específicos
+            frag_count = diagnosis["rumination_tables"].get("rumination_fragments", {}).get("count", 0)
+            tension_count = diagnosis["rumination_tables"].get("rumination_tensions", {}).get("count", 0)
+
+            if admin_conversations > 0 and frag_count == 0:
+                diagnosis["problems"].append({
+                    "severity": "HIGH",
+                    "issue": "Há conversas mas não há fragmentos",
+                    "details": "O hook de ruminação pode não estar sendo chamado ou a LLM não está extraindo fragmentos"
+                })
+                diagnosis["recommendations"].append({
+                    "action": "Verificar logs do bot para erros no hook de ruminação",
+                    "steps": [
+                        "1. Verificar se platform='telegram' nas conversas",
+                        "2. Verificar logs para warnings do hook",
+                        "3. Testar enviar nova mensagem e verificar se cria fragmentos"
+                    ]
+                })
+
+            if frag_count > 0 and tension_count == 0:
+                diagnosis["problems"].append({
+                    "severity": "MEDIUM",
+                    "issue": "Há fragmentos mas não há tensões",
+                    "details": f"Com {frag_count} fragmentos, deveria haver pelo menos algumas tensões detectadas"
+                })
+                diagnosis["recommendations"].append({
+                    "action": "Verificar detecção de tensões",
+                    "steps": [
+                        "1. Enviar mais mensagens com temas contraditórios",
+                        "2. Verificar logs da LLM durante detecção",
+                        f"3. Considerar que pode precisar de mais fragmentos (atual: {frag_count})"
+                    ]
+                })
+
+        # 3. STATUS GERAL
+        if len(diagnosis["problems"]) == 0:
+            if admin_conversations > 0:
+                diagnosis["status"] = "OK"
+                diagnosis["message"] = "Sistema funcionando corretamente"
+            else:
+                diagnosis["status"] = "NO_DATA"
+                diagnosis["message"] = "Sistema pronto mas sem dados para processar"
+        else:
+            diagnosis["status"] = "ERROR"
+            diagnosis["message"] = f"Encontrados {len(diagnosis['problems'])} problemas"
+
+        return JSONResponse(diagnosis)
+
+    except Exception as e:
+        logger.error(f"❌ Erro no diagnóstico: {e}", exc_info=True)
+        return JSONResponse({
+            "status": "ERROR",
+            "error": str(e),
+            "problems": [{
+                "severity": "CRITICAL",
+                "issue": "Erro ao executar diagnóstico",
+                "details": str(e)
+            }]
+        }, status_code=500)
