@@ -170,12 +170,17 @@ class RuminationEngine:
         """
         user_id = conversation_data['user_id']
 
+        logger.info(f"🔍 INGEST chamado: user={user_id}, admin={self.admin_user_id}")
+
         # Verificar se é admin
         if user_id != self.admin_user_id:
+            logger.info(f"⏭️  User não é admin - pulando")
             return []
 
         # Verificar se conversa tem tensão mínima
         tension = conversation_data.get('tension_level', 0)
+        logger.info(f"🔍 Tensão da conversa: {tension:.1f} (mín: {MIN_TENSION_LEVEL})")
+
         if tension < MIN_TENSION_LEVEL:
             logger.info(f"⏭️  Conversa com tensão baixa ({tension:.1f} < {MIN_TENSION_LEVEL}) - pulando ingestão")
             return []
