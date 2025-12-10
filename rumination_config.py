@@ -13,7 +13,7 @@ ADMIN_USER_ID = "367f9e509e396d51"  # Único usuário com ruminação ativa
 # ============================================================
 MIN_EMOTIONAL_WEIGHT = 0.3  # Fragmentos abaixo disso são ignorados
 MAX_FRAGMENTS_PER_CONVERSATION = 5  # Evitar extração excessiva
-MIN_TENSION_LEVEL = 1  # Mínimo de tension_level para processar conversa (qualquer conflito)
+MIN_TENSION_LEVEL = 0.5  # Mínimo de tension_level para processar conversa (tensão moderada+)
 
 # ============================================================
 # FASE 2: DETECÇÃO DE TENSÕES
