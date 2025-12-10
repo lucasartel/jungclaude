@@ -252,6 +252,7 @@
             <div class="controls">
                 <button class="btn btn-primary" onclick="runDigest()">▶ Executar Digestão Manual</button>
                 <button class="btn btn-primary" onclick="runDiagnosis()" style="background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);">🔍 Diagnóstico</button>
+                <button class="btn btn-primary" onclick="runDebugFull()" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">🐛 Debug Completo</button>
                 <button class="btn btn-primary" onclick="fixPlatform()" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">🔧 Fix Platform</button>
                 {% if scheduler_running %}
                     <button class="btn btn-danger" onclick="controlScheduler('stop')">⏸ Parar Scheduler</button>
@@ -582,6 +583,92 @@
                 }
             } catch (error) {
                 showMessage('Erro ao executar fix: ' + error.message, 'error');
+            }
+        }
+
+        async function runDebugFull() {
+            try {
+                showMessage('Executando debug completo...', 'info');
+
+                const response = await fetch('/admin/api/jung-lab/debug-full', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+
+                // Create comprehensive report
+                let message = `🐛 DEBUG COMPLETO DO SISTEMA DE RUMINAÇÃO\n\n`;
+                message += `Status: ${data.status}\n`;
+                message += `Mensagem: ${data.message}\n\n`;
+
+                // Config
+                message += `⚙️ CONFIGURAÇÃO:\n`;
+                message += `  Admin ID: ${data.config.admin_user_id}\n`;
+                message += `  MIN_TENSION: ${data.config.min_tension_level}\n\n`;
+
+                // Tables
+                message += `📊 TABELAS:\n`;
+                for (const [table, info] of Object.entries(data.tables)) {
+                    if (info.exists) {
+                        message += `  ✅ ${table}: ${info.count} registros\n`;
+                    } else {
+                        message += `  ❌ ${table}: NÃO EXISTE\n`;
+                    }
+                }
+
+                // Conversations
+                message += `\n💬 CONVERSAS:\n`;
+                message += `  Total: ${data.conversations.total}\n`;
+                if (data.conversations.by_platform) {
+                    message += `  Por plataforma:\n`;
+                    for (const [platform, count] of Object.entries(data.conversations.by_platform)) {
+                        message += `    - ${platform}: ${count}\n`;
+                    }
+                }
+
+                // Telegram specific
+                message += `\n📱 TELEGRAM:\n`;
+                message += `  Count: ${data.telegram_conversations.count}\n`;
+
+                // Fragments
+                message += `\n🧩 FRAGMENTOS:\n`;
+                message += `  Count: ${data.fragments.count}\n`;
+
+                // Hook code
+                message += `\n🔧 HOOK CODE:\n`;
+                message += `  Present: ${data.hook_code.present ? 'SIM' : 'NÃO'}\n`;
+                if (data.hook_code.lines_count !== undefined) {
+                    message += `  Lines: ${data.hook_code.lines_count}\n`;
+                }
+
+                // Imports
+                message += `\n📦 IMPORTS:\n`;
+                for (const [module, status] of Object.entries(data.imports)) {
+                    message += `  ${module}: ${status}\n`;
+                }
+
+                // Problems
+                if (data.problems.length > 0) {
+                    message += `\n❌ PROBLEMAS (${data.problems.length}):\n`;
+                    data.problems.forEach(p => message += `  - ${p}\n`);
+                }
+
+                // Recommendations
+                if (data.recommendations.length > 0) {
+                    message += `\n💡 RECOMENDAÇÕES:\n`;
+                    data.recommendations.forEach(r => message += `  - ${r}\n`);
+                }
+
+                alert(message);
+
+                // Show summary message
+                if (data.status === 'OK') {
+                    showMessage('✅ Sistema aparentemente funcional', 'success');
+                } else {
+                    showMessage(`❌ ${data.problems.length} problema(s) encontrado(s)`, 'error');
+                }
+
+            } catch (error) {
+                showMessage('Erro ao executar debug: ' + error.message, 'error');
             }
         }
     </script>
