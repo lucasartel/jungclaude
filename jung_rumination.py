@@ -171,6 +171,8 @@ class RuminationEngine:
         user_id = conversation_data['user_id']
 
         logger.info(f"🔍 INGEST chamado: user={user_id}, admin={self.admin_user_id}")
+        logger.info(f"🔍 INGEST tipos: user_id type={type(user_id)}, admin_id type={type(self.admin_user_id)}")
+        logger.info(f"🔍 INGEST comparação: user_id == admin_id? {user_id == self.admin_user_id}")
 
         # Verificar se é admin
         if user_id != self.admin_user_id:
