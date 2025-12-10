@@ -26,35 +26,47 @@
 
         /* Jung Lab Theme - Dark Mode Overrides */
         body {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%) !important;
+            background: #000000 !important;
             color: #e2e8f0 !important;
             min-height: 100vh;
         }
 
         /* Background Colors */
         .bg-white {
-            background: rgba(30, 41, 59, 0.7) !important;
+            background: rgba(15, 23, 42, 0.8) !important;
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(148, 163, 184, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.2);
         }
 
         .bg-gray-50 {
-            background: rgba(15, 23, 42, 0.5) !important;
+            background: rgba(15, 23, 42, 0.6) !important;
         }
 
         .bg-gray-100 {
-            background: rgba(51, 65, 85, 0.5) !important;
+            background: rgba(30, 41, 59, 0.6) !important;
         }
 
         .bg-indigo-50 {
-            background: rgba(139, 92, 246, 0.1) !important;
+            background: rgba(139, 92, 246, 0.15) !important;
         }
 
         .bg-green-50 {
-            background: rgba(34, 197, 94, 0.1) !important;
+            background: rgba(34, 197, 94, 0.15) !important;
         }
 
-        /* Text Colors */
+        .bg-yellow-50 {
+            background: rgba(251, 191, 36, 0.15) !important;
+        }
+
+        .bg-blue-50 {
+            background: rgba(59, 130, 246, 0.15) !important;
+        }
+
+        .bg-red-50 {
+            background: rgba(239, 68, 68, 0.15) !important;
+        }
+
+        /* Text Colors - Garantir contraste adequado */
         .text-gray-900,
         .text-gray-800,
         .text-gray-700 {
@@ -70,11 +82,63 @@
         }
 
         .text-indigo-600 {
-            color: #a78bfa !important;
+            color: #c4b5fd !important;
+        }
+
+        .text-indigo-700 {
+            color: #c4b5fd !important;
+        }
+
+        .text-indigo-900 {
+            color: #ddd6fe !important;
         }
 
         .text-green-600 {
             color: #4ade80 !important;
+        }
+
+        .text-green-700 {
+            color: #4ade80 !important;
+        }
+
+        .text-green-800 {
+            color: #86efac !important;
+        }
+
+        .text-green-900 {
+            color: #86efac !important;
+        }
+
+        .text-yellow-700 {
+            color: #fbbf24 !important;
+        }
+
+        .text-yellow-800 {
+            color: #fcd34d !important;
+        }
+
+        .text-yellow-900 {
+            color: #fcd34d !important;
+        }
+
+        .text-blue-700 {
+            color: #60a5fa !important;
+        }
+
+        .text-red-700 {
+            color: #f87171 !important;
+        }
+
+        .text-red-800 {
+            color: #fca5a5 !important;
+        }
+
+        .text-purple-600 {
+            color: #c084fc !important;
+        }
+
+        .text-purple-900 {
+            color: #d8b4fe !important;
         }
 
         /* Border Colors */
@@ -117,11 +181,23 @@
         }
 
         thead {
+            background: rgba(15, 23, 42, 0.9) !important;
+        }
+
+        thead th {
+            color: #f1f5f9 !important;
+        }
+
+        tbody {
             background: rgba(15, 23, 42, 0.6) !important;
         }
 
+        tbody td {
+            color: #e2e8f0 !important;
+        }
+
         tbody tr:hover {
-            background: rgba(139, 92, 246, 0.1) !important;
+            background: rgba(139, 92, 246, 0.2) !important;
         }
 
         /* Cards */
@@ -173,26 +249,55 @@
         /* Status Badges */
         .bg-green-100 {
             background: rgba(34, 197, 94, 0.2) !important;
+            border: 1px solid rgba(34, 197, 94, 0.4);
         }
 
         .bg-yellow-100 {
             background: rgba(251, 191, 36, 0.2) !important;
+            border: 1px solid rgba(251, 191, 36, 0.4);
         }
 
         .bg-red-100 {
             background: rgba(239, 68, 68, 0.2) !important;
+            border: 1px solid rgba(239, 68, 68, 0.4);
         }
 
-        .text-green-800 {
-            color: #4ade80 !important;
+        .bg-gray-100 {
+            color: #e2e8f0 !important;
         }
 
-        .text-yellow-800 {
-            color: #fbbf24 !important;
+        .text-green-800,
+        .text-green-700 {
+            color: #86efac !important;
         }
 
-        .text-red-800 {
-            color: #f87171 !important;
+        .text-yellow-800,
+        .text-yellow-700 {
+            color: #fcd34d !important;
+        }
+
+        .text-red-800,
+        .text-red-700 {
+            color: #fca5a5 !important;
+        }
+
+        .text-gray-800 {
+            color: #f1f5f9 !important;
+        }
+
+        /* Specific fixes for colored backgrounds */
+        .bg-indigo-100 {
+            background: rgba(139, 92, 246, 0.2) !important;
+        }
+
+        .text-indigo-600,
+        .text-indigo-700 {
+            color: #c4b5fd !important;
+        }
+
+        /* White text on colored backgrounds */
+        .text-white {
+            color: #ffffff !important;
         }
     </style>
 </head>
