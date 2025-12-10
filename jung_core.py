@@ -55,9 +55,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Log build version for deployment verification
-logger.info("🔨 jung_core.py Build: 20251210-0246 (Rumination Hooks)")
-
 # ============================================================
 # DATACLASSES
 # ============================================================
@@ -1176,10 +1173,7 @@ Resposta: {ai_response}
         # 7. HOOK: Sistema de Ruminação (só para admin)
         try:
             from rumination_config import ADMIN_USER_ID
-            logger.info(f"🔍 Hook ruminação: user_id={user_id}, admin={ADMIN_USER_ID}, platform={platform}")
-
             if user_id == ADMIN_USER_ID and platform == "telegram":
-                logger.info("✅ Condições atendidas, iniciando ingestão...")
                 from jung_rumination import RuminationEngine
                 rumination = RuminationEngine(self)
                 rumination.ingest({
@@ -1190,13 +1184,8 @@ Resposta: {ai_response}
                     "tension_level": tension_level,
                     "affective_charge": affective_charge
                 })
-                logger.info("🧠 Ruminação: Ingestão executada")
-            else:
-                logger.info(f"⏭️ Hook ruminação ignorado (user_id={user_id == ADMIN_USER_ID}, platform={platform == 'telegram'})")
         except Exception as e:
             logger.warning(f"⚠️ Erro no hook de ruminação: {e}")
-            import traceback
-            logger.warning(traceback.format_exc())
 
         return conversation_id
     

@@ -251,9 +251,6 @@
 
             <div class="controls">
                 <button class="btn btn-primary" onclick="runDigest()">▶ Executar Digestão Manual</button>
-                <button class="btn btn-primary" onclick="runDiagnosis()" style="background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);">🔍 Diagnóstico</button>
-                <button class="btn btn-primary" onclick="runDebugFull()" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">🐛 Debug Completo</button>
-                <button class="btn btn-primary" onclick="fixPlatform()" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">🔧 Fix Platform</button>
                 {% if scheduler_running %}
                     <button class="btn btn-danger" onclick="controlScheduler('stop')">⏸ Parar Scheduler</button>
                 {% else %}
