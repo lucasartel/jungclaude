@@ -13,8 +13,9 @@ jung_core.py - Motor Junguiano HÍBRIDO PREMIUM
 - Sistema Proativo (jung_proactive.py)
 
 Autor: Sistema Jung Claude
-Versão: 4.1 - PROMPTS RENOVADOS (Anti-Repetição + Vozes Distintas)
-Data: 2025-11-25
+Versão: 4.2 - RUMINAÇÃO HOOKS + DEBUG COMPLETO
+Data: 2025-12-10
+Build: 20251210-0246 (Force rebuild to deploy rumination hooks)
 """
 
 import os
@@ -53,6 +54,9 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Log build version for deployment verification
+logger.info("🔨 jung_core.py Build: 20251210-0246 (Rumination Hooks)")
 
 # ============================================================
 # DATACLASSES

@@ -1,0 +1,8 @@
+Force rebuild timestamp: 2025-12-10T02:46:00Z
+
+This file forces Railway to rebuild the entire container.
+Change this file to trigger a fresh build without cache.
+
+Build ID: rebuild-20251210-0246
+Reason: Railway cache preventing hook code deployment
+Expected: Hook logs should appear after this rebuild
