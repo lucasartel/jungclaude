@@ -13,19 +13,14 @@
                 ← Voltar para Análise MBTI
             </a>
             {% if not error %}
-            <a
-                href="/admin/user/{{ user_id }}/psychometrics/download-pdf"
+            <a href="/admin/user/{{ user_id }}/psychometrics/download-pdf"
                 class="px-4 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 inline-flex items-center"
-                download
-            >
+                download>
                 📥 Baixar PDF
             </a>
             {% endif %}
-            <button
-                hx-post="/admin/api/user/{{ user_id }}/regenerate-psychometrics"
-                hx-target="#regenerate-result"
-                class="px-4 py-2 bg-purple-600 text-white text-sm rounded-md hover:bg-purple-700"
-            >
+            <button hx-post="/admin/api/user/{{ user_id }}/regenerate-psychometrics" hx-target="#regenerate-result"
+                class="px-4 py-2 bg-purple-600 text-white text-sm rounded-md hover:bg-purple-700">
                 🔄 Regenerar Análises
             </button>
         </div>
@@ -39,7 +34,9 @@
         <div class="flex">
             <div class="flex-shrink-0">
                 <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    <path fill-rule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                        clip-rule="evenodd" />
                 </svg>
             </div>
             <div class="ml-3">
@@ -57,7 +54,8 @@
     <!-- User Info Card -->
     <div class="bg-white shadow rounded-lg p-6">
         <div class="flex items-center space-x-4">
-            <div class="flex-shrink-0 h-16 w-16 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-2xl">
+            <div
+                class="flex-shrink-0 h-16 w-16 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-2xl">
                 {{ user.user_name[:2].upper() if user.user_name else 'U' }}
             </div>
             <div class="flex-1">
@@ -73,7 +71,8 @@
                 <div class="text-xs text-gray-500">Versão</div>
             </div>
             <div class="text-center px-4 border-l">
-                <div class="text-sm text-gray-600">{{ psychometrics.analysis_date[:16] if psychometrics.analysis_date else 'N/A' }}</div>
+                <div class="text-sm text-gray-600">{{ psychometrics.analysis_date[:16] if psychometrics.analysis_date
+                    else 'N/A' }}</div>
                 <div class="text-xs text-gray-500">Data da Análise</div>
             </div>
         </div>
@@ -81,7 +80,7 @@
 
     <!-- Executive Summary -->
     {% if psychometrics.executive_summary %}
-    <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-6">
+    <div class="bg-white shadow rounded-lg border-l-4 border-purple-200 p-6">
         <h3 class="text-lg font-semibold text-purple-900 mb-3">📊 Resumo Executivo</h3>
         <div class="text-sm text-gray-700 space-y-2" id="executive-summary-content">
             <!-- Will be populated by JavaScript from JSON -->
@@ -205,7 +204,8 @@
                     <div class="border-l-4 border-green-500 pl-4">
                         <div class="flex justify-between items-center">
                             <h4 class="font-semibold text-gray-900">Conscienciosidade (Conscientiousness)</h4>
-                            <span class="text-2xl font-bold text-green-600">{{ psychometrics.conscientiousness_score }}</span>
+                            <span class="text-2xl font-bold text-green-600">{{ psychometrics.conscientiousness_score
+                                }}</span>
                         </div>
                         <p class="text-sm text-gray-600 mt-1">{{ psychometrics.conscientiousness_level }}</p>
                         <p class="text-xs text-gray-500 mt-2">{{ psychometrics.conscientiousness_description }}</p>
@@ -215,7 +215,8 @@
                     <div class="border-l-4 border-yellow-500 pl-4">
                         <div class="flex justify-between items-center">
                             <h4 class="font-semibold text-gray-900">Extroversão (Extraversion)</h4>
-                            <span class="text-2xl font-bold text-yellow-600">{{ psychometrics.extraversion_score }}</span>
+                            <span class="text-2xl font-bold text-yellow-600">{{ psychometrics.extraversion_score
+                                }}</span>
                         </div>
                         <p class="text-sm text-gray-600 mt-1">{{ psychometrics.extraversion_level }}</p>
                         <p class="text-xs text-gray-500 mt-2">{{ psychometrics.extraversion_description }}</p>
@@ -225,7 +226,8 @@
                     <div class="border-l-4 border-pink-500 pl-4">
                         <div class="flex justify-between items-center">
                             <h4 class="font-semibold text-gray-900">Amabilidade (Agreeableness)</h4>
-                            <span class="text-2xl font-bold text-pink-600">{{ psychometrics.agreeableness_score }}</span>
+                            <span class="text-2xl font-bold text-pink-600">{{ psychometrics.agreeableness_score
+                                }}</span>
                         </div>
                         <p class="text-sm text-gray-600 mt-1">{{ psychometrics.agreeableness_level }}</p>
                         <p class="text-xs text-gray-500 mt-2">{{ psychometrics.agreeableness_description }}</p>
@@ -338,7 +340,8 @@
                         <div class="w-32 font-semibold text-gray-900">👁️ Visual</div>
                         <div class="flex-1">
                             <div class="bg-gray-200 rounded-full h-6 overflow-hidden">
-                                <div class="bg-blue-500 h-6 flex items-center justify-center text-white text-xs font-bold" style="width: {{ psychometrics.vark_visual }}%">
+                                <div class="bg-blue-500 h-6 flex items-center justify-center text-white text-xs font-bold"
+                                    style="width: {{ psychometrics.vark_visual }}%">
                                     {{ psychometrics.vark_visual }}%
                                 </div>
                             </div>
@@ -350,7 +353,8 @@
                         <div class="w-32 font-semibold text-gray-900">🎧 Auditivo</div>
                         <div class="flex-1">
                             <div class="bg-gray-200 rounded-full h-6 overflow-hidden">
-                                <div class="bg-green-500 h-6 flex items-center justify-center text-white text-xs font-bold" style="width: {{ psychometrics.vark_auditory }}%">
+                                <div class="bg-green-500 h-6 flex items-center justify-center text-white text-xs font-bold"
+                                    style="width: {{ psychometrics.vark_auditory }}%">
                                     {{ psychometrics.vark_auditory }}%
                                 </div>
                             </div>
@@ -362,7 +366,8 @@
                         <div class="w-32 font-semibold text-gray-900">📖 Leitura</div>
                         <div class="flex-1">
                             <div class="bg-gray-200 rounded-full h-6 overflow-hidden">
-                                <div class="bg-yellow-500 h-6 flex items-center justify-center text-white text-xs font-bold" style="width: {{ psychometrics.vark_reading }}%">
+                                <div class="bg-yellow-500 h-6 flex items-center justify-center text-white text-xs font-bold"
+                                    style="width: {{ psychometrics.vark_reading }}%">
                                     {{ psychometrics.vark_reading }}%
                                 </div>
                             </div>
@@ -374,7 +379,8 @@
                         <div class="w-32 font-semibold text-gray-900">✋ Cinestésico</div>
                         <div class="flex-1">
                             <div class="bg-gray-200 rounded-full h-6 overflow-hidden">
-                                <div class="bg-red-500 h-6 flex items-center justify-center text-white text-xs font-bold" style="width: {{ psychometrics.vark_kinesthetic }}%">
+                                <div class="bg-red-500 h-6 flex items-center justify-center text-white text-xs font-bold"
+                                    style="width: {{ psychometrics.vark_kinesthetic }}%">
                                     {{ psychometrics.vark_kinesthetic }}%
                                 </div>
                             </div>
@@ -435,50 +441,50 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    {% if not error and psychometrics %}
+    document.addEventListener('DOMContentLoaded', function () {
+        {% if not error and psychometrics %}
 
-    // ========== BIG FIVE RADAR CHART ==========
-    const bigFiveCtx = document.getElementById('bigFiveRadarChart');
-    if (bigFiveCtx) {
-        new Chart(bigFiveCtx, {
-            type: 'radar',
-            data: {
-                labels: ['Abertura', 'Conscienciosidade', 'Extroversão', 'Amabilidade', 'Neuroticismo'],
-                datasets: [{
-                    label: 'Big Five Score',
-                    data: [
-                        {{ psychometrics.openness_score or 0 }},
-                        {{ psychometrics.conscientiousness_score or 0 }},
+        // ========== BIG FIVE RADAR CHART ==========
+        const bigFiveCtx = document.getElementById('bigFiveRadarChart');
+        if (bigFiveCtx) {
+            new Chart(bigFiveCtx, {
+                type: 'radar',
+                data: {
+                    labels: ['Abertura', 'Conscienciosidade', 'Extroversão', 'Amabilidade', 'Neuroticismo'],
+                    datasets: [{
+                        label: 'Big Five Score',
+                        data: [
+                            {{ psychometrics.openness_score or 0 }},
+                    {{ psychometrics.conscientiousness_score or 0 }},
                         {{ psychometrics.extraversion_score or 0 }},
-                        {{ psychometrics.agreeableness_score or 0 }},
-                        {{ psychometrics.neuroticism_score or 0 }}
+        { { psychometrics.agreeableness_score or 0 } },
+        { { psychometrics.neuroticism_score or 0 } }
                     ],
-                    backgroundColor: 'rgba(99, 102, 241, 0.2)',
-                    borderColor: 'rgba(99, 102, 241, 1)',
-                    borderWidth: 2,
+        backgroundColor: 'rgba(99, 102, 241, 0.2)',
+            borderColor: 'rgba(99, 102, 241, 1)',
+                borderWidth: 2,
                     pointBackgroundColor: 'rgba(99, 102, 241, 1)',
-                    pointBorderColor: '#fff',
-                    pointHoverBackgroundColor: '#fff',
-                    pointHoverBorderColor: 'rgba(99, 102, 241, 1)'
-                }]
+                        pointBorderColor: '#fff',
+                            pointHoverBackgroundColor: '#fff',
+                                pointHoverBorderColor: 'rgba(99, 102, 241, 1)'
+    }]
             },
-            options: {
-                scales: {
-                    r: {
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                            stepSize: 20
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    }
+        options: {
+        scales: {
+            r: {
+                beginAtZero: true,
+                max: 100,
+                ticks: {
+                    stepSize: 20
                 }
             }
+        },
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    }
         });
     }
 
@@ -493,104 +499,106 @@ document.addEventListener('DOMContentLoaded', function() {
                     label: 'VARK Score',
                     data: [
                         {{ psychometrics.vark_visual or 0 }},
-                        {{ psychometrics.vark_auditory or 0 }},
+                {{ psychometrics.vark_auditory or 0 }},
                         {{ psychometrics.vark_reading or 0 }},
-                        {{ psychometrics.vark_kinesthetic or 0 }}
+    { { psychometrics.vark_kinesthetic or 0 } }
                     ],
-                    backgroundColor: [
-                        'rgba(59, 130, 246, 0.8)',
-                        'rgba(34, 197, 94, 0.8)',
-                        'rgba(234, 179, 8, 0.8)',
-                        'rgba(239, 68, 68, 0.8)'
-                    ],
-                    borderColor: [
-                        'rgba(59, 130, 246, 1)',
-                        'rgba(34, 197, 94, 1)',
-                        'rgba(234, 179, 8, 1)',
-                        'rgba(239, 68, 68, 1)'
-                    ],
-                    borderWidth: 2
+    backgroundColor: [
+        'rgba(59, 130, 246, 0.8)',
+        'rgba(34, 197, 94, 0.8)',
+        'rgba(234, 179, 8, 0.8)',
+        'rgba(239, 68, 68, 0.8)'
+    ],
+        borderColor: [
+            'rgba(59, 130, 246, 1)',
+            'rgba(34, 197, 94, 1)',
+            'rgba(234, 179, 8, 1)',
+            'rgba(239, 68, 68, 1)'
+        ],
+            borderWidth: 2
                 }]
             },
-            options: {
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                }
+    options: {
+        scales: {
+            y: {
+                beginAtZero: true,
+                    max: 100
             }
+        },
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    }
         });
     }
 
     // ========== SCHWARTZ VALUES GRID ==========
     const schwartzGrid = document.getElementById('schwartz-values-grid');
     if (schwartzGrid) {
-        const schwartzValues = {{ schwartz_values | tojson }};
+        const schwartzValues = {{ schwartz_values | tojson
+    }};
 
-        const valueIcons = {
-            'self_direction': '🎯',
-            'stimulation': '⚡',
-            'hedonism': '😊',
-            'achievement': '🏆',
-            'power': '👑',
-            'security': '🛡️',
-            'conformity': '📏',
-            'tradition': '🏛️',
-            'benevolence': '❤️',
-            'universalism': '🌍'
-        };
+    const valueIcons = {
+        'self_direction': '🎯',
+        'stimulation': '⚡',
+        'hedonism': '😊',
+        'achievement': '🏆',
+        'power': '👑',
+        'security': '🛡️',
+        'conformity': '📏',
+        'tradition': '🏛️',
+        'benevolence': '❤️',
+        'universalism': '🌍'
+    };
 
-        const valueNames = {
-            'self_direction': 'Autodireção',
-            'stimulation': 'Estimulação',
-            'hedonism': 'Hedonismo',
-            'achievement': 'Realização',
-            'power': 'Poder',
-            'security': 'Segurança',
-            'conformity': 'Conformidade',
-            'tradition': 'Tradição',
-            'benevolence': 'Benevolência',
-            'universalism': 'Universalismo'
-        };
+    const valueNames = {
+        'self_direction': 'Autodireção',
+        'stimulation': 'Estimulação',
+        'hedonism': 'Hedonismo',
+        'achievement': 'Realização',
+        'power': 'Poder',
+        'security': 'Segurança',
+        'conformity': 'Conformidade',
+        'tradition': 'Tradição',
+        'benevolence': 'Benevolência',
+        'universalism': 'Universalismo'
+    };
 
-        for (const [key, value] of Object.entries(schwartzValues)) {
-            // Extrair score do objeto (pode ser {score: X, evidences: []} ou apenas número)
-            let score = typeof value === 'object' && value !== null ? (value.score || 0) : (value || 0);
+    for (const [key, value] of Object.entries(schwartzValues)) {
+        // Extrair score do objeto (pode ser {score: X, evidences: []} ou apenas número)
+        let score = typeof value === 'object' && value !== null ? (value.score || 0) : (value || 0);
 
-            const card = document.createElement('div');
-            card.className = 'bg-gray-50 border border-gray-200 rounded-lg p-4 text-center';
+        const card = document.createElement('div');
+        card.className = 'bg-gray-50 border border-gray-200 rounded-lg p-4 text-center';
 
-            card.innerHTML = `
+        card.innerHTML = `
                 <div class="text-3xl mb-2">${valueIcons[key] || '⭐'}</div>
                 <div class="font-semibold text-gray-900 mb-1 text-sm">${valueNames[key] || key}</div>
                 <div class="text-xl font-bold text-indigo-600">${score}/100</div>
             `;
 
-            schwartzGrid.appendChild(card);
-        }
+        schwartzGrid.appendChild(card);
+    }
     }
 
     // ========== EXECUTIVE SUMMARY ==========
     const summaryDiv = document.getElementById('executive-summary-content');
     if (summaryDiv) {
         try {
-            const summary = {{ psychometrics.executive_summary | tojson }};
-            const summaryObj = typeof summary === 'string' ? JSON.parse(summary) : summary;
+            const summary = {{ psychometrics.executive_summary | tojson
+        }};
+    const summaryObj = typeof summary === 'string' ? JSON.parse(summary) : summary;
 
-            let html = '';
-            for (const [key, value] of Object.entries(summaryObj)) {
-                html += `<div><strong>${key}:</strong> ${value}</div>`;
-            }
-            summaryDiv.innerHTML = html;
+    let html = '';
+    for (const [key, value] of Object.entries(summaryObj)) {
+        html += `<div><strong>${key}:</strong> ${value}</div>`;
+    }
+    summaryDiv.innerHTML = html;
         } catch (e) {
-            summaryDiv.innerHTML = '<p class="text-gray-600">Resumo não disponível</p>';
-        }
+        summaryDiv.innerHTML = '<p class="text-gray-600">Resumo não disponível</p>';
+    }
     }
 
     {% endif %}
