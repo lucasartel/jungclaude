@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Jung Claude Admin{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 2rem;">
+    <h1 style="font-size: 2.5rem; font-weight: 800; background: linear-gradient(135deg, #c4b5fd 0%, #ddd6fe 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 0.5rem;">
+        Dashboard
+    </h1>
+    <p style="color: #94a3b8; font-size: 1.1rem;">
+        Visão geral do sistema Jung Claude - Análise Junguiana com IA
+    </p>
+</div>
+
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <dt class="text-sm font-medium text-gray-500 truncate">Usuários Totais</dt>
+                <dd class="mt-1 text-3xl font-semibold text-gray-900">{{ total_users }}</dd>
+            </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <dt class="text-sm font-medium text-gray-500 truncate">Interações Totais</dt>
+                <dd class="mt-1 text-3xl font-semibold text-gray-900">{{ total_interactions }}</dd>
+            </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <dt class="text-sm font-medium text-gray-500 truncate">Conflitos Identificados</dt>
+                <dd class="mt-1 text-3xl font-semibold text-gray-900">{{ total_conflicts }}</dd>
+            </div>
+        </div>
+    </div>
+
+    {% if diagnostic_mode %}
+    <!-- Diagnostic Mode Alert -->
+    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="ml-3 flex-1">
+                <h3 class="text-sm font-medium text-yellow-800">Modo Diagnóstico</h3>
+                <div class="mt-2 text-sm text-yellow-700">
+                    <p><strong>{{ error_message }}</strong></p>
+                    <p class="mt-2">Python: {{ python_version }}</p>
+
+                    <div class="mt-4">
+                        <p class="font-semibold">Status das Dependências:</p>
+                        <ul class="mt-2 space-y-1">
+                            {% for dep, status in dependencies.items() %}
+                            <li class="font-mono text-xs">{{ dep }}: {{ status }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    {% if error_traceback %}
+                    <details class="mt-4 bg-red-50 p-3 rounded border border-red-200">
+                        <summary class="cursor-pointer font-semibold text-red-800 hover:text-red-900">
+                            Ver Traceback Completo do Erro
+                        </summary>
+                        <pre
+                            class="mt-2 text-xs overflow-x-auto bg-white p-2 rounded border border-red-300 text-red-900 max-h-96">{{ error_traceback }}</pre>
+                    </details>
+                    {% endif %}
+
+                    <p class="mt-4">
+                        <strong>Próximos passos:</strong> Clique em "Ver Traceback Completo" acima para identificar o
+                        problema específico.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent Users -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">Usuários Recentes</h3>
+        </div>
+        {% if users %}
+        <ul class="divide-y divide-gray-200">
+            {% for user in users %}
+            <li class="px-4 py-4 sm:px-6 hover:bg-gray-50">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <div
+                            class="flex-shrink-0 h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                            {{ user.user_name[:2].upper() if user.user_name else 'U' }}
+                        </div>
+                        <div class="ml-4">
+                            <div class="text-sm font-medium text-indigo-600 truncate">{{ user.user_name or 'Usuário' }}</div>
+                            <div class="text-sm text-gray-500">ID: {{ user.user_id }}</div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-end">
+                        <div class="text-sm text-gray-900">{{ user.total_messages or 0 }} msgs</div>
+                        <div class="text-xs text-gray-500">{{ user.last_seen or 'N/A' }}</div>
+                    </div>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="px-4 py-8 text-center text-gray-500">
+            Nenhum usuário encontrado
+        </div>
+        {% endif %}
+        <div class="bg-gray-50 px-4 py-4 sm:px-6 rounded-b-lg">
+            <a href="/admin/users" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">Ver todos os
+                usuários &rarr;</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
