@@ -4,61 +4,93 @@
 
 {% block content %}
 <div class="px-4 sm:px-6 lg:px-8">
-    <div class="sm:flex sm:items-center">
+    <!-- Header -->
+    <div class="sm:flex sm:items-center" style="margin-bottom: 2rem;">
         <div class="sm:flex-auto">
-            <h1 class="text-2xl font-semibold text-gray-900">Usuários</h1>
-            <p class="mt-2 text-sm text-gray-700">Lista completa de todos os usuários que interagiram com o bot.</p>
+            <h1 class="text-2xl font-semibold text-gray-900" style="font-size: 2rem; font-weight: 700; display: flex; align-items: center; gap: 0.75rem;">
+                <span style="font-size: 2.5rem;">👥</span>
+                Usuários
+            </h1>
+            <p class="mt-2 text-sm text-gray-700" style="margin-top: 0.5rem; font-size: 1rem; color: #94a3b8;">
+                Lista completa de todos os usuários que interagiram com o bot
+            </p>
+        </div>
+        <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+            <a href="/admin" class="text-indigo-600 hover:text-indigo-900" style="padding: 0.5rem 1.5rem; background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(124, 58, 237, 0.1) 100%); border-radius: 0.5rem; border: 1px solid rgba(139, 92, 246, 0.3); transition: all 0.3s ease; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+                ← Voltar ao Dashboard
+            </a>
         </div>
     </div>
-    
+
+    <!-- Table Container -->
     <div class="mt-8 flex flex-col">
         <div class="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
             <div class="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-                <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg" style="border-radius: 1rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); border: 1px solid rgba(139, 92, 246, 0.2);">
                     <table class="min-w-full divide-y divide-gray-300">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">ID</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Nome</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Username</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Mensagens</th>
-                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Última Interação</th>
-                                <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                                <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6" style="padding: 1rem; font-weight: 700; font-size: 0.875rem; letter-spacing: 0.05em; text-transform: uppercase;">
+                                    ID do Usuário
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900" style="padding: 1rem; font-weight: 700; font-size: 0.875rem; letter-spacing: 0.05em; text-transform: uppercase;">
+                                    Nome
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900" style="padding: 1rem; font-weight: 700; font-size: 0.875rem; letter-spacing: 0.05em; text-transform: uppercase;">
+                                    Username
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900" style="padding: 1rem; font-weight: 700; font-size: 0.875rem; letter-spacing: 0.05em; text-transform: uppercase;">
+                                    Mensagens
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900" style="padding: 1rem; font-weight: 700; font-size: 0.875rem; letter-spacing: 0.05em; text-transform: uppercase;">
+                                    Última Interação
+                                </th>
+                                <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6" style="padding: 1rem;">
                                     <span class="sr-only">Ações</span>
                                 </th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white">
                             {% for user in users %}
-                            <tr class="hover:bg-gray-50">
-                                <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
-                                    {{ user.user_id }}
+                            <tr class="hover:bg-gray-50" style="transition: all 0.3s ease;">
+                                <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6" style="padding: 1.25rem; font-family: monospace; font-size: 0.85rem;">
+                                    <span style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(236, 72, 153, 0.1) 100%); padding: 0.5rem 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(139, 92, 246, 0.2);">
+                                        {{ user.user_id }}
+                                    </span>
                                 </td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                    {{ user.first_name or 'N/A' }}
+                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500" style="padding: 1.25rem;">
+                                    <span style="font-weight: 600;">{{ user.first_name or 'N/A' }}</span>
                                 </td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500" style="padding: 1.25rem; font-family: monospace;">
                                     @{{ user.user_name or 'N/A' }}
                                 </td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                    {{ user.total_messages or 0 }}
+                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500" style="padding: 1.25rem;">
+                                    <span style="background: linear-gradient(135deg, #c4b5fd 0%, #ddd6fe 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 700; font-size: 1.1rem;">
+                                        {{ user.total_messages or 0 }}
+                                    </span>
                                 </td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                    {{ user.last_seen or 'N/A' }}
+                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500" style="padding: 1.25rem;">
+                                    <span style="opacity: 0.8;">{{ user.last_seen or 'N/A' }}</span>
                                 </td>
-                                <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                                    <a href="/admin/user/{{ user.user_id }}/analysis" class="text-indigo-600 hover:text-indigo-900 mr-4">
-                                        Análise
+                                <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6" style="padding: 1.25rem;">
+                                    <a href="/admin/user/{{ user.user_id }}/analysis" class="text-indigo-600 hover:text-indigo-900 mr-4" style="margin-right: 1rem; padding: 0.5rem 1rem; background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(124, 58, 237, 0.1) 100%); border-radius: 0.5rem; border: 1px solid rgba(139, 92, 246, 0.3); transition: all 0.3s ease; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+                                        🧠 Análise
                                     </a>
-                                    <a href="/admin/user/{{ user.user_id }}/agent-data" class="text-purple-600 hover:text-purple-900">
-                                        Dados do Agente
+                                    <a href="/admin/user/{{ user.user_id }}/agent-data" class="text-purple-600 hover:text-purple-900" style="padding: 0.5rem 1rem; background: linear-gradient(135deg, rgba(236, 72, 153, 0.2) 0%, rgba(219, 39, 119, 0.1) 100%); border-radius: 0.5rem; border: 1px solid rgba(236, 72, 153, 0.3); transition: all 0.3s ease; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+                                        🤖 Dados do Agente
                                     </a>
                                 </td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="6" class="px-3 py-4 text-sm text-gray-500 text-center">
-                                    Nenhum usuário encontrado
+                                <td colspan="6" class="px-3 py-4 text-sm text-gray-500 text-center" style="padding: 3rem; text-align: center;">
+                                    <div style="font-size: 3rem; opacity: 0.4; margin-bottom: 1rem;">👤</div>
+                                    <div style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; color: #94a3b8;">
+                                        Nenhum usuário encontrado
+                                    </div>
+                                    <div style="font-size: 0.95rem; opacity: 0.7; color: #64748b;">
+                                        Aguardando primeiras interações com o bot...
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
