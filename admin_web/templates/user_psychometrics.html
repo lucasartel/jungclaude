@@ -455,38 +455,38 @@
                         label: 'Big Five Score',
                         data: [
                             {{ psychometrics.openness_score or 0 }},
-                    {{ psychometrics.conscientiousness_score or 0 }},
-                        {{ psychometrics.extraversion_score or 0 }},
-        { { psychometrics.agreeableness_score or 0 } },
-        { { psychometrics.neuroticism_score or 0 } }
-                    ],
-        backgroundColor: 'rgba(99, 102, 241, 0.2)',
-            borderColor: 'rgba(99, 102, 241, 1)',
-                borderWidth: 2,
-                    pointBackgroundColor: 'rgba(99, 102, 241, 1)',
+                            {{ psychometrics.conscientiousness_score or 0 }},
+                            {{ psychometrics.extraversion_score or 0 }},
+                            {{ psychometrics.agreeableness_score or 0 }},
+                            {{ psychometrics.neuroticism_score or 0 }}
+                        ],
+                        backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                        borderColor: 'rgba(99, 102, 241, 1)',
+                        borderWidth: 2,
+                        pointBackgroundColor: 'rgba(99, 102, 241, 1)',
                         pointBorderColor: '#fff',
-                            pointHoverBackgroundColor: '#fff',
-                                pointHoverBorderColor: 'rgba(99, 102, 241, 1)'
-    }]
-            },
-        options: {
-        scales: {
-            r: {
-                beginAtZero: true,
-                max: 100,
-                ticks: {
-                    stepSize: 20
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(99, 102, 241, 1)'
+                    }]
+                },
+                options: {
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                stepSize: 20
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
                 }
-            }
-        },
-        plugins: {
-            legend: {
-                display: false
-            }
+            });
         }
-    }
-        });
-    }
 
     // ========== VARK BAR CHART ==========
     const varkCtx = document.getElementById('varkBarChart');
@@ -499,110 +499,108 @@
                     label: 'VARK Score',
                     data: [
                         {{ psychometrics.vark_visual or 0 }},
-                {{ psychometrics.vark_auditory or 0 }},
+                        {{ psychometrics.vark_auditory or 0 }},
                         {{ psychometrics.vark_reading or 0 }},
-    { { psychometrics.vark_kinesthetic or 0 } }
+                        {{ psychometrics.vark_kinesthetic or 0 }}
                     ],
-    backgroundColor: [
-        'rgba(59, 130, 246, 0.8)',
-        'rgba(34, 197, 94, 0.8)',
-        'rgba(234, 179, 8, 0.8)',
-        'rgba(239, 68, 68, 0.8)'
-    ],
-        borderColor: [
-            'rgba(59, 130, 246, 1)',
-            'rgba(34, 197, 94, 1)',
-            'rgba(234, 179, 8, 1)',
-            'rgba(239, 68, 68, 1)'
-        ],
-            borderWidth: 2
+                    backgroundColor: [
+                        'rgba(59, 130, 246, 0.8)',
+                        'rgba(34, 197, 94, 0.8)',
+                        'rgba(234, 179, 8, 0.8)',
+                        'rgba(239, 68, 68, 0.8)'
+                    ],
+                    borderColor: [
+                        'rgba(59, 130, 246, 1)',
+                        'rgba(34, 197, 94, 1)',
+                        'rgba(234, 179, 8, 1)',
+                        'rgba(239, 68, 68, 1)'
+                    ],
+                    borderWidth: 2
                 }]
             },
-    options: {
-        scales: {
-            y: {
-                beginAtZero: true,
-                    max: 100
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
             }
-        },
-        plugins: {
-            legend: {
-                display: false
-            }
-        }
-    }
         });
     }
 
-    // ========== SCHWARTZ VALUES GRID ==========
-    const schwartzGrid = document.getElementById('schwartz-values-grid');
-    if (schwartzGrid) {
-        const schwartzValues = {{ schwartz_values | tojson
-    }};
+        // ========== SCHWARTZ VALUES GRID ==========
+        const schwartzGrid = document.getElementById('schwartz-values-grid');
+        if (schwartzGrid) {
+            const schwartzValues = {{ schwartz_values | tojson }};
 
-    const valueIcons = {
-        'self_direction': '🎯',
-        'stimulation': '⚡',
-        'hedonism': '😊',
-        'achievement': '🏆',
-        'power': '👑',
-        'security': '🛡️',
-        'conformity': '📏',
-        'tradition': '🏛️',
-        'benevolence': '❤️',
-        'universalism': '🌍'
-    };
+            const valueIcons = {
+                'self_direction': '🎯',
+                'stimulation': '⚡',
+                'hedonism': '😊',
+                'achievement': '🏆',
+                'power': '👑',
+                'security': '🛡️',
+                'conformity': '📏',
+                'tradition': '🏛️',
+                'benevolence': '❤️',
+                'universalism': '🌍'
+            };
 
-    const valueNames = {
-        'self_direction': 'Autodireção',
-        'stimulation': 'Estimulação',
-        'hedonism': 'Hedonismo',
-        'achievement': 'Realização',
-        'power': 'Poder',
-        'security': 'Segurança',
-        'conformity': 'Conformidade',
-        'tradition': 'Tradição',
-        'benevolence': 'Benevolência',
-        'universalism': 'Universalismo'
-    };
+            const valueNames = {
+                'self_direction': 'Autodireção',
+                'stimulation': 'Estimulação',
+                'hedonism': 'Hedonismo',
+                'achievement': 'Realização',
+                'power': 'Poder',
+                'security': 'Segurança',
+                'conformity': 'Conformidade',
+                'tradition': 'Tradição',
+                'benevolence': 'Benevolência',
+                'universalism': 'Universalismo'
+            };
 
-    for (const [key, value] of Object.entries(schwartzValues)) {
-        // Extrair score do objeto (pode ser {score: X, evidences: []} ou apenas número)
-        let score = typeof value === 'object' && value !== null ? (value.score || 0) : (value || 0);
+            for (const [key, value] of Object.entries(schwartzValues)) {
+                // Extrair score do objeto (pode ser {score: X, evidences: []} ou apenas número)
+                let score = typeof value === 'object' && value !== null ? (value.score || 0) : (value || 0);
 
-        const card = document.createElement('div');
-        card.className = 'bg-gray-50 border border-gray-200 rounded-lg p-4 text-center';
+                const card = document.createElement('div');
+                card.className = 'bg-gray-50 border border-gray-200 rounded-lg p-4 text-center';
 
-        card.innerHTML = `
-                <div class="text-3xl mb-2">${valueIcons[key] || '⭐'}</div>
-                <div class="font-semibold text-gray-900 mb-1 text-sm">${valueNames[key] || key}</div>
-                <div class="text-xl font-bold text-indigo-600">${score}/100</div>
-            `;
+                card.innerHTML = `
+                    <div class="text-3xl mb-2">${valueIcons[key] || '⭐'}</div>
+                    <div class="font-semibold text-gray-900 mb-1 text-sm">${valueNames[key] || key}</div>
+                    <div class="text-xl font-bold text-indigo-600">${score}/100</div>
+                `;
 
-        schwartzGrid.appendChild(card);
-    }
-    }
+                schwartzGrid.appendChild(card);
+            }
+        }
 
-    // ========== EXECUTIVE SUMMARY ==========
-    const summaryDiv = document.getElementById('executive-summary-content');
-    if (summaryDiv) {
-        try {
-            const summary = {{ psychometrics.executive_summary | tojson
-        }};
-    const summaryObj = typeof summary === 'string' ? JSON.parse(summary) : summary;
+        // ========== EXECUTIVE SUMMARY ==========
+        const summaryDiv = document.getElementById('executive-summary-content');
+        if (summaryDiv) {
+            try {
+                const summary = {{ psychometrics.executive_summary | tojson }};
+                const summaryObj = typeof summary === 'string' ? JSON.parse(summary) : summary;
 
-    let html = '';
-    for (const [key, value] of Object.entries(summaryObj)) {
-        html += `<div><strong>${key}:</strong> ${value}</div>`;
-    }
-    summaryDiv.innerHTML = html;
-        } catch (e) {
-        summaryDiv.innerHTML = '<p class="text-gray-600">Resumo não disponível</p>';
-    }
-    }
+                let html = '';
+                for (const [key, value] of Object.entries(summaryObj)) {
+                    html += `<div><strong>${key}:</strong> ${value}</div>`;
+                }
+                summaryDiv.innerHTML = html;
+            } catch (e) {
+                summaryDiv.innerHTML = '<p class="text-gray-600">Resumo não disponível</p>';
+            }
+        }
 
-    {% endif %}
-});
+        {% endif %}
+    });
 </script>
 
 {% endblock %}
