@@ -689,17 +689,39 @@ async def generate_personal_report(user_id: str, username: str = Depends(verify_
             return JSONResponse({"error": "Análises psicométricas não encontradas"}, status_code=404)
 
         user = db.get_user(user_id)
+        if user:
+            user = dict(user)  # Converter Row para dict
+        else:
+            user = {}
 
         # Parse JSON fields
-        schwartz_values = json_lib.loads(psychometrics.get('schwartz_values', '{}'))
-        eq_details = json_lib.loads(psychometrics.get('eq_details', '{}'))
-        executive_summary = json_lib.loads(psychometrics.get('executive_summary', '[]'))
+        schwartz_values = {}
+        eq_details = {}
+        executive_summary = []
+
+        try:
+            schwartz_str = psychometrics.get('schwartz_values', '{}')
+            schwartz_values = json_lib.loads(schwartz_str) if schwartz_str else {}
+        except:
+            pass
+
+        try:
+            eq_str = psychometrics.get('eq_details', '{}')
+            eq_details = json_lib.loads(eq_str) if eq_str else {}
+        except:
+            pass
+
+        try:
+            summary_str = psychometrics.get('executive_summary', '[]')
+            executive_summary = json_lib.loads(summary_str) if summary_str else []
+        except:
+            pass
 
         # Preparar contexto para o LLM
         context = f"""
 PERFIL PSICOMÉTRICO DO USUÁRIO:
 
-NOME: {user.get('user_name', 'Usuário')}
+NOME: {user.get('user_name') or user.get('first_name') or 'Usuário'}
 
 BIG FIVE (OCEAN):
 - Openness (Abertura): {psychometrics.get('openness_score', 0):.1f}/10
@@ -777,7 +799,7 @@ Gere o laudo:"""
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-@router.post("/api/user/{user_id}/generate-hr-report")
+@router.post("/admin/api/user/{user_id}/generate-hr-report")
 async def generate_hr_report(user_id: str, username: str = Depends(verify_credentials)):
     """
     Gera laudo psicométrico detalhado para o RH/GESTOR
@@ -795,17 +817,39 @@ async def generate_hr_report(user_id: str, username: str = Depends(verify_creden
             return JSONResponse({"error": "Análises psicométricas não encontradas"}, status_code=404)
 
         user = db.get_user(user_id)
+        if user:
+            user = dict(user)  # Converter Row para dict
+        else:
+            user = {}
 
-        # Parse JSON fields
-        schwartz_values = json_lib.loads(psychometrics.get('schwartz_values', '{}'))
-        eq_details = json_lib.loads(psychometrics.get('eq_details', '{}'))
-        executive_summary = json_lib.loads(psychometrics.get('executive_summary', '[]'))
+        # Parse JSON fields with error handling
+        schwartz_values = {}
+        eq_details = {}
+        executive_summary = []
+
+        try:
+            schwartz_str = psychometrics.get('schwartz_values', '{}')
+            schwartz_values = json_lib.loads(schwartz_str) if schwartz_str else {}
+        except:
+            pass
+
+        try:
+            eq_str = psychometrics.get('eq_details', '{}')
+            eq_details = json_lib.loads(eq_str) if eq_str else {}
+        except:
+            pass
+
+        try:
+            summary_str = psychometrics.get('executive_summary', '[]')
+            executive_summary = json_lib.loads(summary_str) if summary_str else []
+        except:
+            pass
 
         # Preparar contexto para o LLM
         context = f"""
 PERFIL PSICOMÉTRICO DO COLABORADOR:
 
-NOME: {user.get('user_name', 'Colaborador')}
+NOME: {user.get('user_name') or user.get('first_name') or 'Colaborador'}
 ID: {user_id}
 
 BIG FIVE (OCEAN):
