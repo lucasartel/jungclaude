@@ -754,37 +754,72 @@ async def generate_personal_report(user_id: str, username: str = Depends(verify_
 
         logger.info("🔍 [PERSONAL REPORT] Iniciando construção do contexto f-string...")
 
+        # Construir seções seguras
+        try:
+            nome = user.get('user_name') or user.get('first_name') or 'Usuário'
+            nome_str = str(nome)
+        except:
+            nome_str = 'Usuário'
+
+        # Big Five scores - garantir valores numéricos
+        def safe_score(val, default=0):
+            try:
+                return float(val if val is not None else default)
+            except:
+                return float(default)
+
+        openness = safe_score(psychometrics.get('openness_score'))
+        conscientiousness = safe_score(psychometrics.get('conscientiousness_score'))
+        extraversion = safe_score(psychometrics.get('extraversion_score'))
+        agreeableness = safe_score(psychometrics.get('agreeableness_score'))
+        neuroticism = safe_score(psychometrics.get('neuroticism_score'))
+
+        eq_score = safe_score(psychometrics.get('eq_score'))
+        eq_self_awareness = safe_score(eq_details.get('self_awareness'))
+        eq_self_management = safe_score(eq_details.get('self_management'))
+        eq_social_awareness = safe_score(eq_details.get('social_awareness'))
+        eq_relationship = safe_score(eq_details.get('relationship_management'))
+
+        vark_visual = safe_score(psychometrics.get('vark_visual'))
+        vark_auditory = safe_score(psychometrics.get('vark_auditory'))
+        vark_reading = safe_score(psychometrics.get('vark_reading'))
+        vark_kinesthetic = safe_score(psychometrics.get('vark_kinesthetic'))
+
+        # JSON-safe strings
+        schwartz_json = json_lib.dumps(schwartz_values, indent=2, ensure_ascii=False)
+        executive_items = '\n'.join('- ' + str(item) for item in executive_summary)
+
         # Preparar contexto para o LLM
         context = f"""
 PERFIL PSICOMÉTRICO DO USUÁRIO:
 
-NOME: {user.get('user_name') or user.get('first_name') or 'Usuário'}
+NOME: {nome_str}
 
 BIG FIVE (OCEAN):
-- Openness (Abertura): {psychometrics.get('openness_score', 0):.1f}/10
-- Conscientiousness (Conscienciosidade): {psychometrics.get('conscientiousness_score', 0):.1f}/10
-- Extraversion (Extroversão): {psychometrics.get('extraversion_score', 0):.1f}/10
-- Agreeableness (Amabilidade): {psychometrics.get('agreeableness_score', 0):.1f}/10
-- Neuroticism (Neuroticismo): {psychometrics.get('neuroticism_score', 0):.1f}/10
+- Openness (Abertura): {openness:.1f}/10
+- Conscientiousness (Conscienciosidade): {conscientiousness:.1f}/10
+- Extraversion (Extroversão): {extraversion:.1f}/10
+- Agreeableness (Amabilidade): {agreeableness:.1f}/10
+- Neuroticism (Neuroticismo): {neuroticism:.1f}/10
 
 INTELIGÊNCIA EMOCIONAL:
-- Score Geral: {psychometrics.get('eq_score', 0):.1f}/10
-- Autoconsciência: {eq_details.get('self_awareness', 0):.1f}/10
-- Autogestão: {eq_details.get('self_management', 0):.1f}/10
-- Consciência Social: {eq_details.get('social_awareness', 0):.1f}/10
-- Gestão de Relacionamentos: {eq_details.get('relationship_management', 0):.1f}/10
+- Score Geral: {eq_score:.1f}/10
+- Autoconsciência: {eq_self_awareness:.1f}/10
+- Autogestão: {eq_self_management:.1f}/10
+- Consciência Social: {eq_social_awareness:.1f}/10
+- Gestão de Relacionamentos: {eq_relationship:.1f}/10
 
 ESTILO DE APRENDIZAGEM (VARK):
-- Visual: {psychometrics.get('vark_visual', 0):.1f}/10
-- Auditivo: {psychometrics.get('vark_auditory', 0):.1f}/10
-- Leitura/Escrita: {psychometrics.get('vark_reading', 0):.1f}/10
-- Cinestésico: {psychometrics.get('vark_kinesthetic', 0):.1f}/10
+- Visual: {vark_visual:.1f}/10
+- Auditivo: {vark_auditory:.1f}/10
+- Leitura/Escrita: {vark_reading:.1f}/10
+- Cinestésico: {vark_kinesthetic:.1f}/10
 
 VALORES DE SCHWARTZ:
-{json_lib.dumps(schwartz_values, indent=2, ensure_ascii=False)}
+{schwartz_json}
 
 RESUMO EXECUTIVO:
-{chr(10).join('- ' + item for item in executive_summary)}
+{executive_items}
 """
 
         logger.info("✅ [PERSONAL REPORT] Contexto f-string construído com sucesso!")
@@ -899,38 +934,73 @@ async def generate_hr_report(user_id: str, username: str = Depends(verify_creden
         except:
             executive_summary = []
 
+        # Construir seções seguras
+        try:
+            nome = user.get('user_name') or user.get('first_name') or 'Colaborador'
+            nome_str = str(nome)
+        except:
+            nome_str = 'Colaborador'
+
+        # Big Five scores - garantir valores numéricos
+        def safe_score(val, default=0):
+            try:
+                return float(val if val is not None else default)
+            except:
+                return float(default)
+
+        openness = safe_score(psychometrics.get('openness_score'))
+        conscientiousness = safe_score(psychometrics.get('conscientiousness_score'))
+        extraversion = safe_score(psychometrics.get('extraversion_score'))
+        agreeableness = safe_score(psychometrics.get('agreeableness_score'))
+        neuroticism = safe_score(psychometrics.get('neuroticism_score'))
+
+        eq_score = safe_score(psychometrics.get('eq_score'))
+        eq_self_awareness = safe_score(eq_details.get('self_awareness'))
+        eq_self_management = safe_score(eq_details.get('self_management'))
+        eq_social_awareness = safe_score(eq_details.get('social_awareness'))
+        eq_relationship = safe_score(eq_details.get('relationship_management'))
+
+        vark_visual = safe_score(psychometrics.get('vark_visual'))
+        vark_auditory = safe_score(psychometrics.get('vark_auditory'))
+        vark_reading = safe_score(psychometrics.get('vark_reading'))
+        vark_kinesthetic = safe_score(psychometrics.get('vark_kinesthetic'))
+
+        # JSON-safe strings
+        schwartz_json = json_lib.dumps(schwartz_values, indent=2, ensure_ascii=False)
+        executive_items = '\n'.join('- ' + str(item) for item in executive_summary)
+
         # Preparar contexto para o LLM
         context = f"""
 PERFIL PSICOMÉTRICO DO COLABORADOR:
 
-NOME: {user.get('user_name') or user.get('first_name') or 'Colaborador'}
+NOME: {nome_str}
 ID: {user_id}
 
 BIG FIVE (OCEAN):
-- Openness (Abertura): {psychometrics.get('openness_score', 0):.1f}/10
-- Conscientiousness (Conscienciosidade): {psychometrics.get('conscientiousness_score', 0):.1f}/10
-- Extraversion (Extroversão): {psychometrics.get('extraversion_score', 0):.1f}/10
-- Agreeableness (Amabilidade): {psychometrics.get('agreeableness_score', 0):.1f}/10
-- Neuroticism (Neuroticismo): {psychometrics.get('neuroticism_score', 0):.1f}/10
+- Openness (Abertura): {openness:.1f}/10
+- Conscientiousness (Conscienciosidade): {conscientiousness:.1f}/10
+- Extraversion (Extroversão): {extraversion:.1f}/10
+- Agreeableness (Amabilidade): {agreeableness:.1f}/10
+- Neuroticism (Neuroticismo): {neuroticism:.1f}/10
 
 INTELIGÊNCIA EMOCIONAL:
-- Score Geral: {psychometrics.get('eq_score', 0):.1f}/10
-- Autoconsciência: {eq_details.get('self_awareness', 0):.1f}/10
-- Autogestão: {eq_details.get('self_management', 0):.1f}/10
-- Consciência Social: {eq_details.get('social_awareness', 0):.1f}/10
-- Gestão de Relacionamentos: {eq_details.get('relationship_management', 0):.1f}/10
+- Score Geral: {eq_score:.1f}/10
+- Autoconsciência: {eq_self_awareness:.1f}/10
+- Autogestão: {eq_self_management:.1f}/10
+- Consciência Social: {eq_social_awareness:.1f}/10
+- Gestão de Relacionamentos: {eq_relationship:.1f}/10
 
 ESTILO DE APRENDIZAGEM (VARK):
-- Visual: {psychometrics.get('vark_visual', 0):.1f}/10
-- Auditivo: {psychometrics.get('vark_auditory', 0):.1f}/10
-- Leitura/Escrita: {psychometrics.get('vark_reading', 0):.1f}/10
-- Cinestésico: {psychometrics.get('vark_kinesthetic', 0):.1f}/10
+- Visual: {vark_visual:.1f}/10
+- Auditivo: {vark_auditory:.1f}/10
+- Leitura/Escrita: {vark_reading:.1f}/10
+- Cinestésico: {vark_kinesthetic:.1f}/10
 
 VALORES DE SCHWARTZ:
-{json_lib.dumps(schwartz_values, indent=2, ensure_ascii=False)}
+{schwartz_json}
 
 RESUMO EXECUTIVO:
-{chr(10).join('- ' + item for item in executive_summary)}
+{executive_items}
 """
 
         # Gerar laudo com Claude
