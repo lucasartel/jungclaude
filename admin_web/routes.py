@@ -861,7 +861,7 @@ IMPORTANTE:
 
 Gere o laudo:"""
 
-        response = llm.generate(prompt, max_tokens=2000)
+        response = llm.get_response(prompt, max_tokens=2000)
         report_text = response.strip()
 
         return JSONResponse({
@@ -1038,7 +1038,7 @@ IMPORTANTE:
 
 Gere o laudo:"""
 
-        response = llm.generate(prompt, max_tokens=2000)
+        response = llm.get_response(prompt, max_tokens=2000)
         report_text = response.strip()
 
         return JSONResponse({
