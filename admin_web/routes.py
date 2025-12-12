@@ -2038,3 +2038,107 @@ async def why_no_insights(
             "error": str(e),
             "problem_identified": "Erro ao executar diagnóstico"
         }, status_code=500)
+
+
+@router.get("/api/jung-lab/export-fragments")
+async def export_fragments(
+    _username: str = Depends(verify_credentials)
+):
+    """
+    Exporta todos os fragmentos de ruminação para análise
+    """
+    from rumination_config import ADMIN_USER_ID
+
+    try:
+        db = get_db()
+        cursor = db.conn.cursor()
+
+        cursor.execute("""
+            SELECT id, user_id, content, emotional_weight,
+                   context_type, detected_at, metadata
+            FROM rumination_fragments
+            WHERE user_id = ?
+            ORDER BY detected_at DESC
+        """, (ADMIN_USER_ID,))
+
+        fragments = [dict(row) for row in cursor.fetchall()]
+
+        return JSONResponse({
+            "total": len(fragments),
+            "fragments": fragments
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao exportar fragmentos: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.get("/api/jung-lab/export-tensions")
+async def export_tensions(
+    _username: str = Depends(verify_credentials)
+):
+    """
+    Exporta todas as tensões para análise detalhada
+    """
+    from rumination_config import ADMIN_USER_ID
+
+    try:
+        db = get_db()
+        cursor = db.conn.cursor()
+
+        cursor.execute("""
+            SELECT id, user_id, tension_type, pole_a, pole_b,
+                   pole_a_fragment_ids, pole_b_fragment_ids,
+                   status, intensity, maturity_score, evidence_count,
+                   revisit_count, first_detected_at, last_revisited_at,
+                   last_evidence_at, resolved_at, metadata
+            FROM rumination_tensions
+            WHERE user_id = ?
+            ORDER BY first_detected_at DESC
+        """, (ADMIN_USER_ID,))
+
+        tensions = [dict(row) for row in cursor.fetchall()]
+
+        return JSONResponse({
+            "total": len(tensions),
+            "tensions": tensions
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao exportar tensões: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.get("/api/jung-lab/export-insights")
+async def export_insights(
+    _username: str = Depends(verify_credentials)
+):
+    """
+    Exporta todos os insights gerados
+    """
+    from rumination_config import ADMIN_USER_ID
+
+    try:
+        db = get_db()
+        cursor = db.conn.cursor()
+
+        cursor.execute("""
+            SELECT id, user_id, tension_id, insight_type,
+                   content, confidence_score, status,
+                   generated_at, delivered_at, user_feedback,
+                   metadata
+            FROM rumination_insights
+            WHERE user_id = ?
+            ORDER BY generated_at DESC
+        """, (ADMIN_USER_ID,))
+
+        insights = [dict(row) for row in cursor.fetchall()]
+
+        return JSONResponse({
+            "total": len(insights),
+            "insights": insights
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao exportar insights: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
