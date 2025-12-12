@@ -671,7 +671,7 @@ async def regenerate_psychometrics(user_id: str, username: str = Depends(verify_
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-@router.post("/admin/api/user/{user_id}/generate-personal-report")
+@router.post("/api/user/{user_id}/generate-personal-report")
 async def generate_personal_report(user_id: str, username: str = Depends(verify_credentials)):
     """
     Gera laudo psicométrico detalhado para o USUÁRIO
@@ -830,7 +830,7 @@ Gere o laudo:"""
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-@router.post("/admin/api/user/{user_id}/generate-hr-report")
+@router.post("/api/user/{user_id}/generate-hr-report")
 async def generate_hr_report(user_id: str, username: str = Depends(verify_credentials)):
     """
     Gera laudo psicométrico detalhado para o RH/GESTOR
