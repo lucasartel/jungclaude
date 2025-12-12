@@ -186,16 +186,80 @@ async def lifespan(app: FastAPI):
     proactive_task = asyncio.create_task(proactive_message_scheduler(telegram_app))
     logger.info("✅ Scheduler de mensagens proativas ativado!")
 
+    # ✨ Iniciar scheduler de ruminação (Jung Lab)
+    rumination_scheduler_process = None
+    try:
+        import subprocess
+        import sys
+        pid_file = "rumination_scheduler.pid"
+
+        # Remover PID file antigo se existir (de sessões anteriores)
+        if os.path.exists(pid_file):
+            try:
+                with open(pid_file, "r") as f:
+                    old_pid = int(f.read().strip())
+                try:
+                    os.kill(old_pid, 0)  # Verifica se processo ainda existe
+                    logger.info(f"⚠️  Scheduler de ruminação já rodando (PID: {old_pid})")
+                except OSError:
+                    # Processo não existe, remover PID file obsoleto
+                    os.remove(pid_file)
+                    logger.info("🗑️  PID file obsoleto removido")
+            except:
+                os.remove(pid_file)
+
+        # Iniciar novo processo de scheduler
+        if not os.path.exists(pid_file):
+            python_exe = sys.executable
+            rumination_scheduler_process = subprocess.Popen(
+                [python_exe, "rumination_scheduler.py"],
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+
+            # Salvar PID
+            with open(pid_file, "w") as f:
+                f.write(str(rumination_scheduler_process.pid))
+
+            logger.info(f"✅ Scheduler de ruminação iniciado (PID: {rumination_scheduler_process.pid})")
+    except Exception as e:
+        logger.error(f"❌ Erro ao iniciar scheduler de ruminação: {e}")
+        logger.warning("⚠️  Jung Lab rodará apenas com digestão manual")
+
     yield
 
     # Shutdown
-    logger.info("🛑 Parando Bot Telegram...")
-    proactive_task.cancel()  # Cancelar task proativa
+    logger.info("🛑 Parando aplicação...")
+
+    # Parar scheduler proativo
+    proactive_task.cancel()
     try:
         await proactive_task
     except asyncio.CancelledError:
         logger.info("✅ Scheduler proativo cancelado")
 
+    # Parar scheduler de ruminação
+    if rumination_scheduler_process:
+        try:
+            import signal
+            rumination_scheduler_process.send_signal(signal.SIGTERM)
+            rumination_scheduler_process.wait(timeout=5)
+            logger.info("✅ Scheduler de ruminação parado")
+        except Exception as e:
+            logger.warning(f"⚠️  Erro ao parar scheduler de ruminação: {e}")
+            try:
+                rumination_scheduler_process.kill()
+            except:
+                pass
+
+        # Remover PID file
+        pid_file = "rumination_scheduler.pid"
+        if os.path.exists(pid_file):
+            os.remove(pid_file)
+
+    # Parar bot Telegram
+    logger.info("🛑 Parando Bot Telegram...")
     await telegram_app.updater.stop()
     await telegram_app.stop()
     await telegram_app.shutdown()
