@@ -671,7 +671,7 @@ async def regenerate_psychometrics(user_id: str, username: str = Depends(verify_
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-@router.post("/api/user/{user_id}/generate-personal-report")
+@router.post("/admin/api/user/{user_id}/generate-personal-report")
 async def generate_personal_report(user_id: str, username: str = Depends(verify_credentials)):
     """
     Gera laudo psicométrico detalhado para o USUÁRIO
@@ -687,6 +687,9 @@ async def generate_personal_report(user_id: str, username: str = Depends(verify_
         psychometrics = db.get_psychometrics(user_id)
         if not psychometrics:
             return JSONResponse({"error": "Análises psicométricas não encontradas"}, status_code=404)
+
+        # Converter Row para dict
+        psychometrics = dict(psychometrics)
 
         user = db.get_user(user_id)
         if user:
@@ -815,6 +818,9 @@ async def generate_hr_report(user_id: str, username: str = Depends(verify_creden
         psychometrics = db.get_psychometrics(user_id)
         if not psychometrics:
             return JSONResponse({"error": "Análises psicométricas não encontradas"}, status_code=404)
+
+        # Converter Row para dict
+        psychometrics = dict(psychometrics)
 
         user = db.get_user(user_id)
         if user:
