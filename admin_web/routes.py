@@ -670,6 +670,221 @@ async def regenerate_psychometrics(user_id: str, username: str = Depends(verify_
         logger.error(f"❌ Erro ao regenerar psicometria: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
 
+
+@router.post("/api/user/{user_id}/generate-personal-report")
+async def generate_personal_report(user_id: str, username: str = Depends(verify_credentials)):
+    """
+    Gera laudo psicométrico detalhado para o USUÁRIO
+    6 parágrafos focados em autoconhecimento e desenvolvimento pessoal
+    """
+    from llm_providers import create_llm_provider
+    import json as json_lib
+
+    db = get_db()
+
+    try:
+        # Buscar dados psicométricos
+        psychometrics = db.get_psychometrics(user_id)
+        if not psychometrics:
+            return JSONResponse({"error": "Análises psicométricas não encontradas"}, status_code=404)
+
+        user = db.get_user(user_id)
+
+        # Parse JSON fields
+        schwartz_values = json_lib.loads(psychometrics.get('schwartz_values', '{}'))
+        eq_details = json_lib.loads(psychometrics.get('eq_details', '{}'))
+        executive_summary = json_lib.loads(psychometrics.get('executive_summary', '[]'))
+
+        # Preparar contexto para o LLM
+        context = f"""
+PERFIL PSICOMÉTRICO DO USUÁRIO:
+
+NOME: {user.get('user_name', 'Usuário')}
+
+BIG FIVE (OCEAN):
+- Openness (Abertura): {psychometrics.get('openness_score', 0):.1f}/10
+- Conscientiousness (Conscienciosidade): {psychometrics.get('conscientiousness_score', 0):.1f}/10
+- Extraversion (Extroversão): {psychometrics.get('extraversion_score', 0):.1f}/10
+- Agreeableness (Amabilidade): {psychometrics.get('agreeableness_score', 0):.1f}/10
+- Neuroticism (Neuroticismo): {psychometrics.get('neuroticism_score', 0):.1f}/10
+
+INTELIGÊNCIA EMOCIONAL:
+- Score Geral: {psychometrics.get('eq_score', 0):.1f}/10
+- Autoconsciência: {eq_details.get('self_awareness', 0):.1f}/10
+- Autogestão: {eq_details.get('self_management', 0):.1f}/10
+- Consciência Social: {eq_details.get('social_awareness', 0):.1f}/10
+- Gestão de Relacionamentos: {eq_details.get('relationship_management', 0):.1f}/10
+
+ESTILO DE APRENDIZAGEM (VARK):
+- Visual: {psychometrics.get('vark_visual', 0):.1f}/10
+- Auditivo: {psychometrics.get('vark_auditory', 0):.1f}/10
+- Leitura/Escrita: {psychometrics.get('vark_reading', 0):.1f}/10
+- Cinestésico: {psychometrics.get('vark_kinesthetic', 0):.1f}/10
+
+VALORES DE SCHWARTZ:
+{json_lib.dumps(schwartz_values, indent=2, ensure_ascii=False)}
+
+RESUMO EXECUTIVO:
+{chr(10).join('- ' + item for item in executive_summary)}
+"""
+
+        # Gerar laudo com Claude
+        llm = create_llm_provider("claude")
+
+        prompt = f"""Você é um psicólogo organizacional especializado em análises psicométricas.
+
+Com base nos dados abaixo, gere um LAUDO PSICOMÉTRICO PESSOAL detalhado para o próprio usuário.
+
+{context}
+
+INSTRUÇÕES:
+1. Escreva 6 parágrafos densos e informativos
+2. Foco em AUTOCONHECIMENTO e DESENVOLVIMENTO PESSOAL
+3. Tom empático, respeitoso e encorajador
+4. Use dados concretos dos testes para embasar insights
+5. Forneça recomendações práticas e acionáveis
+6. Ajude o usuário a entender seus pontos fortes e áreas de crescimento
+
+ESTRUTURA SUGERIDA:
+- Parágrafo 1: Visão geral do perfil e principais características
+- Parágrafo 2: Big Five - Traços de personalidade e como impactam o dia a dia
+- Parágrafo 3: Inteligência Emocional - Pontos fortes e oportunidades
+- Parágrafo 4: Estilo de Aprendizagem - Como aprende melhor e dicas práticas
+- Parágrafo 5: Valores Pessoais - O que te motiva e guia suas decisões
+- Parágrafo 6: Síntese e recomendações para desenvolvimento contínuo
+
+IMPORTANTE:
+- NÃO use bullet points ou listas
+- Escreva em PARÁGRAFOS corridos
+- Seja específico e personalizado
+- Use linguagem acessível (não jargões excessivos)
+- Seja honesto sobre pontos de atenção, mas sempre construtivo
+
+Gere o laudo:"""
+
+        response = llm.generate(prompt, max_tokens=2000)
+        report_text = response.strip()
+
+        return JSONResponse({
+            "success": True,
+            "report": report_text
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao gerar laudo pessoal: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.post("/api/user/{user_id}/generate-hr-report")
+async def generate_hr_report(user_id: str, username: str = Depends(verify_credentials)):
+    """
+    Gera laudo psicométrico detalhado para o RH/GESTOR
+    6 parágrafos focados em adequação organizacional e gestão de talentos
+    """
+    from llm_providers import create_llm_provider
+    import json as json_lib
+
+    db = get_db()
+
+    try:
+        # Buscar dados psicométricos
+        psychometrics = db.get_psychometrics(user_id)
+        if not psychometrics:
+            return JSONResponse({"error": "Análises psicométricas não encontradas"}, status_code=404)
+
+        user = db.get_user(user_id)
+
+        # Parse JSON fields
+        schwartz_values = json_lib.loads(psychometrics.get('schwartz_values', '{}'))
+        eq_details = json_lib.loads(psychometrics.get('eq_details', '{}'))
+        executive_summary = json_lib.loads(psychometrics.get('executive_summary', '[]'))
+
+        # Preparar contexto para o LLM
+        context = f"""
+PERFIL PSICOMÉTRICO DO COLABORADOR:
+
+NOME: {user.get('user_name', 'Colaborador')}
+ID: {user_id}
+
+BIG FIVE (OCEAN):
+- Openness (Abertura): {psychometrics.get('openness_score', 0):.1f}/10
+- Conscientiousness (Conscienciosidade): {psychometrics.get('conscientiousness_score', 0):.1f}/10
+- Extraversion (Extroversão): {psychometrics.get('extraversion_score', 0):.1f}/10
+- Agreeableness (Amabilidade): {psychometrics.get('agreeableness_score', 0):.1f}/10
+- Neuroticism (Neuroticismo): {psychometrics.get('neuroticism_score', 0):.1f}/10
+
+INTELIGÊNCIA EMOCIONAL:
+- Score Geral: {psychometrics.get('eq_score', 0):.1f}/10
+- Autoconsciência: {eq_details.get('self_awareness', 0):.1f}/10
+- Autogestão: {eq_details.get('self_management', 0):.1f}/10
+- Consciência Social: {eq_details.get('social_awareness', 0):.1f}/10
+- Gestão de Relacionamentos: {eq_details.get('relationship_management', 0):.1f}/10
+
+ESTILO DE APRENDIZAGEM (VARK):
+- Visual: {psychometrics.get('vark_visual', 0):.1f}/10
+- Auditivo: {psychometrics.get('vark_auditory', 0):.1f}/10
+- Leitura/Escrita: {psychometrics.get('vark_reading', 0):.1f}/10
+- Cinestésico: {psychometrics.get('vark_kinesthetic', 0):.1f}/10
+
+VALORES DE SCHWARTZ:
+{json_lib.dumps(schwartz_values, indent=2, ensure_ascii=False)}
+
+RESUMO EXECUTIVO:
+{chr(10).join('- ' + item for item in executive_summary)}
+"""
+
+        # Gerar laudo com Claude
+        llm = create_llm_provider("claude")
+
+        prompt = f"""Você é um consultor de RH especializado em avaliação psicométrica e gestão de talentos.
+
+Com base nos dados abaixo, gere um LAUDO PSICOMÉTRICO ORGANIZACIONAL detalhado para o gestor/RH.
+
+{context}
+
+INSTRUÇÕES:
+1. Escreva 6 parágrafos densos e informativos
+2. Foco em ADEQUAÇÃO ORGANIZACIONAL, GESTÃO DE TALENTOS e PERFORMANCE
+3. Tom profissional, objetivo e estratégico
+4. Use dados concretos dos testes para embasar recomendações
+5. Identifique fit cultural, potencial de liderança, e riscos/oportunidades
+6. Forneça insights acionáveis para gestão e desenvolvimento
+
+ESTRUTURA SUGERIDA:
+- Parágrafo 1: Perfil comportamental geral e adequação à cultura organizacional
+- Parágrafo 2: Big Five - Impacto na performance, trabalho em equipe e liderança
+- Parágrafo 3: Inteligência Emocional - Capacidade de gestão, conflitos e relacionamentos
+- Parágrafo 4: Estilo de Aprendizagem - Como maximizar treinamentos e desenvolvimento
+- Parágrafo 5: Valores e Motivadores - Alinhamento com valores da empresa e engajamento
+- Parágrafo 6: Recomendações estratégicas para gestão, desenvolvimento e alocação
+
+IMPORTANTE:
+- NÃO use bullet points ou listas
+- Escreva em PARÁGRAFOS corridos
+- Seja direto sobre pontos de atenção e riscos (mas sempre profissional)
+- Foque em como maximizar o potencial do colaborador
+- Considere sucessão, mobilidade interna e desenvolvimento de carreira
+- Use linguagem corporativa e estratégica
+
+Gere o laudo:"""
+
+        response = llm.generate(prompt, max_tokens=2000)
+        report_text = response.strip()
+
+        return JSONResponse({
+            "success": True,
+            "report": report_text
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao gerar laudo RH: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @router.get("/user/{user_id}/psychometrics/download-pdf")
 async def download_psychometrics_pdf(user_id: str, username: str = Depends(verify_credentials)):
     """
