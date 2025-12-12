@@ -683,19 +683,31 @@ async def generate_personal_report(user_id: str, username: str = Depends(verify_
     db = get_db()
 
     try:
+        logger.info(f"🔍 [PERSONAL REPORT] Iniciando geração para user_id: {user_id}")
+
         # Buscar dados psicométricos
         psychometrics = db.get_psychometrics(user_id)
         if not psychometrics:
             return JSONResponse({"error": "Análises psicométricas não encontradas"}, status_code=404)
 
+        logger.info(f"🔍 [PERSONAL REPORT] psychometrics type ANTES conversão: {type(psychometrics)}")
+
         # Converter Row para dict
         psychometrics = dict(psychometrics)
 
+        logger.info(f"🔍 [PERSONAL REPORT] psychometrics type APÓS conversão: {type(psychometrics)}")
+        logger.info(f"🔍 [PERSONAL REPORT] psychometrics keys: {list(psychometrics.keys())}")
+
         user = db.get_user(user_id)
+        logger.info(f"🔍 [PERSONAL REPORT] user type ANTES conversão: {type(user)}")
+
         if user:
             user = dict(user)  # Converter Row para dict
         else:
             user = {}
+
+        logger.info(f"🔍 [PERSONAL REPORT] user type APÓS conversão: {type(user)}")
+        logger.info(f"🔍 [PERSONAL REPORT] user keys: {list(user.keys())}")
 
         # Parse JSON fields
         schwartz_values = {}
@@ -704,21 +716,32 @@ async def generate_personal_report(user_id: str, username: str = Depends(verify_
 
         try:
             schwartz_str = psychometrics.get('schwartz_values', '{}')
+            logger.info(f"🔍 [PERSONAL REPORT] schwartz_str: {type(schwartz_str)} = {schwartz_str[:100] if schwartz_str else 'None'}")
             schwartz_values = json_lib.loads(schwartz_str) if schwartz_str else {}
-        except:
+            logger.info(f"🔍 [PERSONAL REPORT] schwartz_values parsed: {type(schwartz_values)}")
+        except Exception as e:
+            logger.error(f"❌ [PERSONAL REPORT] Erro ao parsear schwartz_values: {e}")
             pass
 
         try:
             eq_str = psychometrics.get('eq_details', '{}')
+            logger.info(f"🔍 [PERSONAL REPORT] eq_str: {type(eq_str)}")
             eq_details = json_lib.loads(eq_str) if eq_str else {}
-        except:
+            logger.info(f"🔍 [PERSONAL REPORT] eq_details parsed: {type(eq_details)}")
+        except Exception as e:
+            logger.error(f"❌ [PERSONAL REPORT] Erro ao parsear eq_details: {e}")
             pass
 
         try:
             summary_str = psychometrics.get('executive_summary', '[]')
+            logger.info(f"🔍 [PERSONAL REPORT] summary_str: {type(summary_str)}")
             executive_summary = json_lib.loads(summary_str) if summary_str else []
-        except:
+            logger.info(f"🔍 [PERSONAL REPORT] executive_summary parsed: {type(executive_summary)}")
+        except Exception as e:
+            logger.error(f"❌ [PERSONAL REPORT] Erro ao parsear executive_summary: {e}")
             pass
+
+        logger.info("🔍 [PERSONAL REPORT] Iniciando construção do contexto f-string...")
 
         # Preparar contexto para o LLM
         context = f"""
@@ -753,8 +776,13 @@ RESUMO EXECUTIVO:
 {chr(10).join('- ' + item for item in executive_summary)}
 """
 
+        logger.info("✅ [PERSONAL REPORT] Contexto f-string construído com sucesso!")
+        logger.info(f"🔍 [PERSONAL REPORT] Tamanho do contexto: {len(context)} caracteres")
+
         # Gerar laudo com Claude
+        logger.info("🔍 [PERSONAL REPORT] Criando provider LLM...")
         llm = create_llm_provider("claude")
+        logger.info("✅ [PERSONAL REPORT] Provider LLM criado!")
 
         prompt = f"""Você é um psicólogo organizacional especializado em análises psicométricas.
 
