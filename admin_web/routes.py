@@ -736,10 +736,21 @@ async def generate_personal_report(user_id: str, username: str = Depends(verify_
             summary_str = psychometrics.get('executive_summary', '[]')
             logger.info(f"🔍 [PERSONAL REPORT] summary_str: {type(summary_str)}")
             executive_summary = json_lib.loads(summary_str) if summary_str else []
-            logger.info(f"🔍 [PERSONAL REPORT] executive_summary parsed: {type(executive_summary)}")
+            logger.info(f"🔍 [PERSONAL REPORT] executive_summary parsed: {type(executive_summary)} = {executive_summary}")
+
+            # Se for dict, converter para lista de valores
+            if isinstance(executive_summary, dict):
+                logger.warning(f"⚠️ [PERSONAL REPORT] executive_summary é dict, convertendo para lista")
+                executive_summary = list(executive_summary.values()) if executive_summary else []
+
+            # Garantir que é lista
+            if not isinstance(executive_summary, list):
+                logger.warning(f"⚠️ [PERSONAL REPORT] executive_summary não é lista, usando []")
+                executive_summary = []
+
         except Exception as e:
             logger.error(f"❌ [PERSONAL REPORT] Erro ao parsear executive_summary: {e}")
-            pass
+            executive_summary = []
 
         logger.info("🔍 [PERSONAL REPORT] Iniciando construção do contexto f-string...")
 
@@ -876,8 +887,17 @@ async def generate_hr_report(user_id: str, username: str = Depends(verify_creden
         try:
             summary_str = psychometrics.get('executive_summary', '[]')
             executive_summary = json_lib.loads(summary_str) if summary_str else []
+
+            # Se for dict, converter para lista de valores
+            if isinstance(executive_summary, dict):
+                executive_summary = list(executive_summary.values()) if executive_summary else []
+
+            # Garantir que é lista
+            if not isinstance(executive_summary, list):
+                executive_summary = []
+
         except:
-            pass
+            executive_summary = []
 
         # Preparar contexto para o LLM
         context = f"""
