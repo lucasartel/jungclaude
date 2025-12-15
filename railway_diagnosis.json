@@ -1,0 +1,1173 @@
+{
+  "config": {
+    "MIN_MATURITY_FOR_SYNTHESIS": 0.75,
+    "MIN_DAYS_FOR_SYNTHESIS": 2,
+    "MIN_EVIDENCE_FOR_SYNTHESIS": 3,
+    "MATURITY_WEIGHTS": {
+      "time": 0.25,
+      "evidence": 0.25,
+      "revisit": 0.15,
+      "connection": 0.15,
+      "intensity": 0.2
+    }
+  },
+  "tensions": [
+    {
+      "id": 1,
+      "type": "desejo_medo",
+      "status": "maturing",
+      "days_old": 1,
+      "intensity": 0.85,
+      "maturity": {
+        "score": 0.408,
+        "calculated": 0.481,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 4,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 0.8,
+        "revisit": 0.5,
+        "connection": 0.0,
+        "intensity": 0.85
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.41 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.75,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.436,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 6,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.75
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.85,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.456,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 5,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.85
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.8,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.446,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 9,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.8
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.75,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.436,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 6,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.75
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 6,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.85,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.456,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 9,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.85
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 7,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.7,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.426,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 6,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.7
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 8,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.85,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.456,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 7,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.85
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 9,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.8,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.396,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 4,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 0.8,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.8
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 10,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.85,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.456,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 7,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.85
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 11,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.8,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.446,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 8,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.8
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 12,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.85,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.456,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 7,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.85
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 13,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.75,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.436,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 9,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.75
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 14,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.65,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.316,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 3,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 0.6,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.65
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 15,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.75,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.436,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 7,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.75
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 16,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.8,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.446,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 8,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.8
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 17,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.65,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.416,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 5,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.65
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 18,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.75,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.436,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 7,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.75
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 19,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.7,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.426,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 6,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.7
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 20,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.75,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.436,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 6,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.75
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 21,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.65,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.416,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 5,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.65
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 22,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.8,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.446,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 7,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.8
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 23,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.75,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.436,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 6,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.75
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 24,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.7,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.426,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 5,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.7
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 25,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.65,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.416,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 6,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.65
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 26,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.75,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.436,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 8,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.75
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 27,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.65,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.416,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 8,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.65
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 28,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.75,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.436,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 6,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.75
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 29,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.65,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.416,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 6,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.65
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 30,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.75,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.436,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 8,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.75
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 31,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 1,
+      "intensity": 0.65,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.416,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 7,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 1,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.143,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.65
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 1 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 32,
+      "type": "desejo_medo",
+      "status": "open",
+      "days_old": 0,
+      "intensity": 0.85,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.37,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 4,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 0,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.0,
+        "evidence": 0.8,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.85
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 0 dias < 2 dias"
+      ]
+    },
+    {
+      "id": 33,
+      "type": "valor_comportamento",
+      "status": "open",
+      "days_old": 0,
+      "intensity": 0.7,
+      "maturity": {
+        "score": 0.0,
+        "calculated": 0.39,
+        "needed": 0.75,
+        "ok": false
+      },
+      "evidence": {
+        "count": 6,
+        "needed": 3,
+        "ok": true
+      },
+      "days": {
+        "count": 0,
+        "needed": 2,
+        "ok": false
+      },
+      "factors": {
+        "time": 0.0,
+        "evidence": 1.0,
+        "revisit": 0.0,
+        "connection": 0.0,
+        "intensity": 0.7
+      },
+      "ready_for_synthesis": false,
+      "blocking_factors": [
+        "Maturidade insuficiente: 0.00 < 0.75",
+        "Tempo insuficiente: 0 dias < 2 dias"
+      ]
+    }
+  ],
+  "problem_identified": "Tensões muito recentes (mais antiga: 1 dias)",
+  "solution": "Aguardar 1 dias ou continue conversando"
+}

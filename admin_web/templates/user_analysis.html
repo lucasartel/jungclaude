@@ -3,68 +3,92 @@
 {% block content %}
 <div class="space-y-6" style="padding: 0 1rem;">
     <!-- Header -->
-    <div class="flex items-center justify-between" style="background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); padding: 2rem; border-radius: 1rem; border: 1px solid rgba(139, 92, 246, 0.2); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); margin-bottom: 2rem;">
+    <div class="flex items-center justify-between"
+        style="background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); padding: 2rem; border-radius: 1rem; border: 1px solid rgba(139, 92, 246, 0.2); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); margin-bottom: 2rem;">
         <div>
-            <h1 class="text-3xl font-bold text-gray-900" style="font-size: 2.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.75rem;">
+            <h1 class="text-3xl font-bold text-gray-900"
+                style="font-size: 2.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.75rem;">
                 <span style="font-size: 3rem;">🧠</span>
-                Análise Psicológica
+                Avaliação Comportamental
             </h1>
             <p class="mt-1 text-sm text-gray-500" style="margin-top: 0.75rem; font-size: 1.1rem; color: #94a3b8;">
-                Análise MBTI e Jungiana de <span style="background: linear-gradient(135deg, #c4b5fd 0%, #ddd6fe 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 700;">{{ user.user_name }}</span>
+                Avaliação comportamental de <span
+                    style="background: linear-gradient(135deg, #c4b5fd 0%, #ddd6fe 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 700;">{{
+                    user.user_name }}</span>
             </p>
         </div>
         <div class="flex space-x-3" style="display: flex; flex-direction: column; gap: 0.75rem;">
             <a href="/admin/user/{{ user_id }}/psychometrics"
-               class="inline-flex items-center px-4 py-2 border border-purple-600 text-sm font-medium rounded-md text-purple-600 bg-white hover:bg-purple-50" style="padding: 0.75rem 1.5rem; background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(124, 58, 237, 0.1) 100%); border-radius: 0.75rem; border: 1px solid rgba(139, 92, 246, 0.3); transition: all 0.3s ease; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+                class="inline-flex items-center px-4 py-2 border border-purple-600 text-sm font-medium rounded-md text-purple-600 bg-white hover:bg-purple-50"
+                style="padding: 0.75rem 1.5rem; background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(124, 58, 237, 0.1) 100%); border-radius: 0.75rem; border: 1px solid rgba(139, 92, 246, 0.3); transition: all 0.3s ease; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 600;">
                 🧪 Ver Análises Psicométricas Completas
             </a>
+            <!--
             <a href="/admin/user/{{ user_id }}/development"
                class="inline-flex items-center px-4 py-2 border border-indigo-600 text-sm font-medium rounded-md text-indigo-600 bg-white hover:bg-indigo-50" style="padding: 0.75rem 1.5rem; background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(22, 163, 74, 0.1) 100%); border-radius: 0.75rem; border: 1px solid rgba(34, 197, 94, 0.3); transition: all 0.3s ease; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 600;">
                 📈 Ver Desenvolvimento
-            </a>
-            <a href="/admin/users" class="text-sm text-indigo-600 hover:text-indigo-500 self-center" style="padding: 0.5rem 1rem; text-align: center; color: #a78bfa; text-decoration: none; font-weight: 500; transition: all 0.3s ease;">
+            </a>-->
+            <a href="/admin/users" class="text-sm text-indigo-600 hover:text-indigo-500 self-center"
+                style="padding: 0.5rem 1rem; text-align: center; color: #a78bfa; text-decoration: none; font-weight: 500; transition: all 0.3s ease;">
                 ← Voltar
             </a>
         </div>
     </div>
 
     <!-- User Info Card -->
-    <div class="bg-white shadow rounded-lg p-6" style="background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); padding: 2rem; border-radius: 1rem; border: 1px solid rgba(148, 163, 184, 0.1); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);">
+    <div class="bg-white shadow rounded-lg p-6"
+        style="background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); padding: 2rem; border-radius: 1rem; border: 1px solid rgba(148, 163, 184, 0.1); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);">
         <div class="flex items-center space-x-4" style="display: flex; align-items: center; gap: 2rem;">
-            <div class="flex-shrink-0 h-16 w-16 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-2xl" style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 2rem; color: white; box-shadow: 0 4px 6px rgba(139, 92, 246, 0.3);">
+            <div class="flex-shrink-0 h-16 w-16 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-2xl"
+                style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 2rem; color: white; box-shadow: 0 4px 6px rgba(139, 92, 246, 0.3);">
                 {{ user.user_name[:2].upper() if user.user_name else 'U' }}
             </div>
             <div class="flex-1">
-                <h2 class="text-xl font-semibold text-gray-900" style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">{{ user.user_name or 'Usuário' }}</h2>
-                <p class="text-sm text-gray-500" style="font-family: monospace; font-size: 0.875rem; color: #64748b;">ID: {{ user_id }}</p>
+                <h2 class="text-xl font-semibold text-gray-900"
+                    style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">{{ user.user_name or 'Usuário'
+                    }}</h2>
+                <p class="text-sm text-gray-500" style="font-family: monospace; font-size: 0.875rem; color: #64748b;">
+                    ID: {{ user_id }}</p>
             </div>
-            <div class="grid grid-cols-2 gap-4" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 2rem;">
+            <div class="grid grid-cols-2 gap-4"
+                style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 2rem;">
                 <div class="text-center" style="text-align: center;">
-                    <div class="text-2xl font-bold text-gray-900" style="font-size: 2.5rem; font-weight: 700; background: linear-gradient(135deg, #c4b5fd 0%, #ddd6fe 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">{{ total_conversations }}</div>
-                    <div class="text-xs text-gray-500" style="font-size: 0.875rem; color: #94a3b8; margin-top: 0.5rem;">Conversas</div>
+                    <div class="text-2xl font-bold text-gray-900"
+                        style="font-size: 2.5rem; font-weight: 700; background: linear-gradient(135deg, #c4b5fd 0%, #ddd6fe 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                        {{ total_conversations }}</div>
+                    <div class="text-xs text-gray-500" style="font-size: 0.875rem; color: #94a3b8; margin-top: 0.5rem;">
+                        Conversas</div>
                 </div>
                 <div class="text-center" style="text-align: center;">
-                    <div class="text-2xl font-bold text-gray-900" style="font-size: 2.5rem; font-weight: 700; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">{{ total_conflicts }}</div>
-                    <div class="text-xs text-gray-500" style="font-size: 0.875rem; color: #94a3b8; margin-top: 0.5rem;">Conflitos</div>
+                    <div class="text-2xl font-bold text-gray-900"
+                        style="font-size: 2.5rem; font-weight: 700; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                        {{ total_conflicts }}</div>
+                    <div class="text-xs text-gray-500" style="font-size: 0.875rem; color: #94a3b8; margin-top: 0.5rem;">
+                        Conflitos</div>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Analysis Section -->
-    <div class="bg-white shadow rounded-lg p-6" style="background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); padding: 2rem; border-radius: 1rem; border: 1px solid rgba(148, 163, 184, 0.1); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);">
-        <div class="flex items-center justify-between mb-4" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-            <h3 class="text-lg font-medium text-gray-900" style="font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.75rem;">
+    <div class="bg-white shadow rounded-lg p-6"
+        style="background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); padding: 2rem; border-radius: 1rem; border: 1px solid rgba(148, 163, 184, 0.1); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);">
+        <div class="flex items-center justify-between mb-4"
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <h3 class="text-lg font-medium text-gray-900"
+                style="font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.75rem;">
                 <span style="font-size: 2rem;">🎭</span>
-                Análise MBTI com Grok
+                Análise MBTI
             </h3>
-            <button
-                id="analyze-btn"
-                onclick="runAnalysis()"
-                class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" style="padding: 0.75rem 2rem; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); border: none; border-radius: 0.75rem; box-shadow: 0 4px 6px rgba(139, 92, 246, 0.3); transition: all 0.3s ease; cursor: pointer; font-weight: 600; font-size: 1rem; color: white; display: inline-flex; align-items: center; gap: 0.5rem;">
-                <svg id="analyze-spinner" class="hidden animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <button id="analyze-btn" onclick="runAnalysis()"
+                class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                style="padding: 0.75rem 2rem; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); border: none; border-radius: 0.75rem; box-shadow: 0 4px 6px rgba(139, 92, 246, 0.3); transition: all 0.3s ease; cursor: pointer; font-weight: 600; font-size: 1rem; color: white; display: inline-flex; align-items: center; gap: 0.5rem;">
+                <svg id="analyze-spinner" class="hidden animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <path class="opacity-75" fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                    </path>
                 </svg>
                 <span id="analyze-text">Iniciar Análise</span>
             </button>
@@ -132,7 +156,9 @@
             <div class="flex">
                 <div class="flex-shrink-0">
                     <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                        <path fill-rule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                            clip-rule="evenodd" />
                     </svg>
                 </div>
                 <div class="ml-3">
@@ -146,7 +172,9 @@
             <div class="flex">
                 <div class="flex-shrink-0">
                     <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                        <path fill-rule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                            clip-rule="evenodd" />
                     </svg>
                 </div>
                 <div class="ml-3">
@@ -184,81 +212,81 @@
 </div>
 
 <script>
-async function runAnalysis() {
-    const btn = document.getElementById('analyze-btn');
-    const spinner = document.getElementById('analyze-spinner');
-    const text = document.getElementById('analyze-text');
-    const results = document.getElementById('analysis-results');
-    const error = document.getElementById('analysis-error');
-    const info = document.getElementById('analysis-info');
+    async function runAnalysis() {
+        const btn = document.getElementById('analyze-btn');
+        const spinner = document.getElementById('analyze-spinner');
+        const text = document.getElementById('analyze-text');
+        const results = document.getElementById('analysis-results');
+        const error = document.getElementById('analysis-error');
+        const info = document.getElementById('analysis-info');
 
-    // Show loading state
-    btn.disabled = true;
-    spinner.classList.remove('hidden');
-    text.textContent = 'Analisando...';
-    results.classList.add('hidden');
-    error.classList.add('hidden');
-    info.classList.add('hidden');
+        // Show loading state
+        btn.disabled = true;
+        spinner.classList.remove('hidden');
+        text.textContent = 'Analisando...';
+        results.classList.add('hidden');
+        error.classList.add('hidden');
+        info.classList.add('hidden');
 
-    try {
-        const response = await fetch('/admin/api/user/{{ user_id }}/analyze-mbti', {
-            method: 'POST'
-        });
+        try {
+            const response = await fetch('/admin/api/user/{{ user_id }}/analyze-mbti', {
+                method: 'POST'
+            });
 
-        const data = await response.json();
+            const data = await response.json();
 
-        if (data.error) {
-            throw new Error(data.summary || data.error);
+            if (data.error) {
+                throw new Error(data.summary || data.error);
+            }
+
+            // Display results
+            displayAnalysis(data);
+            results.classList.remove('hidden');
+
+        } catch (err) {
+            error.classList.remove('hidden');
+            document.getElementById('error-message').textContent = err.message;
+        } finally {
+            btn.disabled = false;
+            spinner.classList.add('hidden');
+            text.textContent = 'Analisar Novamente';
         }
-
-        // Display results
-        displayAnalysis(data);
-        results.classList.remove('hidden');
-
-    } catch (err) {
-        error.classList.remove('hidden');
-        document.getElementById('error-message').textContent = err.message;
-    } finally {
-        btn.disabled = false;
-        spinner.classList.add('hidden');
-        text.textContent = 'Analisar Novamente';
     }
-}
 
-function displayAnalysis(data) {
-    // MBTI Type
-    document.getElementById('mbti-type').textContent = data.type_indicator || 'XXXX';
-    document.getElementById('mbti-confidence').textContent = (data.confidence || 0) + '%';
-    document.getElementById('dominant-function').textContent = data.dominant_function || 'N/A';
+    function displayAnalysis(data) {
+        // MBTI Type
+        document.getElementById('mbti-type').textContent = data.type_indicator || 'XXXX';
+        document.getElementById('mbti-confidence').textContent = (data.confidence || 0) + '%';
+        document.getElementById('dominant-function').textContent = data.dominant_function || 'N/A';
 
-    // Summary
-    document.getElementById('analysis-summary').textContent = data.summary || 'Sem resumo disponível';
+        // Summary
+        document.getElementById('analysis-summary').textContent = data.summary || 'Sem resumo disponível';
 
-    // Dimensions
-    const dimensionsContainer = document.getElementById('dimensions-container');
-    dimensionsContainer.innerHTML = '';
+        // Dimensions
+        const dimensionsContainer = document.getElementById('dimensions-container');
+        dimensionsContainer.innerHTML = '';
 
-    const dimensionLabels = {
-        'E_I': ['E (Extroversão)', 'I (Introversão)'],
-        'S_N': ['S (Sensação)', 'N (Intuição)'],
-        'T_F': ['T (Pensamento)', 'F (Sentimento)'],
-        'J_P': ['J (Julgamento)', 'P (Percepção)']
-    };
+        const dimensionLabels = {
+            'E_I': ['E (Extroversão)', 'I (Introversão)'],
+            'S_N': ['S (Sensação)', 'N (Intuição)'],
+            'T_F': ['T (Pensamento)', 'F (Sentimento)'],
+            'J_P': ['J (Julgamento)', 'P (Percepção)']
+        };
 
-    if (data.dimensions) {
-        for (const [key, dimData] of Object.entries(data.dimensions)) {
-            const score = dimData.score || 0;
-            const labels = dimensionLabels[key] || ['Neg', 'Pos'];
-            const normalized = (score + 100) / 200 * 100;
+        if (data.dimensions) {
+            for (const [key, dimData] of Object.entries(data.dimensions)) {
+                const score = dimData.score || 0;
+                const labels = dimensionLabels[key] || ['Neg', 'Pos'];
+                const normalized = (score + 100) / 200 * 100;
 
-            let tendency = '';
-            if (score < -60) tendency = `✅ ${labels[0]}`;
-            else if (score < -20) tendency = `↗️ Tendência ${labels[0]}`;
-            else if (score <= 20) tendency = '⚖️ Indefinido';
-            else if (score <= 60) tendency = `↗️ Tendência ${labels[1]}`;
-            else tendency = `✅ ${labels[1]}`;
+                let tendency = '';
+                if (score < -60) tendency = `✅ ${labels[0]}`;
+                else if (score < -20) tendency = `↗️ Tendência ${labels[0]}`;
+                else if (score <= 20) tendency = '⚖️ Indefinido';
+                else if (score <= 60) tendency = `↗️ Tendência ${labels[1]}`;
+                else tendency = `✅ ${labels[1]}`;
 
-            const html = `
+                const html = `
                 <div class="border-l-4 border-indigo-500 pl-4">
                     <div class="flex justify-between items-center mb-2">
                         <span class="font-medium text-gray-900">${key}: ${tendency}</span>
@@ -270,30 +298,30 @@ function displayAnalysis(data) {
                     <p class="text-sm text-gray-600">${dimData.interpretation || 'Sem análise'}</p>
                 </div>
             `;
-            dimensionsContainer.innerHTML += html;
+                dimensionsContainer.innerHTML += html;
+            }
         }
+
+        // Potentials
+        const potentialsList = document.getElementById('potentials-list');
+        potentialsList.innerHTML = '';
+        (data.potentials || []).forEach(pot => {
+            potentialsList.innerHTML += `<li class="text-sm text-green-700">✅ ${pot}</li>`;
+        });
+
+        // Challenges
+        const challengesList = document.getElementById('challenges-list');
+        challengesList.innerHTML = '';
+        (data.challenges || []).forEach(chall => {
+            challengesList.innerHTML += `<li class="text-sm text-yellow-700">⚡ ${chall}</li>`;
+        });
+
+        // Recommendations
+        const recommendationsList = document.getElementById('recommendations-list');
+        recommendationsList.innerHTML = '';
+        (data.recommendations || []).forEach(rec => {
+            recommendationsList.innerHTML += `<li class="text-sm text-indigo-700">→ ${rec}</li>`;
+        });
     }
-
-    // Potentials
-    const potentialsList = document.getElementById('potentials-list');
-    potentialsList.innerHTML = '';
-    (data.potentials || []).forEach(pot => {
-        potentialsList.innerHTML += `<li class="text-sm text-green-700">✅ ${pot}</li>`;
-    });
-
-    // Challenges
-    const challengesList = document.getElementById('challenges-list');
-    challengesList.innerHTML = '';
-    (data.challenges || []).forEach(chall => {
-        challengesList.innerHTML += `<li class="text-sm text-yellow-700">⚡ ${chall}</li>`;
-    });
-
-    // Recommendations
-    const recommendationsList = document.getElementById('recommendations-list');
-    recommendationsList.innerHTML = '';
-    (data.recommendations || []).forEach(rec => {
-        recommendationsList.innerHTML += `<li class="text-sm text-indigo-700">→ ${rec}</li>`;
-    });
-}
 </script>
 {% endblock %}
