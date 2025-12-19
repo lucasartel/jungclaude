@@ -750,6 +750,111 @@ async def migrate_evidence():
             "message": "Migration failed - database rolled back"
         }
 
+@app.post("/admin/migrate/facts-v2")
+async def migrate_facts_v2_endpoint():
+    """
+    ENDPOINT TEMPORÁRIO: Migrar para Sistema de Fatos V2
+
+    Acesse: POST https://seu-railway-url/admin/migrate/facts-v2
+
+    Cria tabela user_facts_v2 com schema melhorado e migra dados antigos.
+    """
+
+    try:
+        logger.info("🚀 Iniciando migração para user_facts_v2...")
+
+        from migrate_facts_v2 import migrate_to_v2
+
+        success = migrate_to_v2()
+
+        if success:
+            logger.info("✅ Migração concluída com sucesso!")
+            return {
+                "status": "success",
+                "message": "Migração para user_facts_v2 concluída com sucesso",
+                "next_steps": [
+                    "1. Verificar logs do Railway",
+                    "2. Integrar código no jung_core.py",
+                    "3. Testar com mensagem: 'Minha esposa se chama [nome]'",
+                    "4. Remover este endpoint depois dos testes"
+                ]
+            }
+        else:
+            logger.error("❌ Migração falhou")
+            return {
+                "status": "error",
+                "message": "Migração falhou, verificar logs do Railway"
+            }
+
+    except Exception as e:
+        logger.error(f"❌ Erro na migração: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+@app.get("/admin/facts-v2/status")
+async def facts_v2_status():
+    """
+    Verifica status da migração para user_facts_v2
+
+    Acesse: GET https://seu-railway-url/admin/facts-v2/status
+    """
+
+    try:
+        cursor = bot_state.db.conn.cursor()
+
+        # Verificar se tabela existe
+        cursor.execute("""
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name='user_facts_v2'
+        """)
+
+        v2_exists = cursor.fetchone() is not None
+
+        result = {
+            "user_facts_v2_exists": v2_exists
+        }
+
+        if v2_exists:
+            # Estatísticas
+            cursor.execute("SELECT COUNT(*) as count FROM user_facts_v2 WHERE is_current = 1")
+            total_facts = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(DISTINCT user_id) as count FROM user_facts_v2")
+            users_with_facts = cursor.fetchone()[0]
+
+            cursor.execute("""
+                SELECT fact_category, COUNT(*) as count
+                FROM user_facts_v2
+                WHERE is_current = 1
+                GROUP BY fact_category
+            """)
+
+            by_category = {row[0]: row[1] for row in cursor.fetchall()}
+
+            result.update({
+                "total_facts": total_facts,
+                "users_with_facts": users_with_facts,
+                "by_category": by_category,
+                "status": "migrated"
+            })
+        else:
+            result["status"] = "not_migrated"
+            result["action"] = "Execute POST /admin/migrate/facts-v2"
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Erro ao verificar status: {e}")
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
 # Montar arquivos estáticos (apenas se o diretório existir)
 static_dir = "admin_web/static"
 if os.path.exists(static_dir) and os.path.isdir(static_dir):
