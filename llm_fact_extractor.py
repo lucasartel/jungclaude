@@ -239,44 +239,29 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
             # Remover markdown code blocks se presentes
             cleaned_text = re.sub(r'^```json?\s*', '', response_text, flags=re.IGNORECASE)
             cleaned_text = re.sub(r'\s*```\s*$', '', cleaned_text)
-
-            # DEBUG: Mostrar resposta do LLM
-            logger.info(f"[DEBUG] Resposta raw do LLM: {response_text[:300]}...")
-            logger.info(f"[DEBUG] Após limpeza: {cleaned_text[:300]}...")
+            cleaned_text = cleaned_text.strip()
 
             # Tentar encontrar JSON válido na resposta
             # Caso 1: JSON direto
             try:
-                logger.info("[DEBUG] Tentando parse direto do JSON...")
                 data = json.loads(cleaned_text)
-                logger.info("[DEBUG] ✅ Parse direto funcionou!")
-            except json.JSONDecodeError as e1:
-                logger.info(f"[DEBUG] ❌ Parse direto falhou: {e1}")
-                # Caso 2: Extrair apenas o bloco JSON {...}
-                json_match = re.search(r'\{[\s\S]*\}', cleaned_text)
+            except json.JSONDecodeError:
+                # Caso 2: Extrair apenas o bloco JSON {...} mais externo
+                # Use regex não-greedy para pegar apenas o JSON completo
+                json_match = re.search(r'\{[^{}]*"fatos"[^{}]*:\s*\[[^\]]*\][^{}]*\}', cleaned_text, re.DOTALL)
                 if json_match:
                     try:
-                        logger.info(f"[DEBUG] Tentando parse do bloco JSON extraído...")
-                        logger.info(f"[DEBUG] Bloco extraído: {json_match.group(0)[:300]}...")
                         data = json.loads(json_match.group(0))
-                        logger.info("[DEBUG] ✅ Parse do bloco JSON funcionou!")
-                    except json.JSONDecodeError as e2:
-                        logger.info(f"[DEBUG] ❌ Parse do bloco JSON falhou: {e2}")
-                        # Caso 3: Tentar encontrar array de fatos diretamente
-                        array_match = re.search(r'"fatos"\s*:\s*\[[\s\S]*\]', cleaned_text)
-                        if array_match:
-                            logger.info(f"[DEBUG] Regex de array matched: {array_match.group(0)[:300]}...")
-                            json_to_parse = '{' + array_match.group(0) + '}'
-                            logger.info(f"[DEBUG] JSON reconstruído: {json_to_parse[:300]}...")
-                            # Reconstruir JSON válido
-                            data = json.loads(json_to_parse)
-                            logger.info("[DEBUG] ✅ Parse do array reconstruído funcionou!")
-                        else:
-                            logger.error("[DEBUG] ❌ Nenhum padrão de JSON encontrado!")
-                            raise
+                    except json.JSONDecodeError as e:
+                        logger.error(f"      ❌ Erro ao parsear JSON extraído: {e}")
+                        logger.error(f"      JSON tentado: {json_match.group(0)[:500]}")
+                        raise
                 else:
-                    logger.error("[DEBUG] ❌ Nenhum bloco JSON encontrado!")
-                    raise
+                    # Se não encontrou JSON com "fatos", pode ser resposta vazia ou sem formato
+                    logger.warning(f"      ⚠️ Não encontrei JSON válido na resposta do LLM")
+                    logger.warning(f"      Resposta (primeiros 500 chars): {cleaned_text[:500]}")
+                    # Retornar estrutura vazia em vez de falhar
+                    data = {"fatos": []}
 
             # Converter para ExtractedFact
             facts = []
