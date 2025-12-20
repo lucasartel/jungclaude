@@ -514,6 +514,19 @@ class HybridDatabaseManager:
         else:
             self.xai_client = None
 
+        # ===== Anthropic Client (para Claude) =====
+        try:
+            import anthropic
+            if hasattr(Config, 'ANTHROPIC_API_KEY') and Config.ANTHROPIC_API_KEY:
+                self.anthropic_client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+                logger.info("✅ Anthropic client inicializado")
+            else:
+                self.anthropic_client = None
+                logger.warning("⚠️ ANTHROPIC_API_KEY não configurada")
+        except ImportError:
+            self.anthropic_client = None
+            logger.warning("⚠️ Módulo anthropic não disponível")
+
         # ===== LLM Fact Extractor =====
         logger.info(f"🔍 [DEBUG] LLM_FACT_EXTRACTOR_AVAILABLE = {LLM_FACT_EXTRACTOR_AVAILABLE}")
         logger.info(f"🔍 [DEBUG] anthropic_client = {self.anthropic_client is not None}")
