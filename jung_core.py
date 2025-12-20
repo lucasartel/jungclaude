@@ -1545,35 +1545,89 @@ Resposta: {ai_response}
         # 🔍 DEBUG CRÍTICO: Log de recuperação de fatos
         logger.info(f"📚 [DEBUG] Recuperando fatos para user_id='{user_id}'")
 
+        # Verificar se tabela V2 existe
         cursor.execute("""
-            SELECT fact_category, fact_key, fact_value
-            FROM user_facts
-            WHERE user_id = ? AND is_current = 1
-            ORDER BY fact_category, fact_key
-        """, (user_id,))
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name='user_facts_v2'
+        """)
+        use_v2 = cursor.fetchone() is not None
 
-        facts = cursor.fetchall()
+        if use_v2:
+            # Usar nova estrutura hierárquica V2
+            logger.info(f"📚 [DEBUG] Usando user_facts_v2 (nova estrutura)")
+            cursor.execute("""
+                SELECT fact_category, fact_type, fact_attribute, fact_value, confidence
+                FROM user_facts_v2
+                WHERE user_id = ? AND is_current = 1
+                ORDER BY fact_category, fact_type, fact_attribute
+            """, (user_id,))
 
-        # 🔍 DEBUG: Log dos fatos recuperados
-        logger.info(f"   Fatos encontrados: {len(facts)}")
-        for i, fact in enumerate(facts[:10], 1):  # Mostrar até 10 primeiros
-            logger.info(f"   Fato {i}: {fact['fact_category']} - {fact['fact_key']}: {fact['fact_value']}")
+            facts = cursor.fetchall()
 
-        if facts:
-            context_parts.append("📋 FATOS CONHECIDOS:")
+            # 🔍 DEBUG: Log dos fatos recuperados
+            logger.info(f"   Fatos V2 encontrados: {len(facts)}")
+            for i, fact in enumerate(facts[:10], 1):
+                logger.info(f"   Fato {i}: {fact['fact_category']}.{fact['fact_type']}.{fact['fact_attribute']} = {fact['fact_value']} (conf: {fact['confidence']:.2f})")
 
-            facts_by_category = {}
-            for fact in facts:
-                category = fact['fact_category']
-                if category not in facts_by_category:
-                    facts_by_category[category] = []
-                facts_by_category[category].append(f"{fact['fact_key']}: {fact['fact_value']}")
+            if facts:
+                context_parts.append("📋 FATOS CONHECIDOS:")
 
-            for category, items in facts_by_category.items():
-                context_parts.append(f"\n{category}:")
-                context_parts.append("\n".join(f"  - {item}" for item in items))
+                # Agrupar hierarquicamente: categoria > tipo > atributos
+                facts_hierarchy = {}
+                for fact in facts:
+                    category = fact['fact_category']
+                    fact_type = fact['fact_type']
+                    attribute = fact['fact_attribute']
+                    value = fact['fact_value']
 
-            context_parts.append("")
+                    if category not in facts_hierarchy:
+                        facts_hierarchy[category] = {}
+
+                    if fact_type not in facts_hierarchy[category]:
+                        facts_hierarchy[category][fact_type] = []
+
+                    facts_hierarchy[category][fact_type].append(f"{attribute}: {value}")
+
+                # Exibir de forma estruturada e legível
+                for category, types in facts_hierarchy.items():
+                    context_parts.append(f"\n{category}:")
+                    for fact_type, attrs in types.items():
+                        attrs_text = ", ".join(attrs)
+                        context_parts.append(f"  - {fact_type}: {attrs_text}")
+
+                context_parts.append("")
+        else:
+            # Fallback para estrutura antiga
+            logger.info(f"📚 [DEBUG] Usando user_facts (estrutura antiga)")
+            cursor.execute("""
+                SELECT fact_category, fact_key, fact_value
+                FROM user_facts
+                WHERE user_id = ? AND is_current = 1
+                ORDER BY fact_category, fact_key
+            """, (user_id,))
+
+            facts = cursor.fetchall()
+
+            # 🔍 DEBUG: Log dos fatos recuperados
+            logger.info(f"   Fatos encontrados: {len(facts)}")
+            for i, fact in enumerate(facts[:10], 1):
+                logger.info(f"   Fato {i}: {fact['fact_category']} - {fact['fact_key']}: {fact['fact_value']}")
+
+            if facts:
+                context_parts.append("📋 FATOS CONHECIDOS:")
+
+                facts_by_category = {}
+                for fact in facts:
+                    category = fact['fact_category']
+                    if category not in facts_by_category:
+                        facts_by_category[category] = []
+                    facts_by_category[category].append(f"{fact['fact_key']}: {fact['fact_value']}")
+
+                for category, items in facts_by_category.items():
+                    context_parts.append(f"\n{category}:")
+                    context_parts.append("\n".join(f"  - {item}" for item in items))
+
+                context_parts.append("")
         
         # ===== 4. PADRÕES DETECTADOS =====
         cursor.execute("""
