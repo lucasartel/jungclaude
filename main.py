@@ -1,6 +1,6 @@
 import asyncio
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
@@ -900,14 +900,13 @@ async def facts_v2_list():
             "error": str(e)
         }
 
-@app.post("/admin/test-extraction")
-async def test_extraction(request: dict):
+@app.api_route("/admin/test-extraction", methods=["GET", "POST"])
+async def test_extraction(request: Request = None, message: str = None):
     """
     Endpoint de diagnóstico para testar extração de fatos diretamente
 
-    Uso:
-    POST https://seu-railway-url/admin/test-extraction
-    Body: {"message": "Sua mensagem de teste aqui"}
+    Uso GET: https://seu-railway-url/admin/test-extraction?message=Sua+mensagem
+    Uso POST: Body: {"message": "Sua mensagem de teste aqui"}
 
     Retorna:
     - O que o LLM extraiu (raw)
@@ -916,11 +915,19 @@ async def test_extraction(request: dict):
     """
 
     try:
-        message = request.get("message")
+        # Aceitar tanto GET quanto POST
+        if request and request.method == "POST":
+            body = await request.json()
+            message = body.get("message")
+
         if not message:
             return {
                 "status": "error",
-                "error": "Campo 'message' obrigatório"
+                "error": "Campo 'message' obrigatório",
+                "usage": {
+                    "GET": "/admin/test-extraction?message=Sua+mensagem",
+                    "POST": "Body: {\"message\": \"Sua mensagem\"}"
+                }
             }
 
         # Verificar se extractor está disponível
