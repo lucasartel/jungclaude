@@ -515,20 +515,30 @@ class HybridDatabaseManager:
             self.xai_client = None
 
         # ===== LLM Fact Extractor =====
-        if LLM_FACT_EXTRACTOR_AVAILABLE and self.xai_client:
+        if LLM_FACT_EXTRACTOR_AVAILABLE:
             try:
-                self.fact_extractor = LLMFactExtractor(
-                    llm_client=self.xai_client,  # Usar Grok (mais barato)
-                    model="grok-beta"
-                )
-                logger.info("✅ LLM Fact Extractor inicializado (Grok)")
+                # Preferir Claude por ser mais confiável para extração estruturada
+                if self.anthropic_client:
+                    self.fact_extractor = LLMFactExtractor(
+                        llm_client=self.anthropic_client,
+                        model="claude-sonnet-4-5-20250929"
+                    )
+                    logger.info("✅ LLM Fact Extractor inicializado (Claude Sonnet 4.5)")
+                elif self.xai_client:
+                    self.fact_extractor = LLMFactExtractor(
+                        llm_client=self.xai_client,
+                        model="grok-beta"
+                    )
+                    logger.info("✅ LLM Fact Extractor inicializado (Grok)")
+                else:
+                    logger.warning("⚠️ Nenhum cliente LLM disponível para fact extractor")
+                    self.fact_extractor = None
             except Exception as e:
                 logger.warning(f"⚠️ Erro ao inicializar LLM Fact Extractor: {e}")
                 self.fact_extractor = None
         else:
             self.fact_extractor = None
-            if not LLM_FACT_EXTRACTOR_AVAILABLE:
-                logger.warning("⚠️ LLM Fact Extractor não disponível")
+            logger.warning("⚠️ LLM Fact Extractor não disponível")
 
         logger.info("✅ Banco híbrido inicializado com sucesso")
 

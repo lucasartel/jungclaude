@@ -140,14 +140,24 @@ Retorne APENAS o JSON, sem texto adicional."""
 
         try:
             # Chamar LLM
-            if self.model.startswith("grok"):
+            if self.model.startswith("claude"):
+                # Anthropic Claude
+                response = self.llm.messages.create(
+                    model=self.model,
+                    max_tokens=2000,
+                    temperature=0.1,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                response_text = response.content[0].text.strip()
+            elif self.model.startswith("grok"):
                 # XAI / Grok
                 response = self.llm.chat.completions.create(
                     model=self.model,
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.1,  # Baixa temperatura para extração precisa
+                    temperature=0.1,
                     max_tokens=2000
                 )
+                response_text = response.choices[0].message.content.strip()
             else:
                 # OpenAI
                 response = self.llm.chat.completions.create(
@@ -156,8 +166,7 @@ Retorne APENAS o JSON, sem texto adicional."""
                     temperature=0.1,
                     max_tokens=2000
                 )
-
-            response_text = response.choices[0].message.content.strip()
+                response_text = response.choices[0].message.content.strip()
 
             # Parsear JSON - Melhorado para lidar com diferentes formatos
             # Remover markdown code blocks se presentes
