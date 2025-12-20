@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 import logging
 import os
 import sys
+import sqlite3
 from dotenv import load_dotenv
 
 # Adicionar diretório atual ao PYTHONPATH para garantir que admin_web seja encontrado
@@ -856,48 +857,110 @@ async def facts_v2_status():
         }
 
 @app.get("/admin/facts-v2/list")
-async def facts_v2_list():
+async def facts_v2_list(user_id: str = None):
     """
-    Lista todos os fatos da tabela user_facts_v2
+    Lista todos os fatos da tabela user_facts_v2 com análise completa
 
     Acesse: GET https://seu-railway-url/admin/facts-v2/list
+    Filtrar por usuário: GET https://seu-railway-url/admin/facts-v2/list?user_id=USER_ID
     """
 
     try:
         cursor = bot_state.db.conn.cursor()
-        cursor.row_factory = lambda cursor, row: {
-            "id": row[0],
-            "user_id": row[1],
-            "category": row[2],
-            "type": row[3],
-            "attribute": row[4],
-            "value": row[5],
-            "confidence": row[6],
-            "method": row[7],
-            "created_at": row[8]
-        }
+        cursor.row_factory = sqlite3.Row
 
-        cursor.execute("""
-            SELECT id, user_id, fact_category, fact_type, fact_attribute,
-                   fact_value, confidence, extraction_method, created_at
-            FROM user_facts_v2
-            WHERE is_current = 1
-            ORDER BY created_at DESC
-        """)
+        # Buscar fatos (com filtro opcional de user_id)
+        if user_id:
+            cursor.execute("""
+                SELECT id, user_id, fact_category, fact_type, fact_attribute,
+                       fact_value, confidence, extraction_method, context, created_at
+                FROM user_facts_v2
+                WHERE is_current = 1 AND user_id = ?
+                ORDER BY created_at DESC
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                SELECT id, user_id, fact_category, fact_type, fact_attribute,
+                       fact_value, confidence, extraction_method, context, created_at
+                FROM user_facts_v2
+                WHERE is_current = 1
+                ORDER BY created_at DESC
+            """)
 
         facts = cursor.fetchall()
 
+        # Organizar por categoria
+        by_category = {}
+        by_user = {}
+
+        for fact in facts:
+            cat = fact['fact_category']
+            uid = fact['user_id']
+
+            # Por categoria
+            if cat not in by_category:
+                by_category[cat] = []
+            by_category[cat].append({
+                "id": fact['id'],
+                "user_id": fact['user_id'],
+                "type": fact['fact_type'],
+                "attribute": fact['fact_attribute'],
+                "value": fact['fact_value'],
+                "confidence": fact['confidence'],
+                "method": fact['extraction_method'],
+                "context": fact['context'][:80] + "..." if fact['context'] and len(fact['context']) > 80 else fact['context'],
+                "created_at": fact['created_at']
+            })
+
+            # Por usuário
+            if uid not in by_user:
+                by_user[uid] = {
+                    "total": 0,
+                    "by_category": {}
+                }
+            by_user[uid]["total"] += 1
+            if cat not in by_user[uid]["by_category"]:
+                by_user[uid]["by_category"][cat] = 0
+            by_user[uid]["by_category"][cat] += 1
+
+        # Estatísticas por categoria
+        category_stats = {}
+        for cat, items in by_category.items():
+            category_stats[cat] = {
+                "total": len(items),
+                "avg_confidence": sum(f['confidence'] for f in items) / len(items) if items else 0,
+                "methods": {}
+            }
+
+            # Contar métodos de extração
+            for item in items:
+                method = item['method']
+                if method not in category_stats[cat]["methods"]:
+                    category_stats[cat]["methods"][method] = 0
+                category_stats[cat]["methods"][method] += 1
+
         return {
             "status": "success",
-            "total": len(facts),
-            "facts": facts
+            "summary": {
+                "total_facts": len(facts),
+                "total_users": len(by_user),
+                "categories": list(by_category.keys()),
+                "category_breakdown": {cat: len(items) for cat, items in by_category.items()}
+            },
+            "category_stats": category_stats,
+            "users": by_user,
+            "facts_by_category": by_category,
+            "all_facts": [dict(f) for f in facts]  # Lista completa no final
         }
 
     except Exception as e:
+        import traceback
         logger.error(f"Erro ao listar fatos: {e}")
+        logger.error(traceback.format_exc())
         return {
             "status": "error",
-            "error": str(e)
+            "error": str(e),
+            "traceback": traceback.format_exc()
         }
 
 @app.api_route("/admin/test-extraction", methods=["GET", "POST"])
