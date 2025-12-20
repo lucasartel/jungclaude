@@ -61,10 +61,16 @@ def migrate_to_v2(db_path: str = None):
 
         if cursor.fetchone():
             logger.warning("⚠️ Tabela user_facts_v2 já existe!")
-            response = input("Deseja recriá-la? Isso apagará dados existentes (s/N): ")
-            if response.lower() != 's':
-                logger.info("❌ Migração cancelada")
-                return False
+
+            # Em ambiente web/Railway, sempre recriar
+            # (em ambiente CLI, db_path seria passado explicitamente)
+            if db_path is None or '/data/' in str(db_path):
+                logger.info("🗑️ Ambiente Railway detectado - recriando tabela automaticamente...")
+            else:
+                response = input("Deseja recriá-la? Isso apagará dados existentes (s/N): ")
+                if response.lower() != 's':
+                    logger.info("❌ Migração cancelada")
+                    return False
 
             logger.info("🗑️ Removendo tabela antiga...")
             cursor.execute("DROP TABLE user_facts_v2")
