@@ -92,9 +92,10 @@ class ArchetypeConflict:
 
 class Config:
     """Configurações globais do sistema"""
-    
+
     # APIs
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
     XAI_API_KEY = os.getenv("XAI_API_KEY")
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     
@@ -517,15 +518,18 @@ class HybridDatabaseManager:
         # ===== Anthropic Client (para Claude) =====
         try:
             import anthropic
-            if hasattr(Config, 'ANTHROPIC_API_KEY') and Config.ANTHROPIC_API_KEY:
+            if Config.ANTHROPIC_API_KEY:
                 self.anthropic_client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
                 logger.info("✅ Anthropic client inicializado")
             else:
                 self.anthropic_client = None
                 logger.warning("⚠️ ANTHROPIC_API_KEY não configurada")
-        except ImportError:
+        except ImportError as e:
             self.anthropic_client = None
-            logger.warning("⚠️ Módulo anthropic não disponível")
+            logger.warning(f"⚠️ Módulo anthropic não disponível: {e}")
+        except Exception as e:
+            self.anthropic_client = None
+            logger.error(f"❌ Erro ao inicializar Anthropic client: {e}")
 
         # ===== LLM Fact Extractor =====
         logger.info(f"🔍 [DEBUG] LLM_FACT_EXTRACTOR_AVAILABLE = {LLM_FACT_EXTRACTOR_AVAILABLE}")
