@@ -750,12 +750,12 @@ async def migrate_evidence():
             "message": "Migration failed - database rolled back"
         }
 
-@app.post("/admin/migrate/facts-v2")
+@app.api_route("/admin/migrate/facts-v2", methods=["GET", "POST"])
 async def migrate_facts_v2_endpoint():
     """
     ENDPOINT TEMPORÁRIO: Migrar para Sistema de Fatos V2
 
-    Acesse: POST https://seu-railway-url/admin/migrate/facts-v2
+    Acesse: GET ou POST https://seu-railway-url/admin/migrate/facts-v2
 
     Cria tabela user_facts_v2 com schema melhorado e migra dados antigos.
     """
