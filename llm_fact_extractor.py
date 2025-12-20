@@ -159,12 +159,31 @@ Retorne APENAS o JSON, sem texto adicional."""
 
             response_text = response.choices[0].message.content.strip()
 
-            # Parsear JSON
+            # Parsear JSON - Melhorado para lidar com diferentes formatos
             # Remover markdown code blocks se presentes
-            response_text = re.sub(r'^```json?\s*', '', response_text)
-            response_text = re.sub(r'\s*```$', '', response_text)
+            cleaned_text = re.sub(r'^```json?\s*', '', response_text, flags=re.IGNORECASE)
+            cleaned_text = re.sub(r'\s*```\s*$', '', cleaned_text)
 
-            data = json.loads(response_text)
+            # Tentar encontrar JSON válido na resposta
+            # Caso 1: JSON direto
+            try:
+                data = json.loads(cleaned_text)
+            except json.JSONDecodeError:
+                # Caso 2: Extrair apenas o bloco JSON {...}
+                json_match = re.search(r'\{[\s\S]*\}', cleaned_text)
+                if json_match:
+                    try:
+                        data = json.loads(json_match.group(0))
+                    except json.JSONDecodeError:
+                        # Caso 3: Tentar encontrar array de fatos diretamente
+                        array_match = re.search(r'"fatos"\s*:\s*\[[\s\S]*\]', cleaned_text)
+                        if array_match:
+                            # Reconstruir JSON válido
+                            data = json.loads('{' + array_match.group(0) + '}')
+                        else:
+                            raise
+                else:
+                    raise
 
             # Converter para ExtractedFact
             facts = []
@@ -192,10 +211,15 @@ Retorne APENAS o JSON, sem texto adicional."""
 
         except json.JSONDecodeError as e:
             logger.error(f"      ❌ Erro ao parsear JSON do LLM: {e}")
-            logger.error(f"      Resposta: {response_text[:200]}")
+            logger.error(f"      Resposta completa recebida:")
+            logger.error(f"      {response_text}")
+            logger.error(f"      Cleaned text tentado:")
+            logger.error(f"      {cleaned_text[:500]}")
             return []
         except Exception as e:
             logger.error(f"      ❌ Erro no LLM: {type(e).__name__} - {e}")
+            if 'response_text' in locals():
+                logger.error(f"      Resposta do LLM: {response_text[:300]}")
             return []
 
     def _extract_with_regex(self, user_input: str) -> List[ExtractedFact]:
