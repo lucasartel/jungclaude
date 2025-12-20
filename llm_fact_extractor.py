@@ -40,61 +40,128 @@ class LLMFactExtractor:
     - Fallback para regex em caso de falha do LLM
     """
 
-    # Prompt otimizado para extração de fatos
-    EXTRACTION_PROMPT = """Você é um sistema especializado em extrair fatos estruturados de conversas.
+    # Prompt otimizado para extração de fatos - Sistema de Memória Profunda V2
+    EXTRACTION_PROMPT = """Você é um sistema especializado em extrair fatos estruturados de conversas para criar memória emocional profunda.
 
 TAREFA: Extrair TODOS os fatos mencionados na mensagem abaixo.
 
 CATEGORIAS DE FATOS:
+
 1. RELACIONAMENTO - Pessoas relacionadas ao usuário
    - Tipos: esposa, marido, filho, filha, pai, mae, irmao, irma, avô, avó, primo, amigo, namorado, namorada, etc.
-   - Atributos: nome, idade, profissao, local_trabalho, personalidade, etc.
+   - Atributos: nome, idade, profissao, aniversario, tempo_relacionamento, dinamica, caracteristica, local_trabalho
+   - Exemplo: esposa.nome="Ana", esposa.aniversario="15/03", esposa.dinamica="meu porto seguro"
 
 2. TRABALHO - Informações profissionais
-   - Tipos: profissao, empresa, cargo, area, projeto
-   - Atributos: nome, local, tempo, satisfacao, etc.
+   - Tipos: profissao, empresa, cargo, projeto, colega
+   - Atributos: nome, local, tempo, satisfacao, objetivo, desafio, salario, responsabilidade
+   - Exemplo: profissao.empresa="Google", profissao.satisfacao="gosto mas estressante", profissao.objetivo="virar senior"
 
-3. PERSONALIDADE - Traços de personalidade
-   - Tipos: traço, preferencia, habito, valor
-   - Atributos: descricao, intensidade, contexto
+3. PERSONALIDADE - Traços, valores e crenças
+   - Tipos: traço, valor, crenca, autoimagem, gatilho_emocional
+   - Atributos: descricao, intensidade, contexto, origem, importancia, atitude
+   - Exemplo: traço.tipo="introvertido", valor.tipo="familia_primeiro", crenca.tipo="terapia", crenca.atitude="acredito e faço"
 
-4. SAUDE - Informações de saúde
-   - Tipos: condicao, tratamento, historico
-   - Atributos: descricao, status, medicacao
+4. DESAFIOS - Problemas, lutas, dificuldades (NOVA - Alta sensibilidade)
+   - Tipos: saude_mental (ansiedade, depressao, insonia, estresse), saude_fisica (dor, doenca, lesao),
+            relacionamento (conflito, distanciamento, luto), carreira (pressao, medo_demissao, burnout),
+            objetivo_nao_alcancado (emagrecer, parar_fumar, procrastinacao)
+   - Atributos: tipo, inicio, frequencia, gatilho, tentativa_solucao, nivel_atual, impacto
+   - Exemplo: insonia.inicio="há 3 meses", insonia.gatilho="estresse no trabalho", insonia.nivel_atual="melhorando"
 
-5. EDUCACAO - Formação e aprendizado
-   - Tipos: formacao, curso, instituicao, habilidade
-   - Atributos: nome, nivel, status, area
+5. PREFERENCIAS - Gostos, aversões, rituais (NOVA - Personalização)
+   - Tipos: hobbie, aversao, ritual, comfort_activity, horario_produtivo, gosto_musical, gosto_culinario
+   - Atributos: descricao, frequencia, motivo, beneficio, impacto, genero, autor_favorito, momento
+   - Exemplo: leitura.genero="ficção científica", leitura.frequencia="antes de dormir", leitura.beneficio="me acalma"
 
-6. HOBBIES - Atividades e interesses
-   - Tipos: hobby, interesse, esporte, arte
-   - Atributos: nome, frequencia, nivel
+6. MOMENTOS - Eventos temporais (NOVA - Antecipação)
+   - Tipos: evento_futuro, marco_recente, ciclo_recorrente, data_especial
+   - Atributos: data, tipo, sentimento, planejamento, impacto, frequencia, duracao
+   - Exemplo: viagem_paris.data="janeiro 2025", viagem_paris.sentimento="ansioso positivo"
 
-INSTRUÇÕES:
-1. Extraia TODOS os fatos mencionados
-2. Seja ESPECÍFICO - capture nomes próprios quando mencionados
-3. Para pessoas, sempre tente extrair: nome, idade (se mencionado), profissão (se mencionado)
-4. Se múltiplas pessoas são mencionadas, extraia cada uma separadamente
-5. Use confidence: 1.0 para fatos explícitos, 0.7 para inferidos, 0.5 para ambíguos
+INSTRUÇÕES CRÍTICAS:
+1. Extraia TODOS os fatos mencionados - seja minucioso
+2. Seja ESPECÍFICO - capture nomes próprios, datas, números
+3. Para RELACIONAMENTO: sempre extraia nome, aniversário (se mencionado), dinâmica emocional
+4. Para DESAFIOS: capture início, frequência, gatilhos, tentativas de solução
+5. Para PREFERENCIAS: capture frequência, motivo, benefício
+6. Para MOMENTOS: capture datas específicas ou relativas ("mês que vem")
+7. Se múltiplas entidades são mencionadas, extraia cada uma separadamente
+8. Use confidence: 1.0 para fatos explícitos, 0.8 para inferidos claros, 0.6 para ambíguos
 
-FORMATO DE SAÍDA (JSON):
+EXEMPLOS DE EXTRAÇÃO:
+
+Entrada: "Minha esposa Jucinei faz aniversário dia 15 de março, ela é professora"
+Saída:
 {
   "fatos": [
-    {
-      "category": "RELACIONAMENTO",
-      "fact_type": "esposa",
-      "attribute": "nome",
-      "value": "Ana",
-      "confidence": 1.0,
-      "context": "Minha esposa se chama Ana"
-    }
+    {"category": "RELACIONAMENTO", "fact_type": "esposa", "attribute": "nome", "value": "Jucinei", "confidence": 1.0, "context": "Minha esposa Jucinei"},
+    {"category": "RELACIONAMENTO", "fact_type": "esposa", "attribute": "aniversario", "value": "15/03", "confidence": 1.0, "context": "faz aniversário dia 15 de março"},
+    {"category": "RELACIONAMENTO", "fact_type": "esposa", "attribute": "profissao", "value": "professora", "confidence": 1.0, "context": "ela é professora"}
+  ]
+}
+
+Entrada: "Tenho insônia há 3 meses por causa do estresse no trabalho, já tentei meditação"
+Saída:
+{
+  "fatos": [
+    {"category": "DESAFIOS", "fact_type": "insonia", "attribute": "tipo", "value": "saude_mental", "confidence": 1.0, "context": "Tenho insônia"},
+    {"category": "DESAFIOS", "fact_type": "insonia", "attribute": "inicio", "value": "há 3 meses", "confidence": 1.0, "context": "há 3 meses"},
+    {"category": "DESAFIOS", "fact_type": "insonia", "attribute": "gatilho", "value": "estresse no trabalho", "confidence": 0.8, "context": "por causa do estresse no trabalho"},
+    {"category": "DESAFIOS", "fact_type": "insonia", "attribute": "tentativa_solucao", "value": "meditação", "confidence": 1.0, "context": "já tentei meditação"}
+  ]
+}
+
+Entrada: "Adoro ler ficção científica antes de dormir, Isaac Asimov é meu favorito, me ajuda a relaxar"
+Saída:
+{
+  "fatos": [
+    {"category": "PREFERENCIAS", "fact_type": "leitura", "attribute": "genero", "value": "ficção científica", "confidence": 1.0, "context": "ler ficção científica"},
+    {"category": "PREFERENCIAS", "fact_type": "leitura", "attribute": "frequencia", "value": "antes de dormir", "confidence": 1.0, "context": "antes de dormir"},
+    {"category": "PREFERENCIAS", "fact_type": "leitura", "attribute": "autor_favorito", "value": "Isaac Asimov", "confidence": 1.0, "context": "Isaac Asimov é meu favorito"},
+    {"category": "PREFERENCIAS", "fact_type": "leitura", "attribute": "beneficio", "value": "me ajuda a relaxar", "confidence": 1.0, "context": "me ajuda a relaxar"}
+  ]
+}
+
+Entrada: "Vou viajar para Paris em janeiro, primeira vez na Europa, estou muito ansioso!"
+Saída:
+{
+  "fatos": [
+    {"category": "MOMENTOS", "fact_type": "viagem_paris", "attribute": "data", "value": "janeiro 2025", "confidence": 1.0, "context": "em janeiro"},
+    {"category": "MOMENTOS", "fact_type": "viagem_paris", "attribute": "tipo", "value": "lazer", "confidence": 0.8, "context": "viajar"},
+    {"category": "MOMENTOS", "fact_type": "viagem_paris", "attribute": "planejamento", "value": "primeira vez na Europa", "confidence": 1.0, "context": "primeira vez na Europa"},
+    {"category": "MOMENTOS", "fact_type": "viagem_paris", "attribute": "sentimento", "value": "ansioso positivo", "confidence": 0.9, "context": "estou muito ansioso!"}
+  ]
+}
+
+Entrada: "Trabalho como designer na Google há 3 anos, gosto mas é muito estressante, quero virar senior"
+Saída:
+{
+  "fatos": [
+    {"category": "TRABALHO", "fact_type": "profissao", "attribute": "nome", "value": "designer", "confidence": 1.0, "context": "Trabalho como designer"},
+    {"category": "TRABALHO", "fact_type": "profissao", "attribute": "empresa", "value": "Google", "confidence": 1.0, "context": "na Google"},
+    {"category": "TRABALHO", "fact_type": "profissao", "attribute": "tempo", "value": "3 anos", "confidence": 1.0, "context": "há 3 anos"},
+    {"category": "TRABALHO", "fact_type": "profissao", "attribute": "satisfacao", "value": "gosto mas estressante", "confidence": 1.0, "context": "gosto mas é muito estressante"},
+    {"category": "TRABALHO", "fact_type": "profissao", "attribute": "objetivo", "value": "virar senior", "confidence": 1.0, "context": "quero virar senior"}
+  ]
+}
+
+Entrada: "Sou introvertido, família é tudo para mim, acredito muito em terapia"
+Saída:
+{
+  "fatos": [
+    {"category": "PERSONALIDADE", "fact_type": "traço", "attribute": "tipo", "value": "introvertido", "confidence": 1.0, "context": "Sou introvertido"},
+    {"category": "PERSONALIDADE", "fact_type": "valor", "attribute": "tipo", "value": "familia_primeiro", "confidence": 0.9, "context": "família é tudo para mim"},
+    {"category": "PERSONALIDADE", "fact_type": "valor", "attribute": "importancia", "value": "muito alta", "confidence": 0.9, "context": "família é tudo"},
+    {"category": "PERSONALIDADE", "fact_type": "crenca", "attribute": "tipo", "value": "terapia", "confidence": 1.0, "context": "acredito muito em terapia"},
+    {"category": "PERSONALIDADE", "fact_type": "crenca", "attribute": "atitude", "value": "acredito muito", "confidence": 1.0, "context": "acredito muito"}
   ]
 }
 
 MENSAGEM DO USUÁRIO:
 "{user_input}"
 
-Retorne APENAS o JSON, sem texto adicional."""
+Retorne APENAS o JSON no formato especificado, sem texto adicional."""
 
     def __init__(self, llm_client, model: str = "grok-beta"):
         """
