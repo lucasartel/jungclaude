@@ -43,6 +43,14 @@ except ImportError:
     CHROMADB_AVAILABLE = False
     print("⚠️  ChromaDB não disponível. Usando apenas SQLite.")
 
+# Extrator de fatos com LLM
+try:
+    from llm_fact_extractor import LLMFactExtractor
+    LLM_FACT_EXTRACTOR_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"⚠️ LLMFactExtractor não disponível: {e}")
+    LLM_FACT_EXTRACTOR_AVAILABLE = False
+
 load_dotenv()
 
 # ============================================================
@@ -496,6 +504,31 @@ class HybridDatabaseManager:
             api_key=Config.OPENAI_API_KEY,
             timeout=30.0  # 30 segundos de timeout
         )
+
+        # ===== XAI Client (para Grok) =====
+        if Config.XAI_API_KEY:
+            self.xai_client = OpenAI(
+                api_key=Config.XAI_API_KEY,
+                base_url="https://api.x.ai/v1"
+            )
+        else:
+            self.xai_client = None
+
+        # ===== LLM Fact Extractor =====
+        if LLM_FACT_EXTRACTOR_AVAILABLE and self.xai_client:
+            try:
+                self.fact_extractor = LLMFactExtractor(
+                    llm_client=self.xai_client,  # Usar Grok (mais barato)
+                    model="grok-beta"
+                )
+                logger.info("✅ LLM Fact Extractor inicializado (Grok)")
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao inicializar LLM Fact Extractor: {e}")
+                self.fact_extractor = None
+        else:
+            self.fact_extractor = None
+            if not LLM_FACT_EXTRACTOR_AVAILABLE:
+                logger.warning("⚠️ LLM Fact Extractor não disponível")
 
         logger.info("✅ Banco híbrido inicializado com sucesso")
 
@@ -1166,9 +1199,12 @@ Resposta: {ai_response}
         
         # 5. Atualizar desenvolvimento do agente (isolado por usuário)
         self._update_agent_development(user_id)
-        
-        # 6. Extrair fatos do input
-        self.extract_and_save_facts(user_id, user_input, conversation_id)
+
+        # 6. Extrair fatos do input (V2 com LLM, fallback para V1)
+        if hasattr(self, 'extract_and_save_facts_v2'):
+            self.extract_and_save_facts_v2(user_id, user_input, conversation_id)
+        else:
+            self.extract_and_save_facts(user_id, user_input, conversation_id)
 
         # 7. HOOK: Sistema de Ruminação (só para admin)
         try:
@@ -1694,7 +1730,154 @@ Resposta: {ai_response}
 
             self.conn.commit()
             logger.info(f"   ✅ Fato salvo com sucesso")
-    
+
+    # ========================================
+    # EXTRAÇÃO DE FATOS V2 (com LLM)
+    # ========================================
+
+    def extract_and_save_facts_v2(self, user_id: str, user_input: str,
+                                  conversation_id: int) -> List[Dict]:
+        """
+        Extrai fatos estruturados usando LLM + fallback regex
+
+        VERSÃO 2: Usa LLMFactExtractor + tabela user_facts_v2
+        """
+
+        extracted_facts = []
+
+        # Tentar extração com LLM
+        if hasattr(self, 'fact_extractor') and self.fact_extractor:
+            try:
+                logger.info("🤖 Extraindo fatos com LLM...")
+                facts = self.fact_extractor.extract_facts(user_input, user_id)
+
+                # Salvar cada fato extraído
+                for fact in facts:
+                    self._save_fact_v2(
+                        user_id=user_id,
+                        category=fact.category,
+                        fact_type=fact.fact_type,
+                        attribute=fact.attribute,
+                        value=fact.value,
+                        confidence=fact.confidence,
+                        extraction_method='llm',
+                        context=fact.context,
+                        conversation_id=conversation_id
+                    )
+
+                    extracted_facts.append({
+                        'category': fact.category,
+                        'type': fact.fact_type,
+                        'attribute': fact.attribute,
+                        'value': fact.value,
+                        'confidence': fact.confidence
+                    })
+
+                if extracted_facts:
+                    logger.info(f"✅ Extraídos {len(extracted_facts)} fatos com LLM")
+
+            except Exception as e:
+                logger.error(f"❌ Erro na extração com LLM: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+
+        # Se LLM não extraiu nada ou falhou, usar fallback para método antigo
+        if not extracted_facts:
+            logger.info("🔄 LLM não extraiu fatos, usando método antigo como fallback...")
+            extracted_facts = self.extract_and_save_facts(user_id, user_input, conversation_id)
+
+        return extracted_facts
+
+    def _save_fact_v2(self, user_id: str, category: str, fact_type: str,
+                     attribute: str, value: str, confidence: float = 1.0,
+                     extraction_method: str = 'llm', context: str = None,
+                     conversation_id: int = None):
+        """
+        Salva ou atualiza fato na tabela user_facts_v2
+
+        FEATURES:
+        - Suporta múltiplas pessoas da mesma categoria
+        - Versionamento adequado
+        - Metadados de confiança e método
+        """
+
+        logger.info(f"📝 [FACTS V2] Salvando: {category}.{fact_type}.{attribute} = {value}")
+
+        with self._lock:
+            cursor = self.conn.cursor()
+
+            # Verificar se fato já existe
+            cursor.execute("""
+                SELECT id, fact_value, version
+                FROM user_facts_v2
+                WHERE user_id = ?
+                  AND fact_category = ?
+                  AND fact_type = ?
+                  AND fact_attribute = ?
+                  AND is_current = 1
+            """, (user_id, category, fact_type, attribute))
+
+            existing = cursor.fetchone()
+
+            if existing:
+                existing_id = existing[0]
+                existing_value = existing[1]
+                existing_version = existing[2]
+
+                # Se valor mudou, criar nova versão
+                if existing_value != value:
+                    logger.info(f"   ✏️  Atualizando: '{existing_value}' → '{value}'")
+
+                    # Marcar versão antiga como não-atual
+                    cursor.execute("""
+                        UPDATE user_facts_v2
+                        SET is_current = 0, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """, (existing_id,))
+
+                    # Criar nova versão
+                    cursor.execute("""
+                        INSERT INTO user_facts_v2
+                        (user_id, fact_category, fact_type, fact_attribute, fact_value,
+                         confidence, extraction_method, context, source_conversation_id,
+                         version, is_current)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                    """, (
+                        user_id, category, fact_type, attribute, value,
+                        confidence, extraction_method, context, conversation_id,
+                        existing_version + 1
+                    ))
+
+                    new_id = cursor.lastrowid
+
+                    # Marcar que a versão antiga foi substituída
+                    cursor.execute("""
+                        UPDATE user_facts_v2
+                        SET replaced_by = ?
+                        WHERE id = ?
+                    """, (new_id, existing_id))
+
+                    logger.info(f"   ✅ Nova versão criada (v{existing_version + 1})")
+                else:
+                    logger.info(f"   ℹ️  Fato já existe com mesmo valor")
+            else:
+                # Criar fato novo
+                logger.info(f"   ✨ Criando novo fato")
+                cursor.execute("""
+                    INSERT INTO user_facts_v2
+                    (user_id, fact_category, fact_type, fact_attribute, fact_value,
+                     confidence, extraction_method, context, source_conversation_id,
+                     version, is_current)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
+                """, (
+                    user_id, category, fact_type, attribute, value,
+                    confidence, extraction_method, context, conversation_id
+                ))
+
+                logger.info(f"   ✅ Fato salvo com sucesso")
+
+            self.conn.commit()
+
     # ========================================
     # DETECÇÃO DE PADRÕES
     # ========================================
