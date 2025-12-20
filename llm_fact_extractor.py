@@ -315,19 +315,23 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
 
     def _extract_with_regex(self, user_input: str) -> List[ExtractedFact]:
         """
-        Fallback: Extração usando regex (método antigo melhorado)
+        Fallback: Extração usando regex (método expandido para 2 categorias completas)
+        Cobre RELACIONAMENTO (vida pessoal) e TRABALHO (vida profissional)
         """
-        logger.info("   🔄 Usando fallback regex...")
+        logger.info("   🔄 Usando fallback regex expandido...")
 
         facts = []
         input_lower = user_input.lower()
 
-        # ===== RELACIONAMENTOS =====
-        # Padrão: "minha esposa se chama Ana"
+        # =====================================
+        # RELACIONAMENTO - VIDA PESSOAL
+        # =====================================
+
+        # 1. PESSOAS (nomes de familiares)
         relationship_with_name = [
             (r'minh[ao] (esposa|marido|namorad[ao]|companheiro|companheira) (?:se chama|é|:)?\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+)', 'relationship'),
             (r'(?:tenho|meu|minha) (filho|filha) (?:se chama|é|:)?\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+)', 'relationship'),
-            (r'(?:meu|minha) (pai|mãe|irmão|irmã) (?:se chama|é|:)?\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+)', 'relationship'),
+            (r'(?:meu|minha) (pai|mãe|irmão|irmã|avô|avó) (?:se chama|é|:)?\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+)', 'relationship'),
         ]
 
         for pattern, category in relationship_with_name:
@@ -335,7 +339,6 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
             for match in matches:
                 relationship_type = match.group(1).lower()
                 name = match.group(2)
-
                 facts.append(ExtractedFact(
                     category="RELACIONAMENTO",
                     fact_type=relationship_type,
@@ -345,33 +348,258 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
                     context=match.group(0)
                 ))
 
-        # Padrão: "tenho 2 filhos" ou "tenho dois filhos: João e Maria"
-        children_pattern = r'tenho (?:(\d+)|dois|duas|três|tr[eê]s|quatro) filhos?(?:\s*:\s*([^.!?]+))?'
-        match = re.search(children_pattern, input_lower)
-        if match:
-            children_names = []
-            if match.group(2):  # Lista de nomes
-                # Extrair nomes próprios
-                names_text = match.group(2)
-                # Padrão de nomes próprios (começa com maiúscula)
-                names = re.findall(r'\b([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+)\b', names_text)
-                children_names = names
+        # 2. VALORES PESSOAIS
+        valores_patterns = {
+            'familia': ['família é tudo', 'família em primeiro', 'priorizo família', 'família é importante'],
+            'saude': ['saúde é importante', 'cuido da saúde', 'priorizo saúde'],
+            'amizade': ['amigos são importantes', 'valorizo amizades', 'amizade é essencial'],
+        }
 
-            if children_names:
-                for i, name in enumerate(children_names, 1):
+        for valor, patterns in valores_patterns.items():
+            if any(p in input_lower for p in patterns):
+                facts.append(ExtractedFact(
+                    category="RELACIONAMENTO",
+                    fact_type="valor",
+                    attribute=valor,
+                    value="sim",
+                    confidence=0.8,
+                    context=user_input[:100]
+                ))
+
+        # 3. CRENÇAS
+        crencas_patterns = {
+            'terapia': ['acredito em terapia', 'faço terapia', 'terapia ajuda', 'acompanhamento psicológico'],
+            'espiritualidade': ['acredito em Deus', 'sou religioso', 'tenho fé', 'sou católico', 'sou evangélico'],
+            'meditacao': ['faço meditação', 'medito', 'mindfulness'],
+        }
+
+        for crenca, patterns in crencas_patterns.items():
+            if any(p in input_lower for p in patterns):
+                facts.append(ExtractedFact(
+                    category="RELACIONAMENTO",
+                    fact_type="crenca",
+                    attribute=crenca,
+                    value="pratica" if "faço" in input_lower or "pratico" in input_lower else "acredita",
+                    confidence=0.8,
+                    context=user_input[:100]
+                ))
+
+        # 4. SAÚDE MENTAL
+        saude_mental_patterns = [
+            (r'tenho (insônia|ansiedade|depressão|síndrome do pânico|burnout)', 'tipo'),
+            (r'sofro (?:de|com) (ansiedade|depressão|insônia|estresse crônico)', 'tipo'),
+            (r'(insônia|ansiedade|depressão) há (\d+) (?:meses|anos|semanas|dias)', 'duracao'),
+        ]
+
+        for pattern, attr_type in saude_mental_patterns:
+            matches = re.finditer(pattern, input_lower)
+            for match in matches:
+                if attr_type == 'tipo':
+                    condicao = match.group(1)
                     facts.append(ExtractedFact(
                         category="RELACIONAMENTO",
-                        fact_type="filho",
-                        attribute=f"nome_{i}",
-                        value=name,
+                        fact_type=f"saude_mental_{condicao}",
+                        attribute="tipo",
+                        value=condicao,
+                        confidence=0.85,
+                        context=match.group(0)
+                    ))
+                elif attr_type == 'duracao':
+                    condicao = match.group(1)
+                    tempo = match.group(2)
+                    facts.append(ExtractedFact(
+                        category="RELACIONAMENTO",
+                        fact_type=f"saude_mental_{condicao}",
+                        attribute="duracao",
+                        value=f"{tempo} (período mencionado)",
                         confidence=0.85,
                         context=match.group(0)
                     ))
 
-        # ===== TRABALHO =====
+        # 5. SAÚDE FÍSICA
+        saude_fisica_patterns = [
+            (r'tenho (diabetes|hipertensão|asma|enxaqueca|colesterol alto)', 'condicao'),
+            (r'sou (diabético|hipertenso|asmático)', 'condicao'),
+        ]
+
+        for pattern, attr_type in saude_fisica_patterns:
+            match = re.search(pattern, input_lower)
+            if match:
+                condicao = match.group(1)
+                facts.append(ExtractedFact(
+                    category="RELACIONAMENTO",
+                    fact_type=f"saude_fisica_{condicao}",
+                    attribute="tipo",
+                    value=condicao,
+                    confidence=0.85,
+                    context=match.group(0)
+                ))
+
+        # 6. HOBBIES - LEITURA
+        hobbie_leitura_patterns = [
+            (r'adoro ler (ficção científica|romance|autoajuda|biografia|fantasia|poesia)', 'genero'),
+            (r'gosto de ler (ficção científica|romance|autoajuda|biografia|fantasia)', 'genero'),
+            (r'(Isaac Asimov|Stephen King|Machado de Assis|[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+ [A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+) é meu (?:autor )?favorito', 'autor'),
+        ]
+
+        for pattern, attr_type in hobbie_leitura_patterns:
+            match = re.search(pattern, input_lower if attr_type == 'genero' else user_input)
+            if match:
+                value = match.group(1)
+                facts.append(ExtractedFact(
+                    category="RELACIONAMENTO",
+                    fact_type="hobbie_leitura",
+                    attribute=attr_type,
+                    value=value,
+                    confidence=0.8,
+                    context=match.group(0)
+                ))
+
+        # Frequência de leitura
+        if any(p in input_lower for p in ['leio antes de dormir', 'leio todo dia', 'leio aos finais de semana']):
+            freq = "antes de dormir" if "antes de dormir" in input_lower else \
+                   "diariamente" if "todo dia" in input_lower else \
+                   "fins de semana"
+            facts.append(ExtractedFact(
+                category="RELACIONAMENTO",
+                fact_type="hobbie_leitura",
+                attribute="frequencia",
+                value=freq,
+                confidence=0.75,
+                context=user_input[:100]
+            ))
+
+        # 7. HOBBIES - EXERCÍCIO
+        hobbie_exercicio_patterns = [
+            (r'gosto de (correr|nadar|pedalar|fazer yoga|musculação|caminhar)', 'tipo'),
+            (r'pratico (corrida|natação|ciclismo|yoga|musculação|caminhada)', 'tipo'),
+        ]
+
+        for pattern, attr_type in hobbie_exercicio_patterns:
+            match = re.search(pattern, input_lower)
+            if match:
+                tipo = match.group(1)
+                facts.append(ExtractedFact(
+                    category="RELACIONAMENTO",
+                    fact_type="hobbie_exercicio",
+                    attribute="tipo",
+                    value=tipo,
+                    confidence=0.8,
+                    context=match.group(0)
+                ))
+
+        # 8. HOBBIES - MÚSICA
+        hobbie_musica_patterns = [
+            (r'toco (violão|guitarra|piano|bateria|flauta|saxofone)', 'instrumento'),
+            (r'gosto de (?:música |som )?(?:de )?(rock|jazz|clássica|sertanejo|mpb|pop)', 'genero'),
+        ]
+
+        for pattern, attr_type in hobbie_musica_patterns:
+            match = re.search(pattern, input_lower)
+            if match:
+                value = match.group(1)
+                facts.append(ExtractedFact(
+                    category="RELACIONAMENTO",
+                    fact_type="hobbie_musica",
+                    attribute=attr_type,
+                    value=value,
+                    confidence=0.8,
+                    context=match.group(0)
+                ))
+
+        # 9. EVENTOS - VIAGEM
+        evento_viagem_patterns = [
+            (r'vou viajar para ([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+) em (janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)', 'destino_e_data'),
+            (r'viagem para ([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+)', 'destino'),
+        ]
+
+        for pattern, attr_type in evento_viagem_patterns:
+            match = re.search(pattern, user_input)  # Usar user_input para pegar maiúsculas
+            if match:
+                if attr_type == 'destino_e_data':
+                    destino = match.group(1)
+                    mes = match.group(2)
+                    facts.append(ExtractedFact(
+                        category="RELACIONAMENTO",
+                        fact_type="evento_viagem",
+                        attribute="destino",
+                        value=destino,
+                        confidence=0.85,
+                        context=match.group(0)
+                    ))
+                    facts.append(ExtractedFact(
+                        category="RELACIONAMENTO",
+                        fact_type="evento_viagem",
+                        attribute="data",
+                        value=mes,
+                        confidence=0.85,
+                        context=match.group(0)
+                    ))
+                else:
+                    destino = match.group(1)
+                    facts.append(ExtractedFact(
+                        category="RELACIONAMENTO",
+                        fact_type="evento_viagem",
+                        attribute="destino",
+                        value=destino,
+                        confidence=0.8,
+                        context=match.group(0)
+                    ))
+
+        # Planejamento de viagem
+        if 'primeira vez' in input_lower:
+            facts.append(ExtractedFact(
+                category="RELACIONAMENTO",
+                fact_type="evento_viagem",
+                attribute="planejamento",
+                value="primeira vez",
+                confidence=0.75,
+                context=user_input[:100]
+            ))
+
+        # Sentimento sobre viagem
+        sentimentos_viagem = {
+            'ansioso': ['ansioso', 'nervoso'],
+            'empolgado': ['empolgado', 'animado', 'feliz'],
+        }
+        for sentimento, keywords in sentimentos_viagem.items():
+            if any(k in input_lower for k in keywords):
+                facts.append(ExtractedFact(
+                    category="RELACIONAMENTO",
+                    fact_type="evento_viagem",
+                    attribute="sentimento",
+                    value=sentimento,
+                    confidence=0.7,
+                    context=user_input[:100]
+                ))
+
+        # 10. PERSONALIDADE (traços básicos)
+        personality_patterns = {
+            'introvertido': ['sou introvertido', 'prefiro ficar sozinho', 'evito eventos sociais'],
+            'extrovertido': ['sou extrovertido', 'gosto de pessoas', 'adoro festas'],
+            'ansioso': ['sou ansioso', 'fico ansioso com tudo'],
+            'calmo': ['sou calmo', 'sou tranquilo', 'pessoa zen'],
+        }
+
+        for trait, patterns in personality_patterns.items():
+            if any(p in input_lower for p in patterns):
+                facts.append(ExtractedFact(
+                    category="RELACIONAMENTO",
+                    fact_type="personalidade",
+                    attribute="traço",
+                    value=trait,
+                    confidence=0.75,
+                    context=user_input[:100]
+                ))
+
+        # =====================================
+        # TRABALHO - VIDA PROFISSIONAL
+        # =====================================
+
+        # 1. PROFISSÃO E EMPRESA (já funcionava)
         work_patterns = [
             (r'trabalho como ([^.,!?]+?)(?:\.|,|no|na|em)', 'profissao'),
-            (r'sou (engenheiro|médico|professor|advogado|desenvolvedor|designer|gerente|analista)', 'profissao'),
+            (r'sou (engenheiro|médico|professor|advogado|desenvolvedor|designer|gerente|analista|arquiteto)', 'profissao'),
             (r'trabalho n[ao] ([^.,!?]+?)(?:\.|,|como)', 'empresa'),
         ]
 
@@ -388,29 +616,93 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
                     context=match.group(0)
                 ))
 
-        # ===== PERSONALIDADE =====
-        personality_patterns = {
-            'introvertido': ['sou introvertido', 'prefiro ficar sozinho'],
-            'extrovertido': ['sou extrovertido', 'gosto de pessoas'],
-            'ansioso': ['tenho ansiedade', 'sou ansioso'],
-            'calmo': ['sou calmo', 'sou tranquilo'],
+        # 2. SATISFAÇÃO
+        satisfacao_patterns = {
+            'positiva': ['adoro meu trabalho', 'gosto do trabalho', 'satisfeito com trabalho', 'amo meu trabalho'],
+            'neutra': ['trabalho é ok', 'não amo mas não odeio', 'trabalho normal'],
+            'negativa': ['odeio meu trabalho', 'muito estressante', 'cansativo', 'frustrante', 'trabalho ruim'],
         }
 
-        for trait, patterns in personality_patterns.items():
+        for nivel, patterns in satisfacao_patterns.items():
             if any(p in input_lower for p in patterns):
                 facts.append(ExtractedFact(
-                    category="PERSONALIDADE",
-                    fact_type="traço",
+                    category="TRABALHO",
+                    fact_type="satisfacao",
+                    attribute="nivel",
+                    value=nivel,
+                    confidence=0.75,
+                    context=user_input[:100]
+                ))
+                break  # Pegar apenas a primeira
+
+        # 3. OBJETIVOS PROFISSIONAIS
+        objetivo_patterns = [
+            (r'quero (?:virar|ser|me tornar) (senior|pleno|júnior|gerente|diretor|tech lead)', 'cargo'),
+            (r'objetivo é (mudar de área|crescer|liderar equipe|empreender)', 'tipo'),
+            (r'sonho em trabalhar n[ao] ([^.,!?]+)', 'empresa_sonho'),
+        ]
+
+        for pattern, attr_type in objetivo_patterns:
+            match = re.search(pattern, input_lower)
+            if match:
+                value = match.group(1)
+                facts.append(ExtractedFact(
+                    category="TRABALHO",
+                    fact_type="objetivo",
+                    attribute=attr_type,
+                    value=value,
+                    confidence=0.8,
+                    context=match.group(0)
+                ))
+
+        # 4. DESAFIOS NO TRABALHO
+        desafio_patterns = {
+            'retrabalho': ['muito retrabalho', 'refaço coisas', 'sempre mudando'],
+            'pressao': ['muita pressão', 'prazos apertados', 'muita cobrança'],
+            'sobrecarga': ['muito trabalho', 'sobrecarregado', 'horas extras', 'trabalho demais'],
+            'desorganizacao': ['falta organização', 'equipe desorganizada', 'caos'],
+        }
+
+        for desafio, patterns in desafio_patterns.items():
+            if any(p in input_lower for p in patterns):
+                facts.append(ExtractedFact(
+                    category="TRABALHO",
+                    fact_type="desafio",
                     attribute="tipo",
-                    value=trait,
+                    value=desafio,
                     confidence=0.75,
                     context=user_input[:100]
                 ))
 
+        # 5. TEMPO NA EMPRESA/CARGO
+        tempo_patterns = [
+            (r'(?:trabalho|estou) (?:há|ha|a) (\d+) (?:anos|meses)', 'tempo'),
+            (r'(?:há|ha|a) (\d+) (?:anos|meses) n[ao]', 'tempo'),
+        ]
+
+        for pattern, attr_type in tempo_patterns:
+            match = re.search(pattern, input_lower)
+            if match:
+                tempo = match.group(1)
+                facts.append(ExtractedFact(
+                    category="TRABALHO",
+                    fact_type="tempo",
+                    attribute="duracao",
+                    value=f"{tempo} (período mencionado)",
+                    confidence=0.8,
+                    context=match.group(0)
+                ))
+
+        # =====================================
+        # RETORNO
+        # =====================================
+
         if facts:
             logger.info(f"   ✅ Regex extraiu {len(facts)} fatos")
+            for fact in facts:
+                logger.debug(f"      {fact.category}.{fact.fact_type}.{fact.attribute} = {fact.value}")
         else:
-            logger.info(f"   ℹ️ Nenhum fato extraído")
+            logger.info(f"   ℹ️ Nenhum fato extraído via regex")
 
         return facts
 
