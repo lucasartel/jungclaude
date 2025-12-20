@@ -1236,9 +1236,12 @@ Resposta: {ai_response}
         self._update_agent_development(user_id)
 
         # 6. Extrair fatos do input (V2 com LLM, fallback para V1)
+        logger.info(f"🔍 [DEBUG FATOS] Verificando extração... hasattr(extract_and_save_facts_v2)={hasattr(self, 'extract_and_save_facts_v2')}")
         if hasattr(self, 'extract_and_save_facts_v2'):
+            logger.info("✅ Chamando extract_and_save_facts_v2...")
             self.extract_and_save_facts_v2(user_id, user_input, conversation_id)
         else:
+            logger.info("⚠️ extract_and_save_facts_v2 não encontrado, usando método antigo...")
             self.extract_and_save_facts(user_id, user_input, conversation_id)
 
         # 7. HOOK: Sistema de Ruminação (só para admin)
