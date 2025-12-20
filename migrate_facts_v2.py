@@ -159,7 +159,7 @@ def migrate_to_v2(db_path: str = None):
             # Buscar fatos atuais
             cursor.execute("""
                 SELECT user_id, fact_category, fact_key, fact_value,
-                       source_conversation_id, created_at, version, is_current
+                       source_conversation_id, first_mentioned_at, version, is_current
                 FROM user_facts
                 WHERE is_current = 1
             """)
@@ -207,7 +207,7 @@ def migrate_to_v2(db_path: str = None):
                         0.8,  # Confiança média para dados antigos
                         'regex_legacy',
                         old_fact['source_conversation_id'],
-                        old_fact['created_at'],
+                        old_fact['first_mentioned_at'],  # Corrigido
                         1,  # is_current
                         old_fact['version']
                     ))
