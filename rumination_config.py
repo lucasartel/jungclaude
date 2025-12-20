@@ -47,32 +47,32 @@ MIN_EVIDENCE_RECENCY_DAYS = 7  # Evidências mais antigas que isso pesam menos
 # ============================================================
 # FASE 4: SÍNTESE
 # ============================================================
-MIN_MATURITY_FOR_SYNTHESIS = 0.75  # Threshold de maturidade (75%)
-MIN_EVIDENCE_FOR_SYNTHESIS = 3  # Mínimo de evidências
-MIN_DAYS_FOR_SYNTHESIS = 2  # Mínimo de dias de maturação
-MAX_DAYS_FOR_SYNTHESIS = 21  # Máximo - depois disso força síntese ou arquiva
+MIN_MATURITY_FOR_SYNTHESIS = 0.55  # Threshold de maturidade (55% - reduzido de 75%)
+MIN_EVIDENCE_FOR_SYNTHESIS = 2  # Mínimo de evidências (reduzido de 3)
+MIN_DAYS_FOR_SYNTHESIS = 1  # Mínimo de dias de maturação (reduzido de 2)
+MAX_DAYS_FOR_SYNTHESIS = 14  # Máximo - depois disso força síntese ou arquiva (reduzido de 21)
 
 # Pesos para cálculo de maturidade
 MATURITY_WEIGHTS = {
-    "time": 0.25,       # Tempo desde detecção
+    "time": 0.15,       # Tempo desde detecção (reduzido de 0.25)
     "evidence": 0.25,   # Quantidade de evidências
     "revisit": 0.15,    # Número de revisitas
     "connection": 0.15, # Conexões com outras tensões
-    "intensity": 0.20   # Força da contradição
+    "intensity": 0.30   # Força da contradição (aumentado de 0.20)
 }
 
 # ============================================================
 # FASE 5: ENTREGA
 # ============================================================
-INACTIVITY_THRESHOLD_HOURS = 24  # Horas de inatividade para enviar
-COOLDOWN_HOURS = 48  # Horas entre entregas (2 dias)
-MIN_MATURATION_DAYS = 2  # Mínimo de dias de maturação do insight
+INACTIVITY_THRESHOLD_HOURS = 12  # Horas de inatividade para enviar (reduzido de 24)
+COOLDOWN_HOURS = 24  # Horas entre entregas (1 dia - reduzido de 48)
+MIN_MATURATION_DAYS = 1  # Mínimo de dias de maturação do insight (reduzido de 2)
 
 # ============================================================
 # LIMITES GERAIS
 # ============================================================
-MAX_INSIGHTS_PER_WEEK = 2  # Máximo de insights por semana
-MIN_CONVERSATIONS_FOR_RUMINATION = 5  # Conversas mínimas para começar
+MAX_INSIGHTS_PER_WEEK = 3  # Máximo de insights por semana (aumentado de 2)
+MIN_CONVERSATIONS_FOR_RUMINATION = 3  # Conversas mínimas para começar (reduzido de 5)
 
 # ============================================================
 # LOGGING

@@ -742,12 +742,12 @@ class RuminationEngine:
             # Parse JSON
             result = self._parse_json_response(response)
 
-            if not result or 'full_message' not in result:
-                logger.error("Síntese não retornou mensagem válida")
+            if not result or 'internal_thought' not in result:
+                logger.error("Síntese não retornou pensamento interno válido")
                 return None
 
             # Validar novidade
-            if not self._validate_novelty(result['full_message'], user_id):
+            if not self._validate_novelty(result['internal_thought'], user_id):
                 logger.info("   ⏭️  Insight rejeitado por falta de novidade")
                 return None
 
@@ -763,9 +763,9 @@ class RuminationEngine:
             """, (
                 user_id,
                 tension['id'],
-                result.get('symbol', ''),
-                result.get('question', ''),
-                result['full_message'],
+                result.get('core_image', ''),
+                result.get('internal_question', ''),
+                result['internal_thought'],
                 result.get('depth_score', 0.5),
                 result.get('novelty_score', 0.8),
                 days
