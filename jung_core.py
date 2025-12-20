@@ -515,16 +515,22 @@ class HybridDatabaseManager:
             self.xai_client = None
 
         # ===== LLM Fact Extractor =====
+        logger.info(f"🔍 [DEBUG] LLM_FACT_EXTRACTOR_AVAILABLE = {LLM_FACT_EXTRACTOR_AVAILABLE}")
+        logger.info(f"🔍 [DEBUG] anthropic_client = {self.anthropic_client is not None}")
+        logger.info(f"🔍 [DEBUG] xai_client = {self.xai_client is not None}")
+
         if LLM_FACT_EXTRACTOR_AVAILABLE:
             try:
                 # Preferir Claude por ser mais confiável para extração estruturada
                 if self.anthropic_client:
+                    logger.info("🔧 Inicializando LLMFactExtractor com Claude...")
                     self.fact_extractor = LLMFactExtractor(
                         llm_client=self.anthropic_client,
                         model="claude-sonnet-4-5-20250929"
                     )
                     logger.info("✅ LLM Fact Extractor inicializado (Claude Sonnet 4.5)")
                 elif self.xai_client:
+                    logger.info("🔧 Inicializando LLMFactExtractor com Grok...")
                     self.fact_extractor = LLMFactExtractor(
                         llm_client=self.xai_client,
                         model="grok-beta"
@@ -534,11 +540,13 @@ class HybridDatabaseManager:
                     logger.warning("⚠️ Nenhum cliente LLM disponível para fact extractor")
                     self.fact_extractor = None
             except Exception as e:
-                logger.warning(f"⚠️ Erro ao inicializar LLM Fact Extractor: {e}")
+                logger.error(f"❌ Erro ao inicializar LLM Fact Extractor: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
                 self.fact_extractor = None
         else:
             self.fact_extractor = None
-            logger.warning("⚠️ LLM Fact Extractor não disponível")
+            logger.warning("⚠️ LLM Fact Extractor module não disponível (import falhou)")
 
         logger.info("✅ Banco híbrido inicializado com sucesso")
 
@@ -1754,6 +1762,11 @@ Resposta: {ai_response}
         """
 
         extracted_facts = []
+
+        # Debug: verificar estado do fact_extractor
+        logger.info(f"🔍 [DEBUG] hasattr(self, 'fact_extractor') = {hasattr(self, 'fact_extractor')}")
+        if hasattr(self, 'fact_extractor'):
+            logger.info(f"🔍 [DEBUG] self.fact_extractor = {self.fact_extractor}")
 
         # Tentar extração com LLM
         if hasattr(self, 'fact_extractor') and self.fact_extractor:
