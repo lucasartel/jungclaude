@@ -45,49 +45,55 @@ class LLMFactExtractor:
 
 TAREFA: Extrair TODOS os fatos mencionados na mensagem abaixo.
 
-CATEGORIAS DE FATOS:
+CATEGORIAS DE FATOS (APENAS 2):
 
-1. RELACIONAMENTO - Pessoas relacionadas ao usuário
-   - Tipos: esposa, marido, filho, filha, pai, mae, irmao, irma, avô, avó, primo, amigo, namorado, namorada, etc.
-   - Atributos: nome, idade, profissao, aniversario, tempo_relacionamento, dinamica, caracteristica, local_trabalho
-   - Exemplo: esposa.nome="Ana", esposa.aniversario="15/03", esposa.dinamica="meu porto seguro"
+1. RELACIONAMENTO - TODA a vida pessoal do usuário
+   Tipos principais:
+   - Pessoas: esposa, marido, filho, filha, pai, mae, irmao, irma, amigo, namorado, etc.
+   - Personalidade: traço, valor, crenca, autoimagem, gatilho_emocional
+   - Desafios pessoais: saude_mental, saude_fisica, objetivo_pessoal
+   - Preferências pessoais: hobbie, leitura, musica, comida, ritual, aversao
+   - Eventos pessoais: viagem, aniversario, marco_importante, rotina
 
-2. TRABALHO - Informações profissionais
-   - Tipos: profissao, empresa, cargo, projeto, colega
-   - Atributos: nome, local, tempo, satisfacao, objetivo, desafio, salario, responsabilidade
-   - Exemplo: profissao.empresa="Google", profissao.satisfacao="gosto mas estressante", profissao.objetivo="virar senior"
+   Atributos: nome, idade, profissao, aniversario, dinamica, tipo, inicio, frequencia, gatilho,
+              tentativa_solucao, genero, autor_favorito, beneficio, data, sentimento, planejamento
 
-3. PERSONALIDADE - Traços, valores e crenças
-   - Tipos: traço, valor, crenca, autoimagem, gatilho_emocional
-   - Atributos: descricao, intensidade, contexto, origem, importancia, atitude
-   - Exemplo: traço.tipo="introvertido", valor.tipo="familia_primeiro", crenca.tipo="terapia", crenca.atitude="acredito e faço"
+   Exemplos:
+   - esposa.nome="Ana"
+   - esposa.aniversario="15/03"
+   - personalidade_traço.tipo="introvertido"
+   - saude_mental_insonia.inicio="há 3 meses"
+   - saude_mental_insonia.gatilho="estresse no trabalho"
+   - hobbie_leitura.genero="ficção científica"
+   - hobbie_leitura.frequencia="antes de dormir"
+   - evento_viagem.destino="Paris"
+   - evento_viagem.data="janeiro 2025"
 
-4. DESAFIOS - Problemas, lutas, dificuldades (NOVA - Alta sensibilidade)
-   - Tipos: saude_mental (ansiedade, depressao, insonia, estresse), saude_fisica (dor, doenca, lesao),
-            relacionamento (conflito, distanciamento, luto), carreira (pressao, medo_demissao, burnout),
-            objetivo_nao_alcancado (emagrecer, parar_fumar, procrastinacao)
-   - Atributos: tipo, inicio, frequencia, gatilho, tentativa_solucao, nivel_atual, impacto
-   - Exemplo: insonia.inicio="há 3 meses", insonia.gatilho="estresse no trabalho", insonia.nivel_atual="melhorando"
+2. TRABALHO - TODA a vida profissional do usuário
+   Tipos principais:
+   - Profissão: profissao, empresa, cargo, projeto
+   - Relações: colega, chefe, equipe
+   - Situação: satisfacao, objetivo, desafio, responsabilidade
+   - Desenvolvimento: objetivo_carreira, curso, certificacao
 
-5. PREFERENCIAS - Gostos, aversões, rituais (NOVA - Personalização)
-   - Tipos: hobbie, aversao, ritual, comfort_activity, horario_produtivo, gosto_musical, gosto_culinario
-   - Atributos: descricao, frequencia, motivo, beneficio, impacto, genero, autor_favorito, momento
-   - Exemplo: leitura.genero="ficção científica", leitura.frequencia="antes de dormir", leitura.beneficio="me acalma"
+   Atributos: nome, local, tempo, satisfacao, objetivo, desafio, salario, responsabilidade,
+              nivel, meta, prazo
 
-6. MOMENTOS - Eventos temporais (NOVA - Antecipação)
-   - Tipos: evento_futuro, marco_recente, ciclo_recorrente, data_especial
-   - Atributos: data, tipo, sentimento, planejamento, impacto, frequencia, duracao
-   - Exemplo: viagem_paris.data="janeiro 2025", viagem_paris.sentimento="ansioso positivo"
+   Exemplos:
+   - profissao.nome="designer"
+   - profissao.empresa="Google"
+   - profissao.tempo="3 anos"
+   - satisfacao.nivel="gosto mas estressante"
+   - objetivo.meta="virar senior"
+   - desafio.tipo="pressão por prazos"
 
 INSTRUÇÕES CRÍTICAS:
-1. Extraia TODOS os fatos mencionados - seja minucioso
-2. Seja ESPECÍFICO - capture nomes próprios, datas, números
-3. Para RELACIONAMENTO: sempre extraia nome, aniversário (se mencionado), dinâmica emocional
-4. Para DESAFIOS: capture início, frequência, gatilhos, tentativas de solução
-5. Para PREFERENCIAS: capture frequência, motivo, benefício
-6. Para MOMENTOS: capture datas específicas ou relativas ("mês que vem")
-7. Se múltiplas entidades são mencionadas, extraia cada uma separadamente
-8. Use confidence: 1.0 para fatos explícitos, 0.8 para inferidos claros, 0.6 para ambíguos
+1. Use APENAS as categorias RELACIONAMENTO ou TRABALHO
+2. Para vida pessoal (saúde, hobbies, família, eventos): use RELACIONAMENTO
+3. Para vida profissional (carreira, empresa, colegas): use TRABALHO
+4. Seja ESPECÍFICO - capture nomes próprios, datas, números
+5. Extraia TODOS os detalhes mencionados
+6. Use confidence: 1.0 para fatos explícitos, 0.8 para inferidos claros, 0.6 para ambíguos
 
 EXEMPLOS DE EXTRAÇÃO:
 
@@ -105,10 +111,9 @@ Entrada: "Tenho insônia há 3 meses por causa do estresse no trabalho, já tent
 Saída:
 {
   "fatos": [
-    {"category": "DESAFIOS", "fact_type": "insonia", "attribute": "tipo", "value": "saude_mental", "confidence": 1.0, "context": "Tenho insônia"},
-    {"category": "DESAFIOS", "fact_type": "insonia", "attribute": "inicio", "value": "há 3 meses", "confidence": 1.0, "context": "há 3 meses"},
-    {"category": "DESAFIOS", "fact_type": "insonia", "attribute": "gatilho", "value": "estresse no trabalho", "confidence": 0.8, "context": "por causa do estresse no trabalho"},
-    {"category": "DESAFIOS", "fact_type": "insonia", "attribute": "tentativa_solucao", "value": "meditação", "confidence": 1.0, "context": "já tentei meditação"}
+    {"category": "RELACIONAMENTO", "fact_type": "saude_mental_insonia", "attribute": "inicio", "value": "há 3 meses", "confidence": 1.0, "context": "há 3 meses"},
+    {"category": "RELACIONAMENTO", "fact_type": "saude_mental_insonia", "attribute": "gatilho", "value": "estresse no trabalho", "confidence": 0.8, "context": "por causa do estresse no trabalho"},
+    {"category": "RELACIONAMENTO", "fact_type": "saude_mental_insonia", "attribute": "tentativa_solucao", "value": "meditação", "confidence": 1.0, "context": "já tentei meditação"}
   ]
 }
 
@@ -116,10 +121,10 @@ Entrada: "Adoro ler ficção científica antes de dormir, Isaac Asimov é meu fa
 Saída:
 {
   "fatos": [
-    {"category": "PREFERENCIAS", "fact_type": "leitura", "attribute": "genero", "value": "ficção científica", "confidence": 1.0, "context": "ler ficção científica"},
-    {"category": "PREFERENCIAS", "fact_type": "leitura", "attribute": "frequencia", "value": "antes de dormir", "confidence": 1.0, "context": "antes de dormir"},
-    {"category": "PREFERENCIAS", "fact_type": "leitura", "attribute": "autor_favorito", "value": "Isaac Asimov", "confidence": 1.0, "context": "Isaac Asimov é meu favorito"},
-    {"category": "PREFERENCIAS", "fact_type": "leitura", "attribute": "beneficio", "value": "me ajuda a relaxar", "confidence": 1.0, "context": "me ajuda a relaxar"}
+    {"category": "RELACIONAMENTO", "fact_type": "hobbie_leitura", "attribute": "genero", "value": "ficção científica", "confidence": 1.0, "context": "ler ficção científica"},
+    {"category": "RELACIONAMENTO", "fact_type": "hobbie_leitura", "attribute": "frequencia", "value": "antes de dormir", "confidence": 1.0, "context": "antes de dormir"},
+    {"category": "RELACIONAMENTO", "fact_type": "hobbie_leitura", "attribute": "autor_favorito", "value": "Isaac Asimov", "confidence": 1.0, "context": "Isaac Asimov é meu favorito"},
+    {"category": "RELACIONAMENTO", "fact_type": "hobbie_leitura", "attribute": "beneficio", "value": "me ajuda a relaxar", "confidence": 1.0, "context": "me ajuda a relaxar"}
   ]
 }
 
@@ -127,10 +132,10 @@ Entrada: "Vou viajar para Paris em janeiro, primeira vez na Europa, estou muito 
 Saída:
 {
   "fatos": [
-    {"category": "MOMENTOS", "fact_type": "viagem_paris", "attribute": "data", "value": "janeiro 2025", "confidence": 1.0, "context": "em janeiro"},
-    {"category": "MOMENTOS", "fact_type": "viagem_paris", "attribute": "tipo", "value": "lazer", "confidence": 0.8, "context": "viajar"},
-    {"category": "MOMENTOS", "fact_type": "viagem_paris", "attribute": "planejamento", "value": "primeira vez na Europa", "confidence": 1.0, "context": "primeira vez na Europa"},
-    {"category": "MOMENTOS", "fact_type": "viagem_paris", "attribute": "sentimento", "value": "ansioso positivo", "confidence": 0.9, "context": "estou muito ansioso!"}
+    {"category": "RELACIONAMENTO", "fact_type": "evento_viagem", "attribute": "destino", "value": "Paris", "confidence": 1.0, "context": "viajar para Paris"},
+    {"category": "RELACIONAMENTO", "fact_type": "evento_viagem", "attribute": "data", "value": "janeiro 2025", "confidence": 1.0, "context": "em janeiro"},
+    {"category": "RELACIONAMENTO", "fact_type": "evento_viagem", "attribute": "planejamento", "value": "primeira vez na Europa", "confidence": 1.0, "context": "primeira vez na Europa"},
+    {"category": "RELACIONAMENTO", "fact_type": "evento_viagem", "attribute": "sentimento", "value": "ansioso positivo", "confidence": 0.9, "context": "estou muito ansioso!"}
   ]
 }
 
@@ -141,8 +146,8 @@ Saída:
     {"category": "TRABALHO", "fact_type": "profissao", "attribute": "nome", "value": "designer", "confidence": 1.0, "context": "Trabalho como designer"},
     {"category": "TRABALHO", "fact_type": "profissao", "attribute": "empresa", "value": "Google", "confidence": 1.0, "context": "na Google"},
     {"category": "TRABALHO", "fact_type": "profissao", "attribute": "tempo", "value": "3 anos", "confidence": 1.0, "context": "há 3 anos"},
-    {"category": "TRABALHO", "fact_type": "profissao", "attribute": "satisfacao", "value": "gosto mas estressante", "confidence": 1.0, "context": "gosto mas é muito estressante"},
-    {"category": "TRABALHO", "fact_type": "profissao", "attribute": "objetivo", "value": "virar senior", "confidence": 1.0, "context": "quero virar senior"}
+    {"category": "TRABALHO", "fact_type": "satisfacao", "attribute": "nivel", "value": "gosto mas estressante", "confidence": 1.0, "context": "gosto mas é muito estressante"},
+    {"category": "TRABALHO", "fact_type": "objetivo", "attribute": "meta", "value": "virar senior", "confidence": 1.0, "context": "quero virar senior"}
   ]
 }
 
@@ -150,11 +155,10 @@ Entrada: "Sou introvertido, família é tudo para mim, acredito muito em terapia
 Saída:
 {
   "fatos": [
-    {"category": "PERSONALIDADE", "fact_type": "traço", "attribute": "tipo", "value": "introvertido", "confidence": 1.0, "context": "Sou introvertido"},
-    {"category": "PERSONALIDADE", "fact_type": "valor", "attribute": "tipo", "value": "familia_primeiro", "confidence": 0.9, "context": "família é tudo para mim"},
-    {"category": "PERSONALIDADE", "fact_type": "valor", "attribute": "importancia", "value": "muito alta", "confidence": 0.9, "context": "família é tudo"},
-    {"category": "PERSONALIDADE", "fact_type": "crenca", "attribute": "tipo", "value": "terapia", "confidence": 1.0, "context": "acredito muito em terapia"},
-    {"category": "PERSONALIDADE", "fact_type": "crenca", "attribute": "atitude", "value": "acredito muito", "confidence": 1.0, "context": "acredito muito"}
+    {"category": "RELACIONAMENTO", "fact_type": "personalidade_traço", "attribute": "tipo", "value": "introvertido", "confidence": 1.0, "context": "Sou introvertido"},
+    {"category": "RELACIONAMENTO", "fact_type": "personalidade_valor", "attribute": "tipo", "value": "familia_primeiro", "confidence": 0.9, "context": "família é tudo para mim"},
+    {"category": "RELACIONAMENTO", "fact_type": "personalidade_crenca", "attribute": "tipo", "value": "terapia", "confidence": 1.0, "context": "acredito muito em terapia"},
+    {"category": "RELACIONAMENTO", "fact_type": "personalidade_crenca", "attribute": "atitude", "value": "acredito muito", "confidence": 1.0, "context": "acredito muito"}
   ]
 }
 
