@@ -900,6 +900,86 @@ async def facts_v2_list():
             "error": str(e)
         }
 
+@app.post("/admin/test-extraction")
+async def test_extraction(request: dict):
+    """
+    Endpoint de diagnóstico para testar extração de fatos diretamente
+
+    Uso:
+    POST https://seu-railway-url/admin/test-extraction
+    Body: {"message": "Sua mensagem de teste aqui"}
+
+    Retorna:
+    - O que o LLM extraiu (raw)
+    - Se os fatos foram salvos
+    - Possíveis erros
+    """
+
+    try:
+        message = request.get("message")
+        if not message:
+            return {
+                "status": "error",
+                "error": "Campo 'message' obrigatório"
+            }
+
+        # Verificar se extractor está disponível
+        if not hasattr(bot_state.db, 'fact_extractor') or not bot_state.db.fact_extractor:
+            return {
+                "status": "error",
+                "error": "LLMFactExtractor não está inicializado",
+                "hint": "Verifique se ANTHROPIC_API_KEY está configurada"
+            }
+
+        # Testar extração
+        logger.info(f"[TEST] Testando extração com mensagem: {message}")
+
+        try:
+            facts = bot_state.db.fact_extractor.extract_facts(message)
+
+            result = {
+                "status": "success",
+                "message": message,
+                "facts_extracted": len(facts),
+                "facts": []
+            }
+
+            for fact in facts:
+                fact_dict = {
+                    "category": fact.category,
+                    "type": fact.fact_type,
+                    "attribute": fact.attribute,
+                    "value": fact.value,
+                    "confidence": fact.confidence,
+                    "context": fact.context[:100] + "..." if len(fact.context) > 100 else fact.context
+                }
+                result["facts"].append(fact_dict)
+
+            logger.info(f"[TEST] Extraídos {len(facts)} fatos: {result['facts']}")
+
+            return result
+
+        except Exception as extraction_error:
+            import traceback
+            error_trace = traceback.format_exc()
+            logger.error(f"[TEST] Erro na extração: {extraction_error}")
+            logger.error(f"[TEST] Traceback: {error_trace}")
+
+            return {
+                "status": "error",
+                "error": "Erro durante extração",
+                "details": str(extraction_error),
+                "traceback": error_trace
+            }
+
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
 # Montar arquivos estáticos (apenas se o diretório existir)
 static_dir = "admin_web/static"
 if os.path.exists(static_dir) and os.path.isdir(static_dir):
