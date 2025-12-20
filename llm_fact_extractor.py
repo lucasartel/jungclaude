@@ -225,10 +225,19 @@ Retorne APENAS o JSON, sem texto adicional."""
             logger.error(f"      Cleaned text tentado:")
             logger.error(f"      {cleaned_text[:500]}")
             return []
-        except Exception as e:
-            logger.error(f"      ❌ Erro no LLM: {type(e).__name__} - {e}")
+        except KeyError as e:
+            # Caso o JSON seja válido mas não tenha a chave "fatos"
+            logger.warning(f"      ⚠️ JSON válido mas sem chave 'fatos': {e}")
             if 'response_text' in locals():
-                logger.error(f"      Resposta do LLM: {response_text[:300]}")
+                logger.info(f"      Resposta do Claude: {response_text[:500]}")
+            return []
+        except Exception as e:
+            logger.error(f"      ❌ Erro inesperado no LLM: {type(e).__name__} - {e}")
+            if 'response_text' in locals():
+                logger.error(f"      Resposta do LLM: {response_text[:500]}")
+            # Log do traceback completo para debug
+            import traceback
+            logger.error(f"      Traceback: {traceback.format_exc()}")
             return []
 
     def _extract_with_regex(self, user_input: str) -> List[ExtractedFact]:
