@@ -855,6 +855,51 @@ async def facts_v2_status():
             "error": str(e)
         }
 
+@app.get("/admin/facts-v2/list")
+async def facts_v2_list():
+    """
+    Lista todos os fatos da tabela user_facts_v2
+
+    Acesse: GET https://seu-railway-url/admin/facts-v2/list
+    """
+
+    try:
+        cursor = bot_state.db.conn.cursor()
+        cursor.row_factory = lambda cursor, row: {
+            "id": row[0],
+            "user_id": row[1],
+            "category": row[2],
+            "type": row[3],
+            "attribute": row[4],
+            "value": row[5],
+            "confidence": row[6],
+            "method": row[7],
+            "created_at": row[8]
+        }
+
+        cursor.execute("""
+            SELECT id, user_id, fact_category, fact_type, fact_attribute,
+                   fact_value, confidence, extraction_method, created_at
+            FROM user_facts_v2
+            WHERE is_current = 1
+            ORDER BY created_at DESC
+        """)
+
+        facts = cursor.fetchall()
+
+        return {
+            "status": "success",
+            "total": len(facts),
+            "facts": facts
+        }
+
+    except Exception as e:
+        logger.error(f"Erro ao listar fatos: {e}")
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
 # Montar arquivos estáticos (apenas se o diretório existir)
 static_dir = "admin_web/static"
 if os.path.exists(static_dir) and os.path.isdir(static_dir):
