@@ -2686,7 +2686,7 @@ async def jung_mind_data():
 
         # ===== TENSÕES =====
         cursor.execute("""
-            SELECT id, tension_type, pole_a_summary, pole_b_summary,
+            SELECT id, tension_type, pole_a_content, pole_b_content,
                    intensity, maturity_score, status, created_at, last_evidence_at
             FROM rumination_tensions
             WHERE user_id = ?
@@ -2757,10 +2757,10 @@ async def jung_mind_data():
         # ===== INSIGHTS =====
         cursor.execute("""
             SELECT id, source_tension_id, symbol_content, question_content,
-                   full_message, depth_score, status, generated_at
+                   full_message, depth_score, status, crystallized_at
             FROM rumination_insights
             WHERE user_id = ?
-            ORDER BY generated_at DESC
+            ORDER BY crystallized_at DESC
             LIMIT 50
         """, (ADMIN_USER_ID,))
 
