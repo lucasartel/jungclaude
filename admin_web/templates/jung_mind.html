@@ -546,11 +546,7 @@
                     const node = allNodes.find(n => n.id === nodeId);
                     if (node) {
                         showNodeInfo(node);
-
-                        // Ao clicar em um nó (exceto Jung), mostrar apenas ele e descendentes
-                        if (nodeId !== 'jung') {
-                            showNodeAndDescendants(nodeId);
-                        }
+                        // Não aplicar filtro hierárquico - apenas mostrar informações
                     }
                 } else {
                     hideNodeInfo();
