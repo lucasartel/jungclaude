@@ -2563,12 +2563,49 @@ async def jung_mind_data():
         }
     """
     try:
+        # Importar ADMIN_USER_ID
+        try:
+            from rumination_config import ADMIN_USER_ID
+        except ImportError:
+            logger.error("❌ Não foi possível importar ADMIN_USER_ID de rumination_config")
+            ADMIN_USER_ID = "367f9e509e396d51"  # Fallback hardcoded
+            logger.info(f"   Usando fallback ADMIN_USER_ID: {ADMIN_USER_ID}")
+
         db = get_db()
         conn = db.conn
         cursor = conn.cursor()
 
-        # User ID hardcoded (admin)
-        from rumination_config import ADMIN_USER_ID
+        # Verificar se tabelas existem
+        cursor.execute("""
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name IN ('rumination_fragments', 'rumination_tensions', 'rumination_insights')
+        """)
+        existing_tables = [row[0] for row in cursor.fetchall()]
+
+        if not existing_tables:
+            logger.warning("⚠️ Nenhuma tabela de ruminação encontrada")
+            return JSONResponse({
+                "nodes": [{
+                    "id": "jung",
+                    "label": "JUNG",
+                    "type": "center",
+                    "title": "Sistema de Ruminação ainda não inicializado",
+                    "level": 0,
+                    "color": "#6b7280",
+                    "shape": "star",
+                    "size": 40
+                }],
+                "edges": [],
+                "stats": {
+                    "total_fragments": 0,
+                    "total_tensions": 0,
+                    "total_insights": 0,
+                    "total_synapses": 0
+                },
+                "warning": "Tabelas de ruminação não encontradas. Sistema ainda não foi inicializado."
+            })
+
+        logger.info(f"✅ Tabelas encontradas: {existing_tables}")
 
         nodes = []
         edges = []
