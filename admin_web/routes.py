@@ -2687,10 +2687,10 @@ async def jung_mind_data():
         # ===== TENSÕES =====
         cursor.execute("""
             SELECT id, tension_type, pole_a_content, pole_b_content,
-                   intensity, maturity_score, status, created_at, last_evidence_at
+                   intensity, maturity_score, status, first_detected_at, last_evidence_at
             FROM rumination_tensions
             WHERE user_id = ?
-            ORDER BY maturity_score DESC, created_at DESC
+            ORDER BY maturity_score DESC, first_detected_at DESC
             LIMIT 100
         """, (ADMIN_USER_ID,))
 
@@ -2705,7 +2705,7 @@ async def jung_mind_data():
             intensity = tension[4]
             maturity = tension[5]
             t_status = tension[6]
-            created_at = tension[7]
+            first_detected_at = tension[7]
             last_evidence = tension[8]
 
             # Buscar fragmentos relacionados à tensão
@@ -2739,7 +2739,7 @@ async def jung_mind_data():
                     "intensity": intensity,
                     "maturity": maturity,
                     "status": t_status,
-                    "created_at": created_at
+                    "first_detected_at": first_detected_at
                 }
             })
 
@@ -2774,7 +2774,7 @@ async def jung_mind_data():
             thought = insight[4] or ""
             depth = insight[5] or 0.5
             i_status = insight[6]
-            generated_at = insight[7]
+            crystallized_at = insight[7]
 
             nodes.append({
                 "id": insight_id,
@@ -2785,7 +2785,7 @@ async def jung_mind_data():
                          f"{thought[:200]}...<br><br>" +
                          f"Questão: {question}<br>" +
                          f"Profundidade: {depth:.0%}<br>" +
-                         f"Gerado: {generated_at}",
+                         f"Cristalizado: {crystallized_at}",
                 "level": 3,
                 "color": "#ec4899" if i_status == "ready" else "#8b5cf6",
                 "shape": "box",
@@ -2796,7 +2796,7 @@ async def jung_mind_data():
                     "thought": thought,
                     "depth": depth,
                     "status": i_status,
-                    "generated_at": generated_at
+                    "crystallized_at": crystallized_at
                 }
             })
 
