@@ -2632,6 +2632,7 @@ async def jung_mind_data():
         """, (ADMIN_USER_ID,))
 
         fragments = cursor.fetchall()
+        logger.info(f"📊 Fragmentos encontrados: {len(fragments)}")
         fragment_themes = {}  # Para detectar sinapses
 
         for frag in fragments:
@@ -2695,6 +2696,7 @@ async def jung_mind_data():
         """, (ADMIN_USER_ID,))
 
         tensions = cursor.fetchall()
+        logger.info(f"📊 Tensões encontradas: {len(tensions)}")
         tension_fragments = {}  # Mapear tensão → fragmentos relacionados
 
         for tension in tensions:
@@ -2765,6 +2767,7 @@ async def jung_mind_data():
         """, (ADMIN_USER_ID,))
 
         insights = cursor.fetchall()
+        logger.info(f"📊 Insights encontrados: {len(insights)}")
 
         for insight in insights:
             insight_id = f"insight_{insight[0]}"
@@ -2830,15 +2833,20 @@ async def jung_mind_data():
                         "smooth": {"type": "curvedCW", "roundness": 0.2}
                     })
 
+        stats = {
+            "total_fragments": len(fragments),
+            "total_tensions": len(tensions),
+            "total_insights": len(insights),
+            "total_synapses": sum(1 for e in edges if e["type"] == "synapse")
+        }
+
+        logger.info(f"📊 TOTAIS: {len(nodes)} nós, {len(edges)} edges")
+        logger.info(f"📊 STATS: {stats}")
+
         return JSONResponse({
             "nodes": nodes,
             "edges": edges,
-            "stats": {
-                "total_fragments": len(fragments),
-                "total_tensions": len(tensions),
-                "total_insights": len(insights),
-                "total_synapses": sum(1 for e in edges if e["type"] == "synapse")
-            }
+            "stats": stats
         })
 
     except Exception as e:
