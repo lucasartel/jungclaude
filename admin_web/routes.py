@@ -5,6 +5,7 @@ import os
 from typing import Dict, List, Optional
 import logging
 from datetime import datetime
+import json
 
 # Importar autenticação segura
 from admin_web.auth import verify_credentials
@@ -2688,7 +2689,8 @@ async def jung_mind_data():
         # ===== TENSÕES =====
         cursor.execute("""
             SELECT id, tension_type, pole_a_content, pole_b_content,
-                   intensity, maturity_score, status, first_detected_at, last_evidence_at
+                   intensity, maturity_score, status, first_detected_at, last_evidence_at,
+                   pole_a_fragment_ids, pole_b_fragment_ids
             FROM rumination_tensions
             WHERE user_id = ?
             ORDER BY maturity_score DESC, first_detected_at DESC
@@ -2709,14 +2711,13 @@ async def jung_mind_data():
             t_status = tension[6]
             first_detected_at = tension[7]
             last_evidence = tension[8]
+            pole_a_fragment_ids = tension[9]
+            pole_b_fragment_ids = tension[10]
 
-            # Buscar fragmentos relacionados à tensão
-            cursor.execute("""
-                SELECT fragment_id FROM rumination_tension_fragments
-                WHERE tension_id = ?
-            """, (tension[0],))
-
-            related_fragments = [f"frag_{row[0]}" for row in cursor.fetchall()]
+            # Parse fragment IDs from JSON columns
+            pole_a_ids = json.loads(pole_a_fragment_ids) if pole_a_fragment_ids else []
+            pole_b_ids = json.loads(pole_b_fragment_ids) if pole_b_fragment_ids else []
+            related_fragments = [f"frag_{fid}" for fid in (pole_a_ids + pole_b_ids)]
             tension_fragments[tension_id] = related_fragments
 
             nodes.append({
