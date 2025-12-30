@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organizações - JungAgent Admin</title>
+    <link rel="stylesheet" href="/static/css/admin.css">
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div>
+                <h1>🏢 Gestão de Organizações</h1>
+                <p style="opacity: 0.9; margin-top: 5px;">Gerenciar todas as organizações do sistema</p>
+            </div>
+            <div class="header-info">
+                <div class="user-name">{{ admin.full_name or admin.email }}</div>
+                <span class="role-badge">👑 Master Admin</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="nav">
+        <div class="nav-content">
+            <a href="/admin/master/dashboard">Dashboard</a>
+            <a href="/admin/organizations" class="active">Organizações</a>
+            <a href="/admin/admins">Administradores</a>
+            <a href="/admin/users">Usuários Jung</a>
+            <form action="/admin/logout" method="POST" style="margin-left: auto;">
+                <button type="submit" class="logout-btn nav">Sair</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Success Message -->
+        {% if request.query_params.get('success') %}
+        <div class="alert alert-success">
+            ✅ {{ request.query_params.get('success') }}
+        </div>
+        {% endif %}
+
+        <!-- Actions -->
+        <div class="section">
+            <div class="section-header">
+                <h2>📊 Todas as Organizações</h2>
+                <a href="/admin/organizations/new" class="btn btn-primary">+ Nova Organização</a>
+            </div>
+
+            {% if organizations %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Slug</th>
+                        <th>Indústria</th>
+                        <th>Tamanho</th>
+                        <th>Plano</th>
+                        <th>Status</th>
+                        <th>Usuários</th>
+                        <th>Admins</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for org in organizations %}
+                    <tr>
+                        <td><strong>{{ org.org_name }}</strong></td>
+                        <td><code>{{ org.org_slug }}</code></td>
+                        <td>{{ org.industry or '—' }}</td>
+                        <td>
+                            <span class="badge badge-{{ org.size or 'default' }}">
+                                {{ org.size.upper() if org.size else '—' }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge badge-{{ org.subscription_tier }}">
+                                {{ org.subscription_tier.upper() }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge badge-{{ org.subscription_status }}">
+                                {{ org.subscription_status.upper() }}
+                            </span>
+                        </td>
+                        <td>{{ org.user_count }}</td>
+                        <td>{{ org.admin_count }}</td>
+                        <td class="actions">
+                            <a href="/admin/organizations/{{ org.org_id }}/edit" class="btn-action btn-edit" title="Editar">
+                                ✏️
+                            </a>
+                            {% if org.org_id != 'default-org' %}
+                            <form method="POST" action="/admin/organizations/{{ org.org_id }}/delete" style="display: inline;"
+                                  onsubmit="return confirm('Tem certeza que deseja desativar a organização {{ org.org_name }}?');">
+                                <button type="submit" class="btn-action btn-delete" title="Desativar">
+                                    🗑️
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>Nenhuma organização encontrada</p>
+                <a href="/admin/organizations/new" class="btn btn-primary" style="margin-top: 20px;">+ Criar Primeira Organização</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <style>
+        .alert {
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
+
+        .actions {
+            white-space: nowrap;
+        }
+
+        .btn-action {
+            display: inline-block;
+            padding: 6px 10px;
+            margin: 0 2px;
+            border: none;
+            border-radius: 4px;
+            background: transparent;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.2s;
+        }
+
+        .btn-action:hover {
+            transform: scale(1.2);
+        }
+
+        .btn-edit:hover {
+            filter: brightness(0.8);
+        }
+
+        .btn-delete {
+            background: transparent;
+        }
+
+        .btn-delete:hover {
+            filter: brightness(0.8);
+        }
+
+        .badge-small { background: #e2e3e5; color: #383d41; }
+        .badge-medium { background: #fff3cd; color: #856404; }
+        .badge-large { background: #d1ecf1; color: #0c5460; }
+        .badge-basic { background: #e2e3e5; color: #383d41; }
+        .badge-pro { background: #fff3cd; color: #856404; }
+        .badge-enterprise { background: #d4edda; color: #155724; }
+        .badge-active { background: #d4edda; color: #155724; }
+        .badge-trial { background: #fff3cd; color: #856404; }
+        .badge-suspended { background: #f8d7da; color: #721c24; }
+    </style>
+</body>
+</html>

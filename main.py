@@ -1104,6 +1104,36 @@ except Exception as e:
     logger.error(f"❌ Erro ao carregar dashboard routes: {e}")
     logger.error(traceback.format_exc())
 
+# Rotas de gestão de organizações
+try:
+    from admin_web.routes.organization_routes import router as org_router, init_organization_routes
+
+    if hasattr(bot_state, 'db') and bot_state.db:
+        init_organization_routes(bot_state.db)
+        app.include_router(org_router)
+        logger.info("✅ Rotas de gestão de organizações carregadas")
+    else:
+        logger.warning("⚠️  DatabaseManager não disponível - organization routes não carregadas")
+except Exception as e:
+    import traceback
+    logger.error(f"❌ Erro ao carregar organization routes: {e}")
+    logger.error(traceback.format_exc())
+
+# Rotas de gestão de admin users
+try:
+    from admin_web.routes.admin_user_routes import router as admin_user_router, init_admin_user_routes
+
+    if hasattr(bot_state, 'db') and bot_state.db:
+        init_admin_user_routes(bot_state.db)
+        app.include_router(admin_user_router)
+        logger.info("✅ Rotas de gestão de admin users carregadas")
+    else:
+        logger.warning("⚠️  DatabaseManager não disponível - admin user routes não carregadas")
+except Exception as e:
+    import traceback
+    logger.error(f"❌ Erro ao carregar admin user routes: {e}")
+    logger.error(traceback.format_exc())
+
 # ⚠️ ROTA DE MIGRAÇÃO REMOVIDA - Migração já foi executada com sucesso
 # A rota de migração foi comentada por segurança após a execução bem-sucedida
 # Se precisar executar novamente, descomente temporariamente as linhas abaixo:

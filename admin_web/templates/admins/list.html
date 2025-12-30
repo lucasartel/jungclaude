@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administradores - JungAgent Admin</title>
+    <link rel="stylesheet" href="/static/css/admin.css">
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div>
+                <h1>👥 Gestão de Administradores</h1>
+            </div>
+            <div class="header-info">
+                <span class="role-badge">👑 Master Admin</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="nav">
+        <div class="nav-content">
+            <a href="/admin/master/dashboard">Dashboard</a>
+            <a href="/admin/organizations">Organizações</a>
+            <a href="/admin/admins" class="active">Administradores</a>
+            <form action="/admin/logout" method="POST" style="margin-left: auto;">
+                <button type="submit" class="logout-btn nav">Sair</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="container">
+        {% if request.query_params.get('success') %}
+        <div class="alert alert-success">✅ {{ request.query_params.get('success') }}</div>
+        {% endif %}
+
+        <div class="section">
+            <div class="section-header">
+                <h2>👥 Todos os Administradores</h2>
+                <a href="/admin/admins/new" class="btn btn-primary">+ Novo Admin</a>
+            </div>
+
+            {% if admins %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Organização</th>
+                        <th>Status</th>
+                        <th>Último Login</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for admin_user in admins %}
+                    <tr>
+                        <td><strong>{{ admin_user.full_name }}</strong></td>
+                        <td>{{ admin_user.email }}</td>
+                        <td>
+                            <span class="badge badge-{{ admin_user.role }}">
+                                {{ 'Master' if admin_user.role == 'master' else 'Org Admin' }}
+                            </span>
+                        </td>
+                        <td>{{ admin_user.org_name }}</td>
+                        <td>
+                            <span class="badge badge-{{ 'active' if admin_user.is_active else 'inactive' }}">
+                                {{ 'Ativo' if admin_user.is_active else 'Inativo' }}
+                            </span>
+                        </td>
+                        <td>{{ admin_user.last_login[:16] if admin_user.last_login else 'Nunca' }}</td>
+                        <td class="actions">
+                            <a href="/admin/admins/{{ admin_user.admin_id }}/edit" class="btn-action">✏️</a>
+                            {% if admin_user.admin_id != admin.admin_id %}
+                            <form method="POST" action="/admin/admins/{{ admin_user.admin_id }}/deactivate" style="display: inline;"
+                                  onsubmit="return confirm('Desativar {{ admin_user.full_name }}?');">
+                                <button type="submit" class="btn-action btn-delete">🗑️</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>Nenhum administrador encontrado</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
