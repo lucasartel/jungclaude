@@ -22,30 +22,19 @@ from fastapi.responses import HTMLResponse
 import os
 from pathlib import Path
 
-# WORKAROUND: Railway não está copiando migrations/ para o container
-# Solução: Importar usando caminho absoluto do arquivo
+# WORKAROUND: Railway não copia migrations/ para container
+# SOLUÇÃO FINAL: Mover run_migration_web.py para admin_web/database/
 import importlib.util
 
-project_root = str(Path(__file__).parent.parent.parent)
-migrations_file = os.path.join(project_root, 'migrations', 'run_migration_web.py')
+# Tentar importar de admin_web/database/ (novo local)
+admin_web_dir = str(Path(__file__).parent.parent)
+migration_file = os.path.join(admin_web_dir, 'database', 'run_migration_web.py')
 
-# Verificar se arquivo existe
-if not os.path.exists(migrations_file):
-    import logging
-    logging.error(f"❌ Arquivo não encontrado: {migrations_file}")
-    logging.error(f"   Arquivos em {project_root}: {os.listdir(project_root)}")
-    if os.path.exists(os.path.join(project_root, 'migrations')):
-        logging.error(f"   Arquivos em migrations/: {os.listdir(os.path.join(project_root, 'migrations'))}")
-
-    # Criar função dummy
-    def run_web_migration(*args, **kwargs):
-        return "<h1>ERRO: migrations/ não encontrado no Railway</h1>"
-else:
-    # Importar módulo usando caminho absoluto
-    spec = importlib.util.spec_from_file_location("run_migration_web", migrations_file)
-    migration_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(migration_module)
-    run_web_migration = migration_module.run_web_migration
+# Importar módulo usando caminho absoluto
+spec = importlib.util.spec_from_file_location("run_migration_web", migration_file)
+migration_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(migration_module)
+run_web_migration = migration_module.run_web_migration
 
 router = APIRouter(prefix="/admin", tags=["migration"])
 

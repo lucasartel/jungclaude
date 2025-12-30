@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Adicionar path do projeto
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from admin_web.auth.auth_manager import AuthManager
 from admin_web.database.multi_tenant_schema import MultiTenantSchema
