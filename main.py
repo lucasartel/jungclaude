@@ -1075,9 +1075,10 @@ try:
     from admin_web.auth.middleware import init_middleware
 
     # Inicializar sistemas de autenticação no startup
-    if JUNG_CORE_AVAILABLE and _db_manager:
-        init_middleware(_db_manager)
-        init_auth_routes(_db_manager)
+    # Usar bot_state.db que é o DatabaseManager já inicializado
+    if hasattr(bot_state, 'db') and bot_state.db:
+        init_middleware(bot_state.db)
+        init_auth_routes(bot_state.db)
         app.include_router(auth_router)
         logger.info("✅ Rotas de autenticação multi-tenant carregadas")
     else:
