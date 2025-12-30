@@ -291,13 +291,26 @@ async def run_migration(
         master_name: Nome completo do master
     """
     # Caminho do banco de dados
-    # No Railway, o banco fica em /app/jung_memory.db
-    # Localmente, pode estar na raiz do projeto
-    db_path = os.getenv("DATABASE_PATH", "/app/jung_memory.db")
+    # IMPORTANTE: Railway usa /data/jung_hybrid.db (não /app/jung_memory.db)
+    # Verificar múltiplas localizações possíveis
 
-    # Se não existir, tentar path local
-    if not os.path.exists(db_path):
-        db_path = os.path.join(os.getcwd(), "jung_memory.db")
+    possible_paths = [
+        os.getenv("DATABASE_PATH"),           # Variável de ambiente customizada
+        "/data/jung_hybrid.db",                # Railway (atual)
+        "/app/jung_memory.db",                 # Railway (antigo, se existir)
+        os.path.join(os.getcwd(), "jung_memory.db"),  # Local
+        os.path.join(os.getcwd(), "jung_hybrid.db"),  # Local alternativo
+    ]
+
+    db_path = None
+    for path in possible_paths:
+        if path and os.path.exists(path):
+            db_path = path
+            break
+
+    # Se nenhum banco foi encontrado, usar o padrão do Railway
+    if not db_path:
+        db_path = "/data/jung_hybrid.db"
 
     # Executar migração
     html_output = run_web_migration(
