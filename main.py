@@ -1088,14 +1088,32 @@ except Exception as e:
     logger.error(f"❌ Erro ao carregar auth routes: {e}")
     logger.error(traceback.format_exc())
 
-# ⚠️ TEMPORÁRIO: Rota de migração multi-tenant (REMOVER APÓS MIGRAÇÃO!)
+# Rotas de dashboards multi-tenant
 try:
-    from admin_web.routes.migration_route import router as migration_router
-    app.include_router(migration_router)
-    logger.info("✅ Rota de migração multi-tenant carregada")
-    logger.warning("⚠️  LEMBRETE: Remover migration_route após executar a migração!")
+    from admin_web.routes.dashboard_routes import router as dashboard_router, init_dashboard_routes
+
+    # Inicializar dashboards
+    if hasattr(bot_state, 'db') and bot_state.db:
+        init_dashboard_routes(bot_state.db)
+        app.include_router(dashboard_router)
+        logger.info("✅ Rotas de dashboards multi-tenant carregadas")
+    else:
+        logger.warning("⚠️  DatabaseManager não disponível - dashboard routes não carregadas")
 except Exception as e:
-    logger.warning(f"⚠️  Rota de migração não disponível: {e}")
+    import traceback
+    logger.error(f"❌ Erro ao carregar dashboard routes: {e}")
+    logger.error(traceback.format_exc())
+
+# ⚠️ ROTA DE MIGRAÇÃO REMOVIDA - Migração já foi executada com sucesso
+# A rota de migração foi comentada por segurança após a execução bem-sucedida
+# Se precisar executar novamente, descomente temporariamente as linhas abaixo:
+# try:
+#     from admin_web.routes.migration_route import router as migration_router
+#     app.include_router(migration_router)
+#     logger.info("✅ Rota de migração multi-tenant carregada")
+#     logger.warning("⚠️  LEMBRETE: Remover migration_route após executar a migração!")
+# except Exception as e:
+#     logger.warning(f"⚠️  Rota de migração não disponível: {e}")
 
 
 if __name__ == "__main__":
