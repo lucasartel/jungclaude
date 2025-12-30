@@ -3,7 +3,7 @@ Rotas do Admin Web - Multi-Tenant System
 
 Módulos:
     - auth_routes: Login/Logout
-    - migration_route: Migração temporária (remover após executar)
+    - dashboard_routes: Master e Org Admin Dashboards
 
 IMPORTANTE: Este __init__.py resolve conflito entre:
     - admin_web/routes.py (arquivo antigo com rotas legadas)
