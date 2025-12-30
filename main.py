@@ -1069,6 +1069,24 @@ except Exception as e:
     logger.error(f"Traceback completo:\n{traceback.format_exc()}")
     logger.warning("⚠️  Admin web não disponível - Apenas bot Telegram funcionará")
 
+# Rotas de autenticação multi-tenant
+try:
+    from admin_web.routes.auth_routes import router as auth_router, init_auth_routes
+    from admin_web.auth.middleware import init_middleware
+
+    # Inicializar sistemas de autenticação no startup
+    if JUNG_CORE_AVAILABLE and _db_manager:
+        init_middleware(_db_manager)
+        init_auth_routes(_db_manager)
+        app.include_router(auth_router)
+        logger.info("✅ Rotas de autenticação multi-tenant carregadas")
+    else:
+        logger.warning("⚠️  DatabaseManager não disponível - auth routes não carregadas")
+except Exception as e:
+    import traceback
+    logger.error(f"❌ Erro ao carregar auth routes: {e}")
+    logger.error(traceback.format_exc())
+
 # ⚠️ TEMPORÁRIO: Rota de migração multi-tenant (REMOVER APÓS MIGRAÇÃO!)
 try:
     from admin_web.routes.migration_route import router as migration_router
