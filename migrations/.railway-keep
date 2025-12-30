@@ -1,0 +1,2 @@
+# Este arquivo força o Railway a copiar a pasta migrations/
+# Sem este arquivo, pastas vazias ou novas podem não ser copiadas no build
