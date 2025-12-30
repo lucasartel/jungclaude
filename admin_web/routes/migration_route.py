@@ -23,10 +23,22 @@ import os
 import sys
 from pathlib import Path
 
-# Adicionar path do projeto
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Adicionar path do projeto ao sys.path para garantir que migrations/ seja encontrado
+project_root = str(Path(__file__).parent.parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-from migrations.run_migration_web import run_web_migration
+# Importar com tratamento de erro detalhado
+try:
+    from migrations.run_migration_web import run_web_migration
+except ImportError as e:
+    import logging
+    logging.error(f"❌ ERRO ao importar run_web_migration: {e}")
+    logging.error(f"   sys.path: {sys.path}")
+    logging.error(f"   project_root: {project_root}")
+    logging.error(f"   __file__: {__file__}")
+    # Re-raise para que o erro apareça nos logs do Railway
+    raise
 
 router = APIRouter(prefix="/admin", tags=["migration"])
 
