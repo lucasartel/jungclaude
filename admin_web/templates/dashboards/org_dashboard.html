@@ -366,7 +366,7 @@
                 </div>
                 <div class="org-info-item">
                     <span class="label">Criada em</span>
-                    <span class="value">{{ organization.created_at[:10] }}</span>
+                    <span class="value">{{ organization.created_at[:10] if organization.created_at else '—' }}</span>
                 </div>
             </div>
         </div>
@@ -419,7 +419,7 @@
                             </span>
                         </td>
                         <td>{{ admin_user.last_login[:16] if admin_user.last_login else 'Nunca' }}</td>
-                        <td>{{ admin_user.created_at[:10] }}</td>
+                        <td>{{ admin_user.created_at[:10] if admin_user.created_at else '—' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

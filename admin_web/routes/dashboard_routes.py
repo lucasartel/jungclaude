@@ -113,7 +113,8 @@ async def master_dashboard(
         total_interactions = sum(u.get('total_messages', 0) for u in all_users)
 
         cursor.execute("SELECT COUNT(*) FROM archetype_conflicts")
-        total_conflicts = cursor.fetchone()[0] if cursor.fetchone() else 0
+        conflict_result = cursor.fetchone()
+        total_conflicts = conflict_result[0] if conflict_result else 0
 
         return templates.TemplateResponse("dashboards/master_dashboard.html", {
             "request": request,
