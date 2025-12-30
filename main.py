@@ -1069,6 +1069,15 @@ except Exception as e:
     logger.error(f"Traceback completo:\n{traceback.format_exc()}")
     logger.warning("⚠️  Admin web não disponível - Apenas bot Telegram funcionará")
 
+# ⚠️ TEMPORÁRIO: Rota de migração multi-tenant (REMOVER APÓS MIGRAÇÃO!)
+try:
+    from admin_web.routes.migration_route import router as migration_router
+    app.include_router(migration_router)
+    logger.info("✅ Rota de migração multi-tenant carregada")
+    logger.warning("⚠️  LEMBRETE: Remover migration_route após executar a migração!")
+except Exception as e:
+    logger.warning(f"⚠️  Rota de migração não disponível: {e}")
+
 
 if __name__ == "__main__":
     # Rodar com uvicorn
