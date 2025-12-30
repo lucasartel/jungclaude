@@ -16,7 +16,7 @@ from typing import Dict
 import logging
 
 # Importar middleware de autenticação
-from admin_web.auth.middleware import require_auth, require_master, require_org_admin
+from admin_web.auth.middleware import require_master, require_org_admin
 
 router = APIRouter(prefix="/admin", tags=["dashboards"])
 templates = Jinja2Templates(directory="admin_web/templates")
@@ -63,8 +63,7 @@ async def master_dashboard(
                 org_slug,
                 subscription_tier,
                 subscription_status,
-                created_at,
-                is_active
+                created_at
             FROM organizations
             ORDER BY created_at DESC
         """)
@@ -77,7 +76,7 @@ async def master_dashboard(
                 'subscription_tier': row[3],
                 'subscription_status': row[4],
                 'created_at': row[5],
-                'is_active': row[6]
+                'is_active': True  # Por enquanto, todas as orgs são ativas por padrão
             })
 
         # Buscar todos os usuários do sistema (jung users)
@@ -168,9 +167,9 @@ async def org_dashboard(
                 org_slug,
                 subscription_tier,
                 subscription_status,
-                max_users,
                 created_at,
-                is_active
+                size,
+                industry
             FROM organizations
             WHERE org_id = ?
         """, (org_id,))
@@ -185,9 +184,11 @@ async def org_dashboard(
             'org_slug': org_row[2],
             'subscription_tier': org_row[3],
             'subscription_status': org_row[4],
-            'max_users': org_row[5],
-            'created_at': org_row[6],
-            'is_active': org_row[7]
+            'created_at': org_row[5],
+            'size': org_row[6],
+            'industry': org_row[7],
+            'max_users': 100,  # Default: 100 usuários por organização
+            'is_active': True  # Por enquanto, todas as orgs são ativas
         }
 
         # Buscar usuários da organização
