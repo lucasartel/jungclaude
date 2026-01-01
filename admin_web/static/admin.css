@@ -333,9 +333,11 @@ tbody tr:hover {
     cursor: pointer;
     border: none;
     text-decoration: none;
-    display: inline-flex;
+    display: inline-block;
     align-items: center;
     gap: 0.5rem;
+    position: relative;
+    z-index: 10;
 }
 
 .btn-primary {
@@ -433,6 +435,11 @@ footer.bg-white {
     font-size: 1.4em;
     color: #333;
     margin: 0;
+}
+
+.section-header .btn {
+    pointer-events: auto;
+    user-select: none;
 }
 
 .container {

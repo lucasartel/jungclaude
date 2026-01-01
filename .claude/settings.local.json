@@ -8,7 +8,10 @@
       "Bash(git checkout:*)",
       "Bash(git revert:*)",
       "Bash(mkdir:*)",
-      "Bash(ls -la \"c:\\\\Users\\\\conta\\\\OneDrive\\\\jungproject\\\\admin_web\\\\static\\\\css\"\" 2>&1 || echo \"Diretório não existe \")"
+      "Bash(ls -la \"c:\\\\Users\\\\conta\\\\OneDrive\\\\jungproject\\\\admin_web\\\\static\\\\css\"\" 2>&1 || echo \"Diretório não existe \")",
+      "Bash(cursor: pointer !important)",
+      "Bash(\"\n   - admins/list.html: Added style=\"pointer-events: auto !important)",
+      "Bash(\"\n   - Nuclear option to override any CSS conflicts\n\nTESTING:\nAfter deploy, buttons should be fully clickable and navigate to:\n- /admin/organizations/new\n- /admin/admins/new\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ],
     "deny": [],
     "ask": []
