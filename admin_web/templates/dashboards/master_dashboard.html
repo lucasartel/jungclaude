@@ -303,9 +303,9 @@
     <div class="nav">
         <div class="nav-content">
             <a href="/admin/master/dashboard" class="active">Dashboard</a>
-            <a href="/admin/users">Usuários Jung</a>
-            <a href="/admin/jung-mind">Jung Mind</a>
-            <a href="/admin/sync-check">Sync Check</a>
+            <a href="/admin/organizations">Organizações</a>
+            <a href="/admin/admins">Administradores</a>
+            <!-- Rotas de usuários Jung serão implementadas na próxima versão -->
             <form action="/admin/logout" method="POST" style="margin-left: auto;">
                 <button type="submit" class="logout-btn nav" style="border: none; cursor: pointer;">Sair</button>
             </form>
@@ -422,7 +422,7 @@
         <div class="section">
             <div class="section-header">
                 <h2>🧠 Usuários Jung (Preview)</h2>
-                <a href="/admin/users" class="btn">Ver Todos</a>
+                <!-- Link "Ver Todos" será implementado quando as rotas de usuários forem migradas para multi-tenant -->
             </div>
             {% if jung_users %}
             <table>
