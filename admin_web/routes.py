@@ -7,20 +7,9 @@ import logging
 from datetime import datetime
 import json
 
-# Importar autenticação segura (sistema antigo HTTP Basic Auth)
-# NOTA: Este arquivo ainda usa o sistema antigo de autenticação
-# TODO: Migrar para o novo sistema session-based (admin_web/auth/middleware.py)
-try:
-    from admin_web.auth import verify_credentials
-except ImportError:
-    # Fallback: se admin_web/auth.py não existir, usar função dummy
-    # Isso permite que o sistema multi-tenant funcione sem quebrar rotas antigas
-    from fastapi.security import HTTPBasic, HTTPBasicCredentials
-    security = HTTPBasic()
-    def verify_credentials(_credentials: HTTPBasicCredentials = Depends(security)) -> str:
-        # Dummy - permitir qualquer acesso por enquanto
-        # As rotas antigas serão migradas gradualmente
-        return "admin"
+# MIGRADO: Agora usa sistema session-based multi-tenant
+# Apenas Master Admin pode acessar essas rotas
+from admin_web.auth.middleware import require_master
 
 # Importar core do Jung (opcional - pode falhar se dependências não estiverem disponíveis)
 JUNG_CORE_ERROR = None
@@ -75,7 +64,7 @@ async def test_route():
     }
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, username: str = Depends(verify_credentials)):
+async def dashboard(request: Request, admin: Dict = Depends(require_master)):
     """Dashboard principal - com fallback para quando jung_core não está disponível"""
     
     if not JUNG_CORE_AVAILABLE:
@@ -129,19 +118,19 @@ async def dashboard(request: Request, username: str = Depends(verify_credentials
     })
 
 @router.get("/users", response_class=HTMLResponse)
-async def users_list(request: Request, username: str = Depends(verify_credentials)):
+async def users_list(request: Request, admin: Dict = Depends(require_master)):
     """Lista de usuários"""
     db = get_db()
     users = db.get_all_users(platform="telegram")
     return templates.TemplateResponse("users.html", {"request": request, "users": users})
 
 @router.get("/sync-check", response_class=HTMLResponse)
-async def sync_check_page(request: Request, username: str = Depends(verify_credentials)):
+async def sync_check_page(request: Request, admin: Dict = Depends(require_master)):
     """Página de diagnóstico de sincronização"""
     return templates.TemplateResponse("sync_check.html", {"request": request})
 
 @router.get("/user/{user_id}/analysis", response_class=HTMLResponse)
-async def user_analysis_page(request: Request, user_id: str, username: str = Depends(verify_credentials)):
+async def user_analysis_page(request: Request, user_id: str, admin: Dict = Depends(require_master)):
     """Página de análise MBTI/Jungiana do usuário"""
     db = get_db()
 
@@ -171,7 +160,7 @@ async def user_analysis_page(request: Request, user_id: str, username: str = Dep
     })
 
 @router.get("/user/{user_id}/agent-data", response_class=HTMLResponse)
-async def user_agent_data_page(request: Request, user_id: str, username: str = Depends(verify_credentials)):
+async def user_agent_data_page(request: Request, user_id: str, admin: Dict = Depends(require_master)):
     """
     Página de Dados do Agente
 
@@ -336,7 +325,7 @@ async def user_agent_data_page(request: Request, user_id: str, username: str = D
 # ============================================================================
 
 @router.get("/api/sync-status")
-async def get_sync_status(username: str = Depends(verify_credentials)):
+async def get_sync_status(admin: Dict = Depends(require_master)):
     """Retorna status de sincronização para o header"""
     # Lógica simplificada para o header
     return HTMLResponse(
@@ -344,7 +333,7 @@ async def get_sync_status(username: str = Depends(verify_credentials)):
     )
 
 @router.get("/api/diagnose")
-async def run_diagnosis(username: str = Depends(verify_credentials)):
+async def run_diagnosis(admin: Dict = Depends(require_master)):
     """Roda diagnóstico completo (SQLite vs Chroma)"""
     db = get_db()
     
@@ -412,7 +401,7 @@ async def run_diagnosis(username: str = Depends(verify_credentials)):
     return HTMLResponse(html)
 
 @router.post("/api/user/{user_id}/analyze-mbti")
-async def analyze_user_mbti(request: Request, user_id: str, username: str = Depends(verify_credentials)):
+async def analyze_user_mbti(request: Request, user_id: str, admin: Dict = Depends(require_master)):
     """Analisa padrão MBTI do usuário usando Grok"""
     import re
     import json
@@ -542,7 +531,7 @@ Retorne JSON com esta estrutura EXATA:
         }, status_code=500)
 
 @router.get("/user/{user_id}/psychometrics", response_class=HTMLResponse)
-async def user_psychometrics_page(request: Request, user_id: str, username: str = Depends(verify_credentials)):
+async def user_psychometrics_page(request: Request, user_id: str, admin: Dict = Depends(require_master)):
     """Página de análises psicométricas completas (Big Five, EQ, VARK, Schwartz)"""
     db = get_db()
 
@@ -656,7 +645,7 @@ async def user_psychometrics_page(request: Request, user_id: str, username: str 
     })
 
 @router.post("/api/user/{user_id}/regenerate-psychometrics")
-async def regenerate_psychometrics(user_id: str, username: str = Depends(verify_credentials)):
+async def regenerate_psychometrics(user_id: str, admin: Dict = Depends(require_master)):
     """Força regeneração das análises psicométricas (cria nova versão)"""
     db = get_db()
 
@@ -685,7 +674,7 @@ async def regenerate_psychometrics(user_id: str, username: str = Depends(verify_
 
 
 @router.post("/api/user/{user_id}/generate-personal-report")
-async def generate_personal_report(user_id: str, username: str = Depends(verify_credentials)):
+async def generate_personal_report(user_id: str, admin: Dict = Depends(require_master)):
     """
     Gera laudo psicométrico detalhado para o USUÁRIO
     6 parágrafos focados em autoconhecimento e desenvolvimento pessoal
@@ -890,7 +879,7 @@ Gere o laudo:"""
 
 
 @router.post("/api/user/{user_id}/generate-hr-report")
-async def generate_hr_report(user_id: str, username: str = Depends(verify_credentials)):
+async def generate_hr_report(user_id: str, admin: Dict = Depends(require_master)):
     """
     Gera laudo psicométrico detalhado para o RH/GESTOR
     6 parágrafos focados em adequação organizacional e gestão de talentos
@@ -1067,7 +1056,7 @@ Gere o laudo:"""
 
 
 @router.get("/user/{user_id}/psychometrics/download-pdf")
-async def download_psychometrics_pdf(user_id: str, username: str = Depends(verify_credentials)):
+async def download_psychometrics_pdf(user_id: str, admin: Dict = Depends(require_master)):
     """
     Download de relatório psicométrico em PDF
 
@@ -1146,7 +1135,7 @@ async def download_psychometrics_pdf(user_id: str, username: str = Depends(verif
 # ============================================================================
 
 @router.get("/api/diagnose-facts")
-async def diagnose_facts(username: str = Depends(verify_credentials)):
+async def diagnose_facts(admin: Dict = Depends(require_master)):
     """
     API para diagnosticar vazamento de memória entre usuários.
     Retorna todos os fatos de todos os usuários para análise.
@@ -1244,7 +1233,7 @@ async def diagnose_facts(username: str = Depends(verify_credentials)):
 
 
 @router.get("/api/diagnose-chromadb")
-async def diagnose_chromadb(username: str = Depends(verify_credentials)):
+async def diagnose_chromadb(admin: Dict = Depends(require_master)):
     """
     API para diagnosticar vazamento de memória no ChromaDB.
     Retorna todas as conversas salvas no ChromaDB com seus metadados.
@@ -1339,7 +1328,7 @@ async def diagnose_chromadb(username: str = Depends(verify_credentials)):
 
 
 @router.get("/api/conversation/{conversation_id}")
-async def get_conversation_detail(conversation_id: int, username: str = Depends(verify_credentials)):
+async def get_conversation_detail(conversation_id: int, admin: Dict = Depends(require_master)):
     """
     Retorna detalhes completos de uma conversa específica.
     """
@@ -1387,7 +1376,7 @@ async def get_conversation_detail(conversation_id: int, username: str = Depends(
 async def get_dimension_evidence(
     user_id: str,
     dimension: str,
-    username: str = Depends(verify_credentials)
+    admin: Dict = Depends(require_master)
 ):
     """
     Retorna evidências (citações literais) que embasam um score específico
@@ -1501,7 +1490,7 @@ async def get_dimension_evidence(
 @router.post("/user/{user_id}/psychometrics/extract-evidence")
 async def extract_all_evidence(
     user_id: str,
-    username: str = Depends(verify_credentials)
+    admin: Dict = Depends(require_master)
 ):
     """
     Extrai evidências para todas as dimensões do Big Five
@@ -1602,7 +1591,7 @@ async def extract_all_evidence(
 @router.get("/jung-lab", response_class=HTMLResponse)
 async def jung_lab_dashboard(
     request: Request,
-    username: str = Depends(verify_credentials)
+    admin: Dict = Depends(require_master)
 ):
     """Dashboard do Sistema de Ruminação Cognitiva (Admin only)"""
     from rumination_config import ADMIN_USER_ID
@@ -1679,7 +1668,7 @@ async def jung_lab_dashboard(
 
 @router.post("/api/jung-lab/digest")
 async def run_manual_digest(
-    username: str = Depends(verify_credentials)
+    admin: Dict = Depends(require_master)
 ):
     """Executa digestão manual do sistema de ruminação"""
     from rumination_config import ADMIN_USER_ID
@@ -1714,7 +1703,7 @@ async def run_manual_digest(
 @router.post("/api/jung-lab/scheduler/{action}")
 async def control_scheduler(
     action: str,
-    username: str = Depends(verify_credentials)
+    admin: Dict = Depends(require_master)
 ):
     """Controla o scheduler de ruminação (start/stop)"""
     import subprocess
@@ -1793,7 +1782,7 @@ async def control_scheduler(
 
 @router.get("/api/jung-lab/diagnose")
 async def diagnose_rumination(
-    username: str = Depends(verify_credentials)
+    admin: Dict = Depends(require_master)
 ):
     """
     Diagnóstico completo do sistema de ruminação
@@ -2001,7 +1990,7 @@ async def diagnose_rumination(
 
 @router.post("/api/jung-lab/fix-platform")
 async def fix_platform_issue(
-    username: str = Depends(verify_credentials)
+    admin: Dict = Depends(require_master)
 ):
     """
     FIX automático: Atualiza conversas antigas para platform='telegram'
@@ -2055,7 +2044,7 @@ async def fix_platform_issue(
 
 @router.get("/api/jung-lab/debug-full")
 async def debug_rumination_full(
-    username: str = Depends(verify_credentials)
+    admin: Dict = Depends(require_master)
 ):
     """
     Debug completo do sistema de ruminação
@@ -2268,7 +2257,7 @@ async def debug_rumination_full(
 
 @router.get("/api/jung-lab/why-no-insights")
 async def why_no_insights(
-    _username: str = Depends(verify_credentials)
+    _admin: Dict = Depends(require_master)
 ):
     """
     Diagnóstico específico: Por que não há insights sendo gerados?
@@ -2438,7 +2427,7 @@ async def why_no_insights(
 
 @router.get("/api/jung-lab/export-fragments")
 async def export_fragments(
-    _username: str = Depends(verify_credentials)
+    _admin: Dict = Depends(require_master)
 ):
     """
     Exporta todos os fragmentos de ruminação para análise
@@ -2471,7 +2460,7 @@ async def export_fragments(
 
 @router.get("/api/jung-lab/export-tensions")
 async def export_tensions(
-    _username: str = Depends(verify_credentials)
+    _admin: Dict = Depends(require_master)
 ):
     """
     Exporta todas as tensões para análise detalhada
@@ -2507,7 +2496,7 @@ async def export_tensions(
 
 @router.get("/api/jung-lab/export-insights")
 async def export_insights(
-    _username: str = Depends(verify_credentials)
+    _admin: Dict = Depends(require_master)
 ):
     """
     Exporta todos os insights gerados

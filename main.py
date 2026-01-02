@@ -1058,26 +1058,17 @@ if os.path.exists(static_dir) and os.path.isdir(static_dir):
 else:
     logger.warning(f"⚠️  Diretório static não encontrado: {static_dir} - Continuando sem arquivos estáticos")
 
-# LEGACY ROUTES DESABILITADAS - Sistema antigo de autenticação HTTP Basic
-# As rotas antigas (/admin/, /admin/users, /admin/jung-lab, etc.) foram substituídas
-# pelo novo sistema multi-tenant session-based com controle de permissões por organização.
-#
-# Para reativar as rotas legacy (não recomendado):
-# 1. Descomente o bloco abaixo
-# 2. Implemente middleware de verificação de permissões org-specific
-# 3. Migre de HTTP Basic Auth para session-based auth
-#
-# try:
-#     from admin_web.routes import router as admin_router
-#     app.include_router(admin_router)
-#     logger.info("✅ Rotas do admin web carregadas")
-# except Exception as e:
-#     import traceback
-#     logger.error(f"❌ Erro ao carregar admin web: {e}")
-#     logger.error(f"Traceback completo:\n{traceback.format_exc()}")
-#     logger.warning("⚠️  Admin web não disponível - Apenas bot Telegram funcionará")
-#
-logger.info("ℹ️  Rotas legacy (/admin/users, /admin/jung-lab) desabilitadas - usando sistema multi-tenant")
+# Rotas de análise Jung (protegidas com session-based auth - apenas Master Admin)
+# MIGRADO: Agora usa require_master ao invés de HTTP Basic Auth
+try:
+    from admin_web.routes import router as admin_router
+    app.include_router(admin_router)
+    logger.info("✅ Rotas de análise Jung carregadas (protegidas - Master Admin only)")
+except Exception as e:
+    import traceback
+    logger.error(f"❌ Erro ao carregar rotas de análise: {e}")
+    logger.error(f"Traceback completo:\n{traceback.format_exc()}")
+    logger.warning("⚠️  Rotas de análise não disponíveis")
 
 # Rotas de autenticação multi-tenant
 try:
