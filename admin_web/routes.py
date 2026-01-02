@@ -8,8 +8,8 @@ from datetime import datetime
 import json
 
 # MIGRADO: Agora usa sistema session-based multi-tenant
-# Apenas Master Admin pode acessar essas rotas
-from admin_web.auth.middleware import require_master
+# Master Admin e Org Admin podem acessar (com verificação de organização)
+from admin_web.auth.middleware import require_master, require_org_admin
 
 # Importar core do Jung (opcional - pode falhar se dependências não estiverem disponíveis)
 JUNG_CORE_ERROR = None
@@ -43,6 +43,55 @@ def get_db():
     if _db_manager is None:
         _db_manager = DatabaseManager()
     return _db_manager
+
+
+def verify_user_access(admin: Dict, user_id: str, db_manager) -> bool:
+    """
+    Verifica se o admin pode acessar dados de um usuário específico.
+
+    - Master Admin: pode acessar qualquer usuário
+    - Org Admin: pode acessar apenas usuários da própria organização
+
+    Args:
+        admin: Dict com dados do admin (role, org_id, etc.)
+        user_id: ID do usuário a ser acessado
+        db_manager: DatabaseManager
+
+    Returns:
+        True se tem acesso
+
+    Raises:
+        HTTPException 403 se não tiver acesso
+        HTTPException 404 se usuário não existir
+    """
+    # Master Admin tem acesso a tudo
+    if admin['role'] == 'master':
+        return True
+
+    # Org Admin precisa verificar se o usuário pertence à sua org
+    org_id = admin.get('org_id')
+    if not org_id:
+        raise HTTPException(403, "Admin sem organização associada")
+
+    cursor = db_manager.conn.cursor()
+
+    # Verificar se usuário existe
+    cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
+    if not cursor.fetchone():
+        raise HTTPException(404, "Usuário não encontrado")
+
+    # Verificar se usuário pertence à organização do admin
+    cursor.execute("""
+        SELECT 1
+        FROM user_organization_mapping
+        WHERE user_id = ? AND org_id = ? AND status = 'active'
+    """, (user_id, org_id))
+
+    if not cursor.fetchone():
+        raise HTTPException(403, "Acesso negado: usuário não pertence à sua organização")
+
+    return True
+
 
 # ============================================================================
 # AUTENTICAÇÃO
@@ -130,9 +179,12 @@ async def sync_check_page(request: Request, admin: Dict = Depends(require_master
     return templates.TemplateResponse("sync_check.html", {"request": request})
 
 @router.get("/user/{user_id}/analysis", response_class=HTMLResponse)
-async def user_analysis_page(request: Request, user_id: str, admin: Dict = Depends(require_master)):
+async def user_analysis_page(request: Request, user_id: str, admin: Dict = Depends(require_org_admin)):
     """Página de análise MBTI/Jungiana do usuário"""
     db = get_db()
+
+    # Verificar se admin pode acessar este usuário
+    verify_user_access(admin, user_id, db)
 
     # Buscar usuário
     user = db.get_user(user_id)
@@ -531,9 +583,12 @@ Retorne JSON com esta estrutura EXATA:
         }, status_code=500)
 
 @router.get("/user/{user_id}/psychometrics", response_class=HTMLResponse)
-async def user_psychometrics_page(request: Request, user_id: str, admin: Dict = Depends(require_master)):
+async def user_psychometrics_page(request: Request, user_id: str, admin: Dict = Depends(require_org_admin)):
     """Página de análises psicométricas completas (Big Five, EQ, VARK, Schwartz)"""
     db = get_db()
+
+    # Verificar se admin pode acessar este usuário
+    verify_user_access(admin, user_id, db)
 
     # Buscar usuário
     user = db.get_user(user_id)
