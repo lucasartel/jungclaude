@@ -129,8 +129,12 @@ def ensure_user_in_database(telegram_user, org_slug=None) -> str:
 
     user_id = create_user_hash(username)
 
+    # DEBUG: Log detalhes do usuário
+    logger.info(f"🔍 ensure_user_in_database - Telegram ID: {telegram_id}, Username: {username}, Nome: {full_name}, Org: {org_slug or 'None'}")
+
     # Checar se já existe
     existing_user = bot_state.db.get_user(user_id)
+    logger.info(f"🔍 Usuário {user_id[:8]} existe no banco? {existing_user is not None}")
 
     if not existing_user:
         bot_state.db.create_user(
@@ -143,22 +147,31 @@ def ensure_user_in_database(telegram_user, org_slug=None) -> str:
 
         # Determinar organização
         target_org_id = 'default-org'  # Fallback
+        org_found = False
 
         if org_slug:
             # Usuário veio por link de convite - buscar org_id pelo slug
+            logger.info(f"🔍 Buscando organização com slug: '{org_slug}'")
             try:
                 cursor = bot_state.db.conn.cursor()
-                cursor.execute("SELECT org_id FROM organizations WHERE org_slug = ?", (org_slug,))
+                cursor.execute("SELECT org_id, org_name FROM organizations WHERE org_slug = ?", (org_slug,))
                 result = cursor.fetchone()
                 if result:
                     target_org_id = result[0]
-                    logger.info(f"🎯 Link de convite: organização '{org_slug}' encontrada (ID: {target_org_id})")
+                    org_name = result[1]
+                    org_found = True
+                    logger.info(f"🎯 ✅ Organização encontrada: '{org_name}' (ID: {target_org_id})")
                 else:
-                    logger.warning(f"⚠️  Organização '{org_slug}' não encontrada - usando default")
+                    logger.warning(f"⚠️  Organização com slug '{org_slug}' NÃO ENCONTRADA no banco - usando default-org")
             except Exception as e:
-                logger.error(f"❌ Erro ao buscar organização por slug: {e}")
+                logger.error(f"❌ Erro ao buscar organização por slug '{org_slug}': {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+        else:
+            logger.info(f"🔍 Nenhum org_slug fornecido - usando default-org")
 
         # Adicionar à organização
+        logger.info(f"🔍 Tentando adicionar usuário {user_id[:8]} à organização {target_org_id}")
         try:
             cursor = bot_state.db.conn.cursor()
             cursor.execute("""
@@ -166,16 +179,25 @@ def ensure_user_in_database(telegram_user, org_slug=None) -> str:
                 (user_id, org_id, status, added_by, added_at)
                 VALUES (?, ?, 'active', 'bot-auto', CURRENT_TIMESTAMP)
             """, (user_id, target_org_id))
+
+            rows_affected = cursor.rowcount
             bot_state.db.conn.commit()
 
-            if org_slug:
-                logger.info(f"✅ Usuário {user_id[:8]} adicionado à organização '{org_slug}' via convite")
+            logger.info(f"🔍 INSERT executado - Rows affected: {rows_affected}")
+
+            if org_slug and org_found:
+                logger.info(f"✅ ✅ ✅ SUCESSO! Usuário {user_id[:8]} ({full_name}) adicionado à organização '{org_slug}' (ID: {target_org_id}) via convite")
+            elif org_slug and not org_found:
+                logger.warning(f"⚠️  Usuário {user_id[:8]} adicionado a 'default-org' porque '{org_slug}' não existe")
             else:
                 logger.info(f"✅ Usuário {user_id[:8]} adicionado à organização default (sem convite)")
         except Exception as e:
-            logger.error(f"❌ Erro ao adicionar usuário à organização: {e}")
+            logger.error(f"❌ ❌ ❌ ERRO ao adicionar usuário à organização: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
     else:
         # Usuário já existe - atualizar last_seen
+        logger.info(f"🔄 Usuário {user_id[:8]} ({full_name}) JÁ EXISTE no banco")
         cursor = bot_state.db.conn.cursor()
         cursor.execute("""
             UPDATE users
@@ -187,36 +209,59 @@ def ensure_user_in_database(telegram_user, org_slug=None) -> str:
 
         # Verificar se usuário já está em alguma organização
         cursor.execute("""
-            SELECT COUNT(*) FROM user_organization_mapping
+            SELECT org_id FROM user_organization_mapping
             WHERE user_id = ? AND status = 'active'
         """, (user_id,))
 
-        if cursor.fetchone()[0] == 0:
+        existing_orgs = cursor.fetchall()
+        logger.info(f"🔍 Usuário {user_id[:8]} está em {len(existing_orgs)} organizações: {[org[0] for org in existing_orgs]}")
+
+        if len(existing_orgs) == 0:
             # Usuário existe mas não está em nenhuma organização
-            # Tentar associar via link de convite ou default
+            logger.info(f"🔍 Usuário {user_id[:8]} SEM organização - tentando adicionar")
             target_org_id = 'default-org'
+            org_found = False
 
             if org_slug:
+                logger.info(f"🔍 Link de convite detectado para usuário existente: '{org_slug}'")
                 try:
-                    cursor.execute("SELECT org_id FROM organizations WHERE org_slug = ?", (org_slug,))
+                    cursor.execute("SELECT org_id, org_name FROM organizations WHERE org_slug = ?", (org_slug,))
                     result = cursor.fetchone()
                     if result:
                         target_org_id = result[0]
-                        logger.info(f"🎯 Usuário existente + link de convite: '{org_slug}'")
+                        org_name = result[1]
+                        org_found = True
+                        logger.info(f"🎯 ✅ Organização encontrada: '{org_name}' (ID: {target_org_id})")
+                    else:
+                        logger.warning(f"⚠️  Organização '{org_slug}' não encontrada")
                 except Exception as e:
                     logger.error(f"❌ Erro ao buscar org: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
 
             # Associar à organização
+            logger.info(f"🔍 Associando usuário existente {user_id[:8]} à org {target_org_id}")
             try:
                 cursor.execute("""
                     INSERT OR IGNORE INTO user_organization_mapping
                     (user_id, org_id, status, added_by, added_at)
                     VALUES (?, ?, 'active', 'bot-auto', CURRENT_TIMESTAMP)
                 """, (user_id, target_org_id))
+                rows_affected = cursor.rowcount
                 bot_state.db.conn.commit()
-                logger.info(f"✅ Usuário existente {user_id[:8]} associado à organização")
+
+                logger.info(f"🔍 INSERT executado - Rows affected: {rows_affected}")
+
+                if org_slug and org_found:
+                    logger.info(f"✅ ✅ ✅ SUCESSO! Usuário existente {user_id[:8]} ({full_name}) adicionado à org '{org_slug}'")
+                else:
+                    logger.info(f"✅ Usuário existente {user_id[:8]} associado à organização default")
             except Exception as e:
-                logger.error(f"❌ Erro ao associar: {e}")
+                logger.error(f"❌ ❌ ❌ ERRO ao associar usuário existente: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+        else:
+            logger.info(f"ℹ️  Usuário {user_id[:8]} já está em organização(ões), não adicionando novamente")
 
     return user_id
 
