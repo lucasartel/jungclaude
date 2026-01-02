@@ -283,9 +283,9 @@ async def org_users_list(
         if admin['role'] == 'master':
             # Master vê todos os usuários
             cursor.execute("""
-                SELECT 
+                SELECT
                     u.user_id,
-                    u.full_name,
+                    u.user_name,
                     u.platform,
                     u.total_messages,
                     u.archetype_primary,
@@ -304,11 +304,11 @@ async def org_users_list(
             org_id = admin.get('org_id')
             if not org_id:
                 raise HTTPException(403, "Org Admin sem organização associada")
-            
+
             cursor.execute("""
-                SELECT 
+                SELECT
                     u.user_id,
-                    u.full_name,
+                    u.user_name,
                     u.platform,
                     u.total_messages,
                     u.archetype_primary,
@@ -319,7 +319,7 @@ async def org_users_list(
                 FROM users u
                 INNER JOIN user_organization_mapping uom ON u.user_id = uom.user_id
                 INNER JOIN organizations o ON uom.org_id = o.org_id
-                WHERE u.platform = 'telegram' 
+                WHERE u.platform = 'telegram'
                   AND uom.org_id = ?
                   AND uom.status = 'active'
                 ORDER BY u.last_interaction_at DESC
