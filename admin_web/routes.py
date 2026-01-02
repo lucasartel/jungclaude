@@ -1655,7 +1655,7 @@ async def jung_lab_dashboard(
         "jung_lab.html",
         {
             "request": request,
-            "username": username,
+            "admin": admin,
             "stats": stats,
             "fragments": fragments,
             "tensions": tensions,
