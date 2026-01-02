@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usuários Jung - JungAgent Admin</title>
+    <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div>
+                <h1>🧠 Usuários Jung</h1>
+                <p style="opacity: 0.9; margin-top: 5px;">
+                    {% if admin.role == 'master' %}
+                    Gerenciar todos os usuários do sistema
+                    {% else %}
+                    Gerenciar usuários da sua organização
+                    {% endif %}
+                </p>
+            </div>
+            <div class="header-info">
+                <div class="user-name">{{ admin.full_name or admin.email }}</div>
+                <span class="role-badge">
+                    {% if admin.role == 'master' %}
+                    👑 Master Admin
+                    {% else %}
+                    🏢 Org Admin
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="nav">
+        <div class="nav-content">
+            {% if admin.role == 'master' %}
+            <a href="/admin/master/dashboard">Dashboard</a>
+            <a href="/admin/organizations">Organizações</a>
+            <a href="/admin/admins">Administradores</a>
+            <a href="/admin/org/users" class="active">Usuários Jung</a>
+            <a href="/admin/jung-mind">Jung Mind</a>
+            {% else %}
+            <a href="/admin/org/dashboard">Dashboard</a>
+            <a href="/admin/org/users" class="active">Usuários Jung</a>
+            {% endif %}
+            <form action="/admin/logout" method="POST" style="margin-left: auto;">
+                <button type="submit" class="logout-btn nav">Sair</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="section">
+            <div class="section-header">
+                <h2>📋 Todos os Usuários ({{ total_users }})</h2>
+            </div>
+
+            {% if users %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        {% if admin.role == 'master' %}
+                        <th>Organização</th>
+                        {% endif %}
+                        <th>Arquétipo</th>
+                        <th>Mensagens</th>
+                        <th>Última Interação</th>
+                        <th>Cadastro</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td><strong>{{ user.full_name }}</strong></td>
+                        {% if admin.role == 'master' %}
+                        <td>{{ user.org_name }}</td>
+                        {% endif %}
+                        <td>
+                            <span class="badge badge-primary">
+                                {{ user.archetype_primary }}
+                            </span>
+                        </td>
+                        <td>{{ user.total_messages }}</td>
+                        <td>{{ user.last_interaction_at[:16] if user.last_interaction_at else 'Nunca' }}</td>
+                        <td>{{ user.created_at[:10] if user.created_at else '—' }}</td>
+                        <td class="actions">
+                            <a href="/admin/user/{{ user.user_id }}/analysis" class="btn-action" title="Ver Análise">
+                                📊
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>Nenhum usuário encontrado</p>
+                {% if admin.role != 'master' %}
+                <p style="margin-top: 10px; color: #666;">
+                    Os usuários aparecerão aqui quando começarem a interagir com o bot.
+                </p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

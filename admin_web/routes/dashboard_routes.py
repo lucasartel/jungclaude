@@ -256,3 +256,100 @@ async def org_dashboard(
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(500, f"Erro ao carregar dashboard: {str(e)}")
+
+# ============================================================================
+# USERS LIST - Lista de usuários filtrada por organização
+# ============================================================================
+
+@router.get("/org/users", response_class=HTMLResponse)
+async def org_users_list(
+    request: Request,
+    admin: Dict = Depends(require_org_admin)
+):
+    """
+    Lista de usuários Jung da organização do admin.
+    
+    Master Admin vê todos os usuários.
+    Org Admin vê apenas usuários da própria organização.
+    """
+    if not _db_manager:
+        raise HTTPException(503, "DatabaseManager não disponível")
+    
+    try:
+        cursor = _db_manager.conn.cursor()
+        
+        # Se for Master Admin, mostrar todos
+        # Se for Org Admin, filtrar por org_id
+        if admin['role'] == 'master':
+            # Master vê todos os usuários
+            cursor.execute("""
+                SELECT 
+                    u.user_id,
+                    u.full_name,
+                    u.platform,
+                    u.total_messages,
+                    u.archetype_primary,
+                    u.created_at,
+                    u.last_interaction_at,
+                    o.org_name,
+                    o.org_id
+                FROM users u
+                LEFT JOIN user_organization_mapping uom ON u.user_id = uom.user_id AND uom.status = 'active'
+                LEFT JOIN organizations o ON uom.org_id = o.org_id
+                WHERE u.platform = 'telegram'
+                ORDER BY u.last_interaction_at DESC
+            """)
+        else:
+            # Org Admin vê apenas usuários da própria org
+            org_id = admin.get('org_id')
+            if not org_id:
+                raise HTTPException(403, "Org Admin sem organização associada")
+            
+            cursor.execute("""
+                SELECT 
+                    u.user_id,
+                    u.full_name,
+                    u.platform,
+                    u.total_messages,
+                    u.archetype_primary,
+                    u.created_at,
+                    u.last_interaction_at,
+                    o.org_name,
+                    o.org_id
+                FROM users u
+                INNER JOIN user_organization_mapping uom ON u.user_id = uom.user_id
+                INNER JOIN organizations o ON uom.org_id = o.org_id
+                WHERE u.platform = 'telegram' 
+                  AND uom.org_id = ?
+                  AND uom.status = 'active'
+                ORDER BY u.last_interaction_at DESC
+            """, (org_id,))
+        
+        users = []
+        for row in cursor.fetchall():
+            users.append({
+                'user_id': row[0],
+                'full_name': row[1] or 'Usuário sem nome',
+                'platform': row[2],
+                'total_messages': row[3] or 0,
+                'archetype_primary': row[4] or 'Não definido',
+                'created_at': row[5],
+                'last_interaction_at': row[6],
+                'org_name': row[7] or 'Sem organização',
+                'org_id': row[8]
+            })
+        
+        return templates.TemplateResponse("users/list.html", {
+            "request": request,
+            "admin": admin,
+            "users": users,
+            "total_users": len(users)
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erro ao listar usuários: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(500, f"Erro ao carregar usuários: {str(e)}")

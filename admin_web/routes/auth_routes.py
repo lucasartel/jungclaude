@@ -119,11 +119,11 @@ async def login(
 
         # Redirecionar para dashboard
         # Master vai para /admin/master/dashboard
-        # Org Admin vai para /admin/org/dashboard
+        # Org Admin vai para /admin/org/users (lista de usuários da org)
         if admin['role'] == 'master':
             redirect_url = "/admin/master/dashboard"
         else:
-            redirect_url = "/admin/org/dashboard"
+            redirect_url = "/admin/org/users"
 
         # Criar response com cookie
         response = RedirectResponse(
