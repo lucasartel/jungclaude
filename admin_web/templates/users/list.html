@@ -64,7 +64,6 @@
                         {% if admin.role == 'master' %}
                         <th>Organização</th>
                         {% endif %}
-                        <th>Arquétipo</th>
                         <th>Mensagens</th>
                         <th>Última Interação</th>
                         <th>Cadastro</th>
@@ -78,11 +77,6 @@
                         {% if admin.role == 'master' %}
                         <td>{{ user.org_name }}</td>
                         {% endif %}
-                        <td>
-                            <span class="badge badge-primary">
-                                {{ user.archetype_primary }}
-                            </span>
-                        </td>
                         <td>{{ user.total_messages }}</td>
                         <td>{{ user.last_interaction_at[:16] if user.last_interaction_at else 'Nunca' }}</td>
                         <td>{{ user.created_at[:10] if user.created_at else '—' }}</td>

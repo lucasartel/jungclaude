@@ -287,17 +287,18 @@ async def org_users_list(
                     u.user_id,
                     u.user_name,
                     u.platform,
-                    u.total_messages,
-                    u.archetype_primary,
+                    COUNT(DISTINCT c.id) as total_messages,
+                    u.last_seen,
                     u.created_at,
-                    u.last_interaction_at,
                     o.org_name,
                     o.org_id
                 FROM users u
+                LEFT JOIN conversations c ON u.user_id = c.user_id
                 LEFT JOIN user_organization_mapping uom ON u.user_id = uom.user_id AND uom.status = 'active'
                 LEFT JOIN organizations o ON uom.org_id = o.org_id
                 WHERE u.platform = 'telegram'
-                ORDER BY u.last_interaction_at DESC
+                GROUP BY u.user_id
+                ORDER BY u.last_seen DESC
             """)
         else:
             # Org Admin vê apenas usuários da própria org
@@ -310,19 +311,20 @@ async def org_users_list(
                     u.user_id,
                     u.user_name,
                     u.platform,
-                    u.total_messages,
-                    u.archetype_primary,
+                    COUNT(DISTINCT c.id) as total_messages,
+                    u.last_seen,
                     u.created_at,
-                    u.last_interaction_at,
                     o.org_name,
                     o.org_id
                 FROM users u
+                LEFT JOIN conversations c ON u.user_id = c.user_id
                 INNER JOIN user_organization_mapping uom ON u.user_id = uom.user_id
                 INNER JOIN organizations o ON uom.org_id = o.org_id
                 WHERE u.platform = 'telegram'
                   AND uom.org_id = ?
                   AND uom.status = 'active'
-                ORDER BY u.last_interaction_at DESC
+                GROUP BY u.user_id
+                ORDER BY u.last_seen DESC
             """, (org_id,))
         
         users = []
@@ -332,11 +334,11 @@ async def org_users_list(
                 'full_name': row[1] or 'Usuário sem nome',
                 'platform': row[2],
                 'total_messages': row[3] or 0,
-                'archetype_primary': row[4] or 'Não definido',
+                'last_interaction_at': row[4],  # last_seen
                 'created_at': row[5],
-                'last_interaction_at': row[6],
-                'org_name': row[7] or 'Sem organização',
-                'org_id': row[8]
+                'org_name': row[6] or 'Sem organização',
+                'org_id': row[7],
+                'archetype_primary': 'N/A'  # Remover coluna que não existe
             })
         
         return templates.TemplateResponse("users/list.html", {
