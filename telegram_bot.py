@@ -175,16 +175,49 @@ def ensure_user_in_database(telegram_user, org_slug=None) -> str:
         except Exception as e:
             logger.error(f"❌ Erro ao adicionar usuário à organização: {e}")
     else:
-        # Atualizar last_seen
+        # Usuário já existe - atualizar last_seen
         cursor = bot_state.db.conn.cursor()
         cursor.execute("""
-            UPDATE users 
+            UPDATE users
             SET last_seen = CURRENT_TIMESTAMP,
                 platform_id = ?
             WHERE user_id = ?
         """, (str(telegram_id), user_id))
         bot_state.db.conn.commit()
-    
+
+        # Verificar se usuário já está em alguma organização
+        cursor.execute("""
+            SELECT COUNT(*) FROM user_organization_mapping
+            WHERE user_id = ? AND status = 'active'
+        """, (user_id,))
+
+        if cursor.fetchone()[0] == 0:
+            # Usuário existe mas não está em nenhuma organização
+            # Tentar associar via link de convite ou default
+            target_org_id = 'default-org'
+
+            if org_slug:
+                try:
+                    cursor.execute("SELECT org_id FROM organizations WHERE org_slug = ?", (org_slug,))
+                    result = cursor.fetchone()
+                    if result:
+                        target_org_id = result[0]
+                        logger.info(f"🎯 Usuário existente + link de convite: '{org_slug}'")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao buscar org: {e}")
+
+            # Associar à organização
+            try:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO user_organization_mapping
+                    (user_id, org_id, status, added_by, added_at)
+                    VALUES (?, ?, 'active', 'bot-auto', CURRENT_TIMESTAMP)
+                """, (user_id, target_org_id))
+                bot_state.db.conn.commit()
+                logger.info(f"✅ Usuário existente {user_id[:8]} associado à organização")
+            except Exception as e:
+                logger.error(f"❌ Erro ao associar: {e}")
+
     return user_id
 
 def format_time_delta(dt: datetime) -> str:
