@@ -1146,6 +1146,43 @@ except Exception as e:
 # except Exception as e:
 #     logger.warning(f"⚠️  Rota de migração não disponível: {e}")
 
+# ⚠️ ENDPOINT TEMPORÁRIO DE DEBUG - REMOVER APÓS DEBUG
+@app.get("/debug/organizations")
+async def debug_organizations():
+    """
+    Endpoint temporário para debug - lista todas as organizações e seus slugs.
+    REMOVER após identificar o problema com os invite links!
+    """
+    try:
+        cursor = bot_state.db.conn.cursor()
+        cursor.execute("""
+            SELECT org_id, org_name, org_slug, subscription_tier, subscription_status, created_at
+            FROM organizations
+            ORDER BY created_at DESC
+        """)
+
+        orgs = []
+        for row in cursor.fetchall():
+            orgs.append({
+                'org_id': row[0],
+                'org_name': row[1],
+                'org_slug': row[2],
+                'subscription_tier': row[3],
+                'subscription_status': row[4],
+                'created_at': row[5],
+                'invite_link': f"https://t.me/jungagent_bot?start=org_{row[2]}"
+            })
+
+        return {
+            'total': len(orgs),
+            'organizations': orgs
+        }
+    except Exception as e:
+        logger.error(f"❌ Erro no debug endpoint: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(500, f"Erro: {str(e)}")
+
 
 if __name__ == "__main__":
     # Rodar com uvicorn
