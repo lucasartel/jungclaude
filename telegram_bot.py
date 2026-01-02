@@ -111,21 +111,27 @@ bot_state = BotState()
 # FUNÇÕES AUXILIARES
 # ============================================================
 
-def ensure_user_in_database(telegram_user) -> str:
+def ensure_user_in_database(telegram_user, org_slug=None) -> str:
     """
     Garante que usuário Telegram está no banco HÍBRIDO
-    Retorna user_id (hash)
+
+    Args:
+        telegram_user: Objeto do usuário Telegram
+        org_slug: Slug da organização (ex: "37graus") - se vier de link de convite
+
+    Returns:
+        user_id (hash)
     """
-    
+
     telegram_id = telegram_user.id
     username = telegram_user.username or f"user_{telegram_id}"
     full_name = f"{telegram_user.first_name or ''} {telegram_user.last_name or ''}".strip()
-    
+
     user_id = create_user_hash(username)
-    
+
     # Checar se já existe
     existing_user = bot_state.db.get_user(user_id)
-    
+
     if not existing_user:
         bot_state.db.create_user(
             user_id=user_id,
@@ -134,6 +140,40 @@ def ensure_user_in_database(telegram_user) -> str:
             platform_id=str(telegram_id)
         )
         logger.info(f"✨ Novo usuário criado: {full_name} ({user_id[:8]})")
+
+        # Determinar organização
+        target_org_id = 'default-org'  # Fallback
+
+        if org_slug:
+            # Usuário veio por link de convite - buscar org_id pelo slug
+            try:
+                cursor = bot_state.db.conn.cursor()
+                cursor.execute("SELECT org_id FROM organizations WHERE org_slug = ?", (org_slug,))
+                result = cursor.fetchone()
+                if result:
+                    target_org_id = result[0]
+                    logger.info(f"🎯 Link de convite: organização '{org_slug}' encontrada (ID: {target_org_id})")
+                else:
+                    logger.warning(f"⚠️  Organização '{org_slug}' não encontrada - usando default")
+            except Exception as e:
+                logger.error(f"❌ Erro ao buscar organização por slug: {e}")
+
+        # Adicionar à organização
+        try:
+            cursor = bot_state.db.conn.cursor()
+            cursor.execute("""
+                INSERT OR IGNORE INTO user_organization_mapping
+                (user_id, org_id, status, added_by, added_at)
+                VALUES (?, ?, 'active', 'bot-auto', CURRENT_TIMESTAMP)
+            """, (user_id, target_org_id))
+            bot_state.db.conn.commit()
+
+            if org_slug:
+                logger.info(f"✅ Usuário {user_id[:8]} adicionado à organização '{org_slug}' via convite")
+            else:
+                logger.info(f"✅ Usuário {user_id[:8]} adicionado à organização default (sem convite)")
+        except Exception as e:
+            logger.error(f"❌ Erro ao adicionar usuário à organização: {e}")
     else:
         # Atualizar last_seen
         cursor = bot_state.db.conn.cursor()
@@ -168,7 +208,16 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler para /start - com consentimento LGPD"""
 
     user = update.effective_user
-    user_id = ensure_user_in_database(user)
+
+    # Verificar se há parâmetro de organização (ex: /start org_37graus)
+    org_slug = None
+    if context.args and len(context.args) > 0:
+        param = context.args[0]
+        if param.startswith('org_'):
+            org_slug = param[4:]  # Remove "org_" prefix
+            logger.info(f"👥 Link de convite detectado: organização '{org_slug}'")
+
+    user_id = ensure_user_in_database(user, org_slug=org_slug)
 
     # Buscar estatísticas do usuário
     stats = bot_state.db.get_user_stats(user_id)
