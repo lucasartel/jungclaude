@@ -2533,7 +2533,7 @@ async def export_insights(
 # ============================================================================
 
 @router.get("/jung-mind", response_class=HTMLResponse)
-async def jung_mind_page(request: Request):
+async def jung_mind_page(request: Request, admin: Dict = Depends(require_master)):
     """
     Página do mapa mental Jung Mind
     Visualização hierárquica: Jung (centro) → Fragmentos → Tensões → Insights
@@ -2544,7 +2544,7 @@ async def jung_mind_page(request: Request):
     })
 
 @router.get("/api/jung-mind-data")
-async def jung_mind_data():
+async def jung_mind_data(admin: Dict = Depends(require_master)):
     """
     API que retorna dados do jung-lab formatados para Vis.js Network
 
