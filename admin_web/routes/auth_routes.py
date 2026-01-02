@@ -136,7 +136,7 @@ async def login(
             key="session_id",
             value=session_id,
             httponly=True,      # Não acessível via JavaScript (XSS protection)
-            secure=False,       # TODO: Mudar para True em produção (HTTPS)
+            secure=True,        # HTTPS obrigatório em produção
             samesite='lax',     # CSRF protection
             max_age=24*60*60    # 24 horas em segundos
         )
