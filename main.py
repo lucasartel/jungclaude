@@ -989,6 +989,166 @@ async def facts_v2_list(user_id: str = None):
             "traceback": traceback.format_exc()
         }
 
+@app.api_route("/admin/test-consolidation", methods=["GET", "POST"])
+async def test_consolidation(user_id: str = None):
+    """
+    ENDPOINT DE TESTE: Consolidação de Memórias
+
+    Acesse: GET https://seu-railway-url/admin/test-consolidation
+
+    Testa o sistema de consolidação de memórias (Fase 4):
+    - Executa consolidação para um usuário específico ou todos
+    - Mostra clusters criados
+    - Exibe memórias consolidadas
+    - Retorna estatísticas
+
+    Parâmetros:
+    - user_id (opcional): ID do usuário para consolidar (se vazio, consolida todos)
+    """
+
+    try:
+        from jung_memory_consolidation import MemoryConsolidator
+        from datetime import datetime
+        import sqlite3
+
+        results = {
+            "status": "success",
+            "timestamp": datetime.now().isoformat(),
+            "consolidation_results": []
+        }
+
+        consolidator = MemoryConsolidator(bot_state.db)
+
+        # Se user_id especificado, consolidar apenas esse usuário
+        if user_id:
+            logger.info(f"📦 Consolidando memórias para user_id={user_id}")
+
+            try:
+                consolidator.consolidate_user_memories(user_id, lookback_days=365)
+
+                # Buscar memórias consolidadas criadas
+                if bot_state.db.chroma_enabled:
+                    consolidated_docs = bot_state.db.vectorstore._collection.get(
+                        where={
+                            "user_id": user_id,
+                            "type": "consolidated"
+                        }
+                    )
+
+                    consolidated_count = len(consolidated_docs.get('ids', []))
+
+                    results["consolidation_results"].append({
+                        "user_id": user_id[:8] + "...",
+                        "status": "success",
+                        "consolidated_memories_created": consolidated_count,
+                        "documents": []
+                    })
+
+                    # Adicionar detalhes das memórias consolidadas
+                    if consolidated_count > 0:
+                        for i, doc_id in enumerate(consolidated_docs['ids']):
+                            metadata = consolidated_docs['metadatas'][i]
+                            doc_content = consolidated_docs['documents'][i]
+
+                            results["consolidation_results"][-1]["documents"].append({
+                                "id": doc_id,
+                                "topic": metadata.get('topic'),
+                                "period": f"{metadata.get('period_start')} a {metadata.get('period_end')}",
+                                "conversations_count": metadata.get('count'),
+                                "avg_tension": metadata.get('avg_tension'),
+                                "avg_affective": metadata.get('avg_affective'),
+                                "summary_preview": doc_content[:300] + "..." if len(doc_content) > 300 else doc_content
+                            })
+                else:
+                    results["consolidation_results"].append({
+                        "user_id": user_id[:8] + "...",
+                        "status": "success_no_chroma",
+                        "message": "ChromaDB desabilitado, consolidação não criou documentos"
+                    })
+
+            except Exception as e:
+                results["consolidation_results"].append({
+                    "user_id": user_id[:8] + "...",
+                    "status": "error",
+                    "error": str(e)
+                })
+
+        # Se não especificou user_id, consolidar todos os usuários
+        else:
+            logger.info("📦 Consolidando memórias para TODOS os usuários")
+
+            cursor = bot_state.db.conn.cursor()
+            cursor.execute("SELECT DISTINCT user_id FROM conversations")
+            all_user_ids = [row[0] for row in cursor.fetchall()]
+
+            results["total_users"] = len(all_user_ids)
+
+            for uid in all_user_ids[:10]:  # Limitar a 10 para não travar
+                try:
+                    consolidator.consolidate_user_memories(uid, lookback_days=90)
+
+                    # Contar consolidadas criadas
+                    if bot_state.db.chroma_enabled:
+                        consolidated_docs = bot_state.db.vectorstore._collection.get(
+                            where={
+                                "user_id": uid,
+                                "type": "consolidated"
+                            }
+                        )
+                        consolidated_count = len(consolidated_docs.get('ids', []))
+                    else:
+                        consolidated_count = 0
+
+                    results["consolidation_results"].append({
+                        "user_id": uid[:8] + "...",
+                        "status": "success",
+                        "consolidated_memories": consolidated_count
+                    })
+
+                except Exception as e:
+                    results["consolidation_results"].append({
+                        "user_id": uid[:8] + "...",
+                        "status": "error",
+                        "error": str(e)
+                    })
+
+            if len(all_user_ids) > 10:
+                results["note"] = f"Processados apenas os primeiros 10 de {len(all_user_ids)} usuários para evitar timeout"
+
+        # Estatísticas globais de consolidação
+        if bot_state.db.chroma_enabled:
+            try:
+                all_consolidated = bot_state.db.vectorstore._collection.get(
+                    where={"type": "consolidated"}
+                )
+
+                results["global_stats"] = {
+                    "total_consolidated_memories": len(all_consolidated.get('ids', [])),
+                    "topics": {}
+                }
+
+                # Contar por tópico
+                for metadata in all_consolidated.get('metadatas', []):
+                    topic = metadata.get('topic', 'unknown')
+                    if topic not in results["global_stats"]["topics"]:
+                        results["global_stats"]["topics"][topic] = 0
+                    results["global_stats"]["topics"][topic] += 1
+
+            except Exception as e:
+                results["global_stats"] = {"error": str(e)}
+
+        return results
+
+    except Exception as e:
+        logger.error(f"Erro no endpoint de teste de consolidação: {e}")
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 @app.api_route("/admin/test-extraction", methods=["GET", "POST"])
 async def test_extraction(request: Request = None, message: str = None):
     """
