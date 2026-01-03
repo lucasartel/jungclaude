@@ -1549,9 +1549,149 @@ Resposta: {ai_response}
         return history
 
     # ========================================
+    # QUERY ENRICHMENT - FASE 2
+    # ========================================
+
+    def _extract_names_from_text(self, text: str) -> List[str]:
+        """
+        Extrai nomes próprios do texto (heurística simples)
+
+        Args:
+            text: Texto para análise
+
+        Returns:
+            Lista de possíveis nomes próprios
+        """
+        import re
+
+        # Padrão: Palavras capitalizadas que não são início de frase
+        # Ex: "Minha esposa Ana" -> captura "Ana"
+        pattern = r'\b([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+)\b'
+
+        # Filtrar palavras comuns que não são nomes
+        stopwords = {'O', 'A', 'Os', 'As', 'Um', 'Uma', 'De', 'Da', 'Do', 'Em', 'No', 'Na',
+                    'Para', 'Por', 'Com', 'Sem', 'Mais', 'Menos', 'Muito', 'Pouco'}
+
+        matches = re.findall(pattern, text)
+        names = [m for m in matches if m not in stopwords]
+
+        return list(set(names))  # Remover duplicatas
+
+    def _detect_topics_in_text(self, text: str) -> List[str]:
+        """
+        Detecta tópicos mencionados no texto
+
+        Args:
+            text: Texto para análise
+
+        Returns:
+            Lista de tópicos detectados
+        """
+        text_lower = text.lower()
+
+        topic_keywords = {
+            "trabalho": ["trabalho", "emprego", "empresa", "chefe", "colega", "reunião", "projeto"],
+            "familia": ["esposa", "marido", "filho", "filha", "pai", "mãe", "família", "casa"],
+            "saude": ["saúde", "doença", "médico", "ansiedade", "depressão", "terapia", "remédio"],
+            "relacionamento": ["amigo", "namoro", "amor", "relacionamento", "parceiro"],
+            "lazer": ["viagem", "férias", "hobby", "passeio"],
+            "dinheiro": ["dinheiro", "salário", "conta", "dívida", "financeiro"],
+        }
+
+        detected = []
+        for topic, keywords in topic_keywords.items():
+            if any(kw in text_lower for kw in keywords):
+                detected.append(topic)
+
+        return detected
+
+    def _build_enriched_query(self, user_id: str, user_input: str, chat_history: List[Dict] = None) -> str:
+        """
+        Constrói query enriquecida com múltiplas fontes (Fase 2 - Query Enrichment)
+
+        Args:
+            user_id: ID do usuário
+            user_input: Input do usuário
+            chat_history: Histórico da conversa atual
+
+        Returns:
+            Query enriquecida
+        """
+        query_parts = [user_input]  # Base
+
+        # CAMADA 1: Contexto conversacional recente (expandir de 3 para 5)
+        if chat_history and len(chat_history) > 0:
+            recent = " ".join([
+                msg["content"][:100]
+                for msg in chat_history[-5:]  # Era -3, agora -5
+                if msg["role"] == "user"
+            ])
+            if recent:
+                query_parts.append(recent)
+
+        # CAMADA 2: Fatos relevantes do usuário (NOVO)
+        # Buscar nomes de pessoas mencionadas no input
+        mentioned_names = self._extract_names_from_text(user_input)
+
+        if mentioned_names:
+            # Buscar fatos sobre essas pessoas
+            cursor = self.conn.cursor()
+
+            # Usar user_facts_v2 se disponível
+            cursor.execute("""
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name='user_facts_v2'
+            """)
+            use_v2 = cursor.fetchone() is not None
+
+            relevant_facts = []
+            for name in mentioned_names:
+                try:
+                    if use_v2:
+                        cursor.execute("""
+                            SELECT fact_type, fact_attribute, fact_value
+                            FROM user_facts_v2
+                            WHERE user_id = ? AND fact_value LIKE ? AND is_current = 1
+                            LIMIT 3
+                        """, (user_id, f"%{name}%"))
+                    else:
+                        cursor.execute("""
+                            SELECT fact_key, fact_value
+                            FROM user_facts
+                            WHERE user_id = ? AND fact_value LIKE ? AND is_current = 1
+                            LIMIT 3
+                        """, (user_id, f"%{name}%"))
+
+                    facts = cursor.fetchall()
+                    relevant_facts.extend([
+                        f"{row[0]}:{row[1]}" if use_v2 else f"{row[0]}:{row[1]}"
+                        for row in facts
+                    ])
+                except Exception as e:
+                    logger.warning(f"Erro ao buscar fatos para '{name}': {e}")
+
+            if relevant_facts:
+                query_parts.append(" ".join(relevant_facts[:5]))  # Limitar a 5 fatos
+
+        # CAMADA 3: Tópicos implícitos (NOVO)
+        topics = self._detect_topics_in_text(user_input)
+        if topics:
+            query_parts.append(" ".join(topics))
+
+        enriched = " ".join(query_parts)
+
+        # Log para debug
+        if len(enriched) > len(user_input):
+            logger.info(f"   Query enriquecida: {len(enriched)} chars (original: {len(user_input)} chars)")
+            logger.info(f"   Nomes detectados: {mentioned_names}")
+            logger.info(f"   Tópicos detectados: {topics}")
+
+        return enriched
+
+    # ========================================
     # BUSCA SEMÂNTICA (ChromaDB)
     # ========================================
-    
+
     def semantic_search(self, user_id: str, query: str, k: int = 5,
                        chat_history: List[Dict] = None) -> List[Dict]:
         """
@@ -1574,19 +1714,15 @@ Resposta: {ai_response}
         try:
             # 🔍 DEBUG CRÍTICO: Logs para detectar vazamento de memória entre usuários
             logger.info(f"🔍 [DEBUG] Busca semântica para user_id='{user_id}' (type={type(user_id).__name__})")
-            logger.info(f"   Query: '{query[:100]}'")
+            logger.info(f"   Query original: '{query[:100]}'")
             logger.info(f"   ChromaDB enabled: {self.chroma_enabled}")
 
-            # Query enriquecida com histórico recente (se disponível)
-            enriched_query = query
-
-            if chat_history and len(chat_history) > 0:
-                recent_context = " ".join([
-                    msg["content"][:100]
-                    for msg in chat_history[-3:]
-                    if msg["role"] == "user"
-                ])
-                enriched_query = f"{recent_context} {query}"
+            # Query enriquecida com multi-stage enhancement (FASE 2)
+            enriched_query = self._build_enriched_query(
+                user_id=user_id,
+                user_input=query,
+                chat_history=chat_history
+            )
 
             # Garantir que user_id é string para consistência
             user_id_str = str(user_id) if user_id else None
