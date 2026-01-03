@@ -1065,9 +1065,179 @@ class HybridDatabaseManager:
         }
     
     # ========================================
+    # FUNÇÕES AUXILIARES - METADATA ENRIQUECIDO
+    # ========================================
+
+    def _calculate_recency_tier(self, timestamp: datetime) -> str:
+        """
+        Calcula tier de recência da conversa
+
+        Args:
+            timestamp: Timestamp da conversa
+
+        Returns:
+            "recent" (≤30 dias) | "medium" (31-90 dias) | "old" (>90 dias)
+        """
+        days_ago = (datetime.now() - timestamp).days
+
+        if days_ago <= 30:
+            return "recent"
+        elif days_ago <= 90:
+            return "medium"
+        else:
+            return "old"
+
+    def _get_dominant_archetype(self, archetype_analyses: Dict) -> str:
+        """
+        Retorna arquétipo com maior intensidade
+
+        Args:
+            archetype_analyses: Dict com análises arquetípicas
+
+        Returns:
+            Nome do arquétipo dominante ou ""
+        """
+        if not archetype_analyses:
+            return ""
+
+        try:
+            dominant = max(
+                archetype_analyses.items(),
+                key=lambda x: x[1].intensity if hasattr(x[1], 'intensity') else 0
+            )
+            return dominant[0] if dominant else ""
+        except Exception as e:
+            logger.warning(f"Erro ao calcular arquétipo dominante: {e}")
+            return ""
+
+    def _extract_people_from_conversation(self, conversation_id: int) -> List[str]:
+        """
+        Extrai nomes de pessoas mencionadas nos fatos desta conversa
+
+        Args:
+            conversation_id: ID da conversa
+
+        Returns:
+            Lista de nomes próprios
+        """
+        cursor = self.conn.cursor()
+
+        # Verificar se user_facts_v2 existe
+        cursor.execute("""
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name='user_facts_v2'
+        """)
+        use_v2 = cursor.fetchone() is not None
+
+        try:
+            if use_v2:
+                cursor.execute("""
+                    SELECT fact_value
+                    FROM user_facts_v2
+                    WHERE source_conversation_id = ?
+                    AND fact_attribute = 'nome'
+                    AND is_current = 1
+                """, (conversation_id,))
+            else:
+                cursor.execute("""
+                    SELECT fact_value
+                    FROM user_facts
+                    WHERE source_conversation_id = ?
+                    AND fact_key = 'nome'
+                    AND is_current = 1
+                """, (conversation_id,))
+
+            names = [row[0] for row in cursor.fetchall() if row[0]]
+            return names
+        except Exception as e:
+            logger.warning(f"Erro ao extrair pessoas da conversa {conversation_id}: {e}")
+            return []
+
+    def _extract_topics_from_keywords(self, keywords: List[str]) -> List[str]:
+        """
+        Classifica keywords em tópicos amplos
+
+        Args:
+            keywords: Lista de keywords da conversa
+
+        Returns:
+            Lista de tópicos detectados
+        """
+        if not keywords:
+            return []
+
+        # Mapeamento de keywords para tópicos
+        topic_mapping = {
+            "trabalho": ["trabalho", "emprego", "empresa", "carreira", "chefe", "colega", "projeto"],
+            "familia": ["esposa", "marido", "filho", "filha", "pai", "mae", "familia", "casa"],
+            "saude": ["saude", "medico", "doenca", "ansiedade", "depressao", "insonia", "terapia"],
+            "relacionamento": ["amigo", "amizade", "namoro", "relacionamento", "amor"],
+            "lazer": ["viagem", "hobby", "leitura", "esporte", "musica"],
+            "dinheiro": ["dinheiro", "financeiro", "salario", "conta", "divida"],
+        }
+
+        topics = set()
+        keywords_lower = [k.lower() for k in keywords]
+
+        for topic, topic_keywords in topic_mapping.items():
+            if any(kw in " ".join(keywords_lower) for kw in topic_keywords):
+                topics.add(topic)
+
+        return list(topics)
+
+    def calculate_temporal_boost(self, memory_timestamp: str, mode: str = "balanced") -> float:
+        """
+        Calcula boost temporal para reranking de memórias
+
+        Args:
+            memory_timestamp: Timestamp ISO da memória
+            mode: Modo de decay ("recent_focused" | "balanced" | "archeological")
+
+        Returns:
+            Float multiplicador (0.5 a 1.5)
+        """
+        try:
+            mem_time = datetime.fromisoformat(memory_timestamp)
+        except:
+            return 1.0  # Fallback se timestamp inválido
+
+        days_ago = (datetime.now() - mem_time).days
+
+        if mode == "recent_focused":
+            # Valoriza últimos 7 dias, penaliza antigas
+            if days_ago <= 7:
+                return 1.5
+            elif days_ago <= 30:
+                return 1.2
+            elif days_ago <= 90:
+                return 1.0
+            else:
+                return 0.7
+
+        elif mode == "balanced":
+            # Equilíbrio entre recente e histórico
+            if days_ago <= 30:
+                return 1.2
+            elif days_ago <= 90:
+                return 1.0
+            else:
+                return 0.9
+
+        elif mode == "archeological":
+            # Valoriza padrões de longo prazo
+            if days_ago <= 30:
+                return 1.0
+            elif days_ago <= 90:
+                return 1.1
+            else:
+                return 1.3  # Boost para memórias antigas
+
+        return 1.0  # Default
+
+    # ========================================
     # CONVERSAS (HÍBRIDO: SQLite + ChromaDB)
     # ========================================
-    
+
     def save_conversation(self, user_id: str, user_name: str, user_input: str,
                          ai_response: str, session_id: str = None,
                          archetype_analyses: Dict = None,
@@ -1157,12 +1327,14 @@ Resposta: {ai_response}
                     for conflict in detected_conflicts:
                         doc_content += f"{conflict.description}\n"
                 
-                # Metadata
+                # Metadata (Enriquecido - Fase 1 do Plano de Memória)
+                now = datetime.now()
                 metadata = {
+                    # Campos existentes (manter)
                     "user_id": user_id,
                     "user_name": user_name,
                     "session_id": session_id or "",
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": now.isoformat(),
                     "conversation_id": conversation_id,
                     "tension_level": tension_level,
                     "affective_charge": affective_charge,
@@ -1170,7 +1342,21 @@ Resposta: {ai_response}
                     "intensity_level": intensity_level,
                     "complexity": complexity,
                     "keywords": ",".join(keywords) if keywords else "",
-                    "has_conflicts": len(detected_conflicts) > 0 if detected_conflicts else False
+                    "has_conflicts": len(detected_conflicts) > 0 if detected_conflicts else False,
+
+                    # NOVOS - Temporal Estratificado
+                    "day_bucket": now.strftime("%Y-%m-%d"),
+                    "week_bucket": now.strftime("%Y-W%W"),
+                    "month_bucket": now.strftime("%Y-%m"),
+                    "recency_tier": self._calculate_recency_tier(now),
+
+                    # NOVOS - Emocional/Temático
+                    "emotional_intensity": round(affective_charge + tension_level, 2),
+                    "dominant_archetype": self._get_dominant_archetype(archetype_analyses) if archetype_analyses else "",
+
+                    # NOVOS - Relacional
+                    "mentions_people": ",".join(self._extract_people_from_conversation(conversation_id)),
+                    "topics": ",".join(self._extract_topics_from_keywords(keywords)),
                 }
 
                 # 🔍 DEBUG: Log do metadata sendo salvo
