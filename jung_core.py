@@ -1689,109 +1689,280 @@ Resposta: {ai_response}
         return enriched
 
     # ========================================
+    # TWO-STAGE RETRIEVAL & RERANKING - FASE 3
+    # ========================================
+
+    def _calculate_adaptive_k(self, query: str, chat_history: List[Dict], user_id: str) -> int:
+        """
+        Calcula k adaptativo baseado em complexidade do contexto (Fase 3)
+
+        Args:
+            query: Query do usuário
+            chat_history: Histórico da conversa
+            user_id: ID do usuário
+
+        Returns:
+            k dinâmico entre 3 e 12
+        """
+        base_k = 5
+
+        # Fator 1: Comprimento do histórico
+        if chat_history and len(chat_history) > 10:
+            base_k += 2  # Conversas longas precisam de mais contexto
+
+        # Fator 2: Complexidade da query
+        query_words = len(query.split())
+        if query_words > 20:
+            base_k += 2
+        elif query_words < 5:
+            base_k -= 1  # Queries curtas precisam de menos
+
+        # Fator 3: Múltiplas pessoas mencionadas
+        mentioned_names = self._extract_names_from_text(query)
+        if len(mentioned_names) > 1:
+            base_k += len(mentioned_names)
+
+        # Fator 4: Histórico total do usuário
+        total_conversations = self.count_conversations(user_id)
+        if total_conversations < 20:
+            base_k = min(base_k, 3)  # Limitar para usuários novos
+
+        # Limitar entre 3 e 12
+        final_k = max(3, min(base_k, 12))
+
+        logger.info(f"   k adaptativo calculado: {final_k} (base={5}, words={query_words}, names={len(mentioned_names)}, total_convs={total_conversations})")
+
+        return final_k
+
+    def _rerank_memories(self, results: List[tuple], user_id: str, query: str) -> List[Dict]:
+        """
+        Reranking inteligente com 6 boosts (Fase 3)
+
+        Args:
+            results: Lista de (Document, score) do ChromaDB
+            user_id: ID do usuário
+            query: Query original
+            chat_history: Histórico da conversa
+
+        Returns:
+            Lista de memórias rerankeadas com scores combinados
+        """
+        import re
+
+        reranked = []
+
+        # Extrair informações da query para boosting
+        query_names = set(self._extract_names_from_text(query))
+        query_topics = set(self._detect_topics_in_text(query))
+
+        logger.info(f"   Reranking {len(results)} memórias...")
+        logger.info(f"   Query names: {query_names}")
+        logger.info(f"   Query topics: {query_topics}")
+
+        for doc, base_score in results:
+            metadata = doc.metadata
+
+            # Validação extra: filtrar manualmente user_id errado
+            doc_user_id = str(metadata.get('user_id', ''))
+            if doc_user_id != str(user_id):
+                logger.error(f"🚨 Removendo doc com user_id='{doc_user_id}' (esperado='{user_id}')")
+                continue
+
+            # === CÁLCULO DE BOOSTS ===
+
+            # 1. BOOST TEMPORAL
+            temporal_boost = self.calculate_temporal_boost(
+                metadata.get('timestamp', ''),
+                mode="balanced"
+            )
+
+            # 2. BOOST EMOCIONAL
+            emotional_intensity = metadata.get('emotional_intensity', 0.0)
+            emotional_boost = 1.0
+            if emotional_intensity > 1.5:
+                emotional_boost = 1.3  # Priorizar momentos emocionalmente intensos
+            elif emotional_intensity > 2.5:
+                emotional_boost = 1.5  # Muito intenso
+
+            # 3. BOOST DE TÓPICO
+            memory_topics = set(metadata.get('topics', '').split(',')) if metadata.get('topics') else set()
+            # Remover strings vazias
+            memory_topics = {t.strip() for t in memory_topics if t.strip()}
+
+            topic_boost = 1.0
+            if query_topics & memory_topics:  # Interseção
+                overlap = len(query_topics & memory_topics)
+                topic_boost = 1.2 + (overlap * 0.1)  # +0.1 por tópico em comum
+
+            # 4. BOOST DE PESSOA MENCIONADA (mais forte)
+            memory_people = set(metadata.get('mentions_people', '').split(',')) if metadata.get('mentions_people') else set()
+            memory_people = {p.strip() for p in memory_people if p.strip()}
+
+            person_boost = 1.0
+            if query_names & memory_people:  # Interseção
+                person_boost = 1.5  # FORTE boost se mesma pessoa mencionada
+
+            # 5. BOOST DE PROFUNDIDADE EXISTENCIAL
+            depth = metadata.get('existential_depth', 0.0)
+            depth_boost = 1.0
+            if depth > 0.7:
+                depth_boost = 1.15  # Leve boost para conversas profundas
+
+            # 6. BOOST DE CONFLITO ARQUETÍPICO
+            conflict_boost = 1.0
+            if metadata.get('has_conflicts', False):
+                conflict_boost = 1.1  # Leve boost para momentos de conflito interno
+
+            # === SCORE FINAL COMBINADO ===
+            # Distância ChromaDB é invertida (menor = mais similar)
+            # Convertemos para similaridade: 1 - score
+            similarity = 1 - base_score
+
+            final_score = (
+                similarity *
+                temporal_boost *
+                emotional_boost *
+                topic_boost *
+                person_boost *
+                depth_boost *
+                conflict_boost
+            )
+
+            # Extrair conteúdo do documento
+            user_input_match = re.search(r"Input:\s*(.+?)(?:\n|Resposta:|$)", doc.page_content, re.DOTALL)
+            user_input_text = user_input_match.group(1).strip() if user_input_match else ""
+
+            response_match = re.search(r"Resposta:\s*(.+?)(?:\n|===|$)", doc.page_content, re.DOTALL)
+            response_text = response_match.group(1).strip() if response_match else ""
+
+            reranked.append({
+                'conversation_id': metadata.get('conversation_id'),
+                'user_input': user_input_text,
+                'ai_response': response_text,
+                'timestamp': metadata.get('timestamp', ''),
+                'base_score': base_score,
+                'similarity_score': similarity,
+                'final_score': final_score,
+                'boosts': {
+                    'temporal': round(temporal_boost, 2),
+                    'emotional': round(emotional_boost, 2),
+                    'topic': round(topic_boost, 2),
+                    'person': round(person_boost, 2),
+                    'depth': round(depth_boost, 2),
+                    'conflict': round(conflict_boost, 2),
+                },
+                'metadata': metadata,
+                'full_document': doc.page_content,
+                'keywords': metadata.get('keywords', '').split(','),
+                'tension_level': metadata.get('tension_level', 0.0),
+            })
+
+        # Ordenar por final_score (decrescente)
+        reranked.sort(key=lambda x: x['final_score'], reverse=True)
+
+        # Log dos top 3 com detalhes de boosts
+        logger.info(f"   ✅ Reranking concluído. Top 3:")
+        for i, mem in enumerate(reranked[:3], 1):
+            logger.info(f"   {i}. base={mem['base_score']:.3f}, similarity={mem['similarity_score']:.3f}, final={mem['final_score']:.3f}")
+            logger.info(f"      Boosts: {mem['boosts']}")
+            logger.info(f"      Input: {mem['user_input'][:60]}...")
+
+        return reranked
+
+    # ========================================
     # BUSCA SEMÂNTICA (ChromaDB)
     # ========================================
 
-    def semantic_search(self, user_id: str, query: str, k: int = 5,
+    def semantic_search(self, user_id: str, query: str, k: int = None,
                        chat_history: List[Dict] = None) -> List[Dict]:
         """
-        Busca semântica VERDADEIRA usando ChromaDB + OpenAI Embeddings
-        
+        Busca semântica com TWO-STAGE RETRIEVAL + INTELLIGENT RERANKING (Fase 3)
+
+        STAGE 1: Broad retrieval (k*3)
+        STAGE 2: Intelligent reranking com 6 boosts
+
         Args:
             user_id: ID do usuário
             query: Texto da consulta
-            k: Número de resultados
+            k: Número de resultados (None = adaptativo)
             chat_history: Histórico da conversa atual (opcional)
-        
+
         Returns:
-            Lista de memórias relevantes com scores de similaridade
+            Lista de memórias rerankeadas com scores combinados
         """
-        
+
         if not self.chroma_enabled:
             logger.warning("ChromaDB desabilitado. Retornando conversas recentes do SQLite.")
-            return self._fallback_keyword_search(user_id, query, k)
-        
+            return self._fallback_keyword_search(user_id, query, k or 5)
+
         try:
-            # 🔍 DEBUG CRÍTICO: Logs para detectar vazamento de memória entre usuários
-            logger.info(f"🔍 [DEBUG] Busca semântica para user_id='{user_id}' (type={type(user_id).__name__})")
-            logger.info(f"   Query original: '{query[:100]}'")
-            logger.info(f"   ChromaDB enabled: {self.chroma_enabled}")
-
-            # Query enriquecida com multi-stage enhancement (FASE 2)
-            enriched_query = self._build_enriched_query(
-                user_id=user_id,
-                user_input=query,
-                chat_history=chat_history
-            )
-
             # Garantir que user_id é string para consistência
             user_id_str = str(user_id) if user_id else None
             if not user_id_str:
                 logger.error("❌ user_id é None ou vazio! Retornando lista vazia.")
                 return []
 
-            # Busca vetorial com filtro explícito
+            # 🔍 DEBUG: Início do two-stage retrieval
+            logger.info(f"🔍 [TWO-STAGE] Busca semântica para user_id='{user_id_str}'")
+            logger.info(f"   Query original: '{query[:100]}'")
+
+            # Calcular k adaptativo se não fornecido (FASE 3)
+            if k is None:
+                k = self._calculate_adaptive_k(query, chat_history, user_id_str)
+            else:
+                logger.info(f"   k fixo fornecido: {k}")
+
+            # Query enriquecida com multi-stage enhancement (FASE 2)
+            enriched_query = self._build_enriched_query(
+                user_id=user_id_str,
+                user_input=query,
+                chat_history=chat_history
+            )
+
+            # ============================================
+            # STAGE 1: BROAD RETRIEVAL
+            # ============================================
+            broad_k = max(k * 3, 9)  # Buscar pelo menos 3x mais, mínimo 9
+            logger.info(f"   STAGE 1: Broad retrieval (k={broad_k})")
+
             chroma_filter = {"user_id": user_id_str}
-            logger.info(f"   Filtro ChromaDB: {chroma_filter}")
 
             results = self.vectorstore.similarity_search_with_score(
                 enriched_query,
-                k=k * 2,  # Buscar mais para filtrar depois
+                k=broad_k,
                 filter=chroma_filter
             )
 
-            # 🔍 DEBUG: Validar resultados retornados
             logger.info(f"   Resultados retornados do ChromaDB: {len(results)}")
-            for i, (doc, score) in enumerate(results[:5], 1):
-                doc_user_id = doc.metadata.get('user_id', 'N/A')
-                logger.info(f"   Resultado {i}: user_id='{doc_user_id}' (type={type(doc_user_id).__name__}), score={score:.3f}")
-                if str(doc_user_id) != user_id_str:
-                    logger.error(f"   🚨 VAZAMENTO DETECTADO! Doc user_id='{doc_user_id}' != Query user_id='{user_id_str}'")
 
-            # Processar resultados
-            memories = []
+            if not results:
+                logger.warning("   Nenhum resultado encontrado no ChromaDB")
+                return []
 
-            for doc, score in results:
-                # 🔍 VALIDAÇÃO EXTRA: Filtrar manualmente qualquer resultado com user_id errado
-                doc_user_id = str(doc.metadata.get('user_id', ''))
-                if doc_user_id != user_id_str:
-                    logger.error(f"🚨 FILTRO EXTRA: Removendo doc com user_id='{doc_user_id}' (esperado='{user_id_str}')")
-                    continue  # PULAR este documento
-                # Extrair input do usuário do documento
-                user_input_match = re.search(r"Input:\s*(.+?)(?:\n|Resposta:|$)", doc.page_content, re.DOTALL)
-                user_input_text = user_input_match.group(1).strip() if user_input_match else ""
-                
-                # Extrair resposta
-                response_match = re.search(r"Resposta:\s*(.+?)(?:\n|===|$)", doc.page_content, re.DOTALL)
-                response_text = response_match.group(1).strip() if response_match else ""
-                
-                memories.append({
-                    'conversation_id': doc.metadata.get('conversation_id'),
-                    'user_input': user_input_text,
-                    'ai_response': response_text,
-                    'timestamp': doc.metadata.get('timestamp', ''),
-                    'similarity_score': 1 - score,  # Converter distância em similaridade
-                    'tension_level': doc.metadata.get('tension_level', 0.0),
-                    'keywords': doc.metadata.get('keywords', '').split(','),
-                    'full_document': doc.page_content,
-                    'metadata': doc.metadata
-                })
-            
-            # Ordenar por similaridade
-            memories.sort(key=lambda x: x['similarity_score'], reverse=True)
-            
-            # Retornar top k
-            top_memories = memories[:k]
-            
-            logger.info(f"✅ Encontradas {len(top_memories)} memórias semânticas")
+            # ============================================
+            # STAGE 2: INTELLIGENT RERANKING
+            # ============================================
+            logger.info(f"   STAGE 2: Reranking inteligente")
+            reranked = self._rerank_memories(
+                results=results,
+                user_id=user_id_str,
+                query=query
+            )
+
+            # Retornar top k após reranking
+            top_memories = reranked[:k]
+
+            logger.info(f"✅ Two-Stage concluído: {len(top_memories)} memórias finais (de {len(results)} broad)")
             for i, mem in enumerate(top_memories[:3], 1):
-                logger.info(f"   {i}. [{mem['similarity_score']:.2f}] {mem['user_input'][:50]}...")
-            
+                logger.info(f"   {i}. [final={mem['final_score']:.3f}] {mem['user_input'][:50]}...")
+
             return top_memories
-            
+
         except Exception as e:
             logger.error(f"❌ Erro na busca semântica: {e}")
-            return self._fallback_keyword_search(user_id, query, k)
+            import traceback
+            logger.error(traceback.format_exc())
+            return self._fallback_keyword_search(user_id, query, k or 5)
     
     def _fallback_keyword_search(self, user_id: str, query: str, k: int = 5) -> List[Dict]:
         """Busca por keywords (fallback quando ChromaDB indisponível)"""
