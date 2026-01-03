@@ -1359,6 +1359,35 @@ Resposta: {ai_response}
                     "topics": ",".join(self._extract_topics_from_keywords(keywords)),
                 }
 
+                # NOVO - Fact-Conversation Linking (Fase 4)
+                # Buscar IDs de fatos extraídos desta conversa
+                try:
+                    cursor.execute("""
+                        SELECT name FROM sqlite_master
+                        WHERE type='table' AND name='user_facts_v2'
+                    """)
+                    use_v2 = cursor.fetchone() is not None
+
+                    if use_v2:
+                        cursor.execute("""
+                            SELECT id FROM user_facts_v2
+                            WHERE source_conversation_id = ? AND is_current = 1
+                        """, (conversation_id,))
+                    else:
+                        cursor.execute("""
+                            SELECT id FROM user_facts
+                            WHERE source_conversation_id = ? AND is_current = 1
+                        """, (conversation_id,))
+
+                    fact_ids = [str(row[0]) for row in cursor.fetchall()]
+                    if fact_ids:
+                        metadata["extracted_fact_ids"] = ",".join(fact_ids)
+                        logger.info(f"   Linkados {len(fact_ids)} fatos ao ChromaDB metadata")
+                except Exception as fact_link_error:
+                    logger.warning(f"   Erro ao linkar fatos: {fact_link_error}")
+                    # Não bloquear salvamento se linking falhar
+                    pass
+
                 # 🔍 DEBUG: Log do metadata sendo salvo
                 logger.info(f"   ChromaDB metadata: user_id='{metadata['user_id']}' (type={type(metadata['user_id']).__name__})")
                 logger.info(f"   ChromaDB doc_id: '{chroma_id}'")
