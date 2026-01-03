@@ -188,7 +188,7 @@ async def lifespan(app: FastAPI):
     logger.info("✅ Scheduler de mensagens proativas ativado!")
 
     # ✨ Iniciar scheduler de consolidação de memórias (Fase 4)
-    from jung_memory_consolidation import run_consolidation_job
+    from jung_memory_consolidation import run_consolidation_job_async
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
     from apscheduler.triggers.cron import CronTrigger
 
@@ -196,7 +196,7 @@ async def lifespan(app: FastAPI):
 
     # Agendar consolidação mensal (todo dia 1 às 03:00 UTC)
     consolidation_scheduler.add_job(
-        func=lambda: run_consolidation_job(bot_state.db),
+        func=lambda: run_consolidation_job_async(bot_state.db),
         trigger=CronTrigger(day=1, hour=3, minute=0),
         id='memory_consolidation',
         name='Memory Consolidation Job',

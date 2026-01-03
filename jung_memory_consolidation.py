@@ -279,7 +279,7 @@ Seja conciso mas informativo. Máximo 200 palavras."""
 
 def run_consolidation_job(db_manager):
     """
-    Job para rodar consolidação em todos os usuários
+    Job para rodar consolidação em todos os usuários (síncrono)
 
     Args:
         db_manager: HybridDatabaseManager instance
@@ -302,3 +302,15 @@ def run_consolidation_job(db_manager):
             logger.error(f"Erro ao consolidar memórias de {user_id}: {e}")
 
     logger.info("✅ Job de consolidação concluído")
+
+
+async def run_consolidation_job_async(db_manager):
+    """
+    Versão assíncrona do job de consolidação (para APScheduler AsyncIO)
+
+    Args:
+        db_manager: HybridDatabaseManager instance
+    """
+    import asyncio
+    # Executar a versão síncrona em thread separada para não bloquear event loop
+    await asyncio.to_thread(run_consolidation_job, db_manager)
