@@ -2023,197 +2023,269 @@ Resposta: {ai_response}
     # ========================================
     # CONSTRUÇÃO DE CONTEXTO
     # ========================================
-    
-    def build_rich_context(self, user_id: str, current_input: str,
-                          k_memories: int = 5,
-                          chat_history: List[Dict] = None) -> str:
+
+    def _search_relevant_facts(self, user_id: str, query: str) -> List[Dict]:
         """
-        Constrói contexto COMPLETO e SEMÂNTICO sobre o usuário
-        
-        Combina:
-        - Fatos estruturados (SQL)
-        - Padrões detectados (SQL)
-        - Memórias semânticas relevantes (ChromaDB)
-        - Histórico da conversa atual
+        Busca fatos relevantes ao input atual (Fase 5)
+
+        Args:
+            user_id: ID do usuário
+            query: Input do usuário
+
+        Returns:
+            Lista de fatos relevantes
         """
-        
-        # 🔍 DEBUG CRÍTICO: Log INÍCIO da construção de contexto
-        logger.info(f"🏁 [DEBUG] ========== INÍCIO build_rich_context ==========")
-        logger.info(f"🏁 [DEBUG] user_id='{user_id}' (type={type(user_id).__name__})")
+        # Extrair nomes e tópicos da query
+        mentioned_names = self._extract_names_from_text(query)
+        mentioned_topics = self._detect_topics_in_text(query)
 
-        user = self.get_user(user_id)
-        name = user['user_name'] if user else "Usuário"
-
-        logger.info(f"🏁 [DEBUG] user_name='{name}'")
-
-        context_parts = []
-        
-        # ===== 1. CABEÇALHO =====
-        context_parts.append(f"=== CONTEXTO SOBRE {name.upper()} ===\n")
-        
-        # ===== 2. HISTÓRICO DA CONVERSA ATUAL =====
-        if chat_history and len(chat_history) > 0:
-            context_parts.append("💬 HISTÓRICO DA CONVERSA ATUAL:")
-            
-            recent = chat_history[-6:] if len(chat_history) > 6 else chat_history
-            
-            for msg in recent:
-                role = "👤 Usuário" if msg["role"] == "user" else "🤖 Assistente"
-                content = msg["content"][:150] + "..." if len(msg["content"]) > 150 else msg["content"]
-                context_parts.append(f"{role}: {content}")
-            
-            context_parts.append("")
-        
-        # ===== 3. FATOS ESTRUTURADOS =====
         cursor = self.conn.cursor()
 
-        # 🔍 DEBUG CRÍTICO: Log de recuperação de fatos
-        logger.info(f"📚 [DEBUG] Recuperando fatos para user_id='{user_id}'")
-
-        # Verificar se tabela V2 existe
+        # Verificar estrutura V2
         cursor.execute("""
             SELECT name FROM sqlite_master
             WHERE type='table' AND name='user_facts_v2'
         """)
         use_v2 = cursor.fetchone() is not None
 
-        if use_v2:
-            # Usar nova estrutura hierárquica V2
-            logger.info(f"📚 [DEBUG] Usando user_facts_v2 (nova estrutura)")
-            cursor.execute("""
-                SELECT fact_category, fact_type, fact_attribute, fact_value, confidence
-                FROM user_facts_v2
-                WHERE user_id = ? AND is_current = 1
-                ORDER BY fact_category, fact_type, fact_attribute
-            """, (user_id,))
+        relevant_facts = []
 
-            facts = cursor.fetchall()
+        # Buscar fatos sobre pessoas mencionadas
+        if mentioned_names:
+            for name in mentioned_names:
+                if use_v2:
+                    cursor.execute("""
+                        SELECT fact_category, fact_type, fact_attribute, fact_value, confidence
+                        FROM user_facts_v2
+                        WHERE user_id = ? AND fact_value LIKE ? AND is_current = 1
+                        LIMIT 5
+                    """, (user_id, f"%{name}%"))
+                else:
+                    cursor.execute("""
+                        SELECT fact_category, fact_key AS fact_attribute, fact_value
+                        FROM user_facts
+                        WHERE user_id = ? AND fact_value LIKE ? AND is_current = 1
+                        LIMIT 5
+                    """, (user_id, f"%{name}%"))
 
-            # 🔍 DEBUG: Log dos fatos recuperados
-            logger.info(f"   Fatos V2 encontrados: {len(facts)}")
-            for i, fact in enumerate(facts[:10], 1):
-                logger.info(f"   Fato {i}: {fact['fact_category']}.{fact['fact_type']}.{fact['fact_attribute']} = {fact['fact_value']} (conf: {fact['confidence']:.2f})")
+                relevant_facts.extend([dict(row) for row in cursor.fetchall()])
 
-            if facts:
-                context_parts.append("📋 FATOS CONHECIDOS:")
+        # Buscar fatos sobre tópicos mencionados
+        if mentioned_topics:
+            for topic in mentioned_topics:
+                category_map = {
+                    "trabalho": "TRABALHO",
+                    "familia": "RELACIONAMENTO",
+                    "saude": "SAUDE",
+                }
+                category = category_map.get(topic, "RELACIONAMENTO")
 
-                # Agrupar hierarquicamente: categoria > tipo > atributos
-                facts_hierarchy = {}
-                for fact in facts:
-                    category = fact['fact_category']
-                    fact_type = fact['fact_type']
-                    attribute = fact['fact_attribute']
-                    value = fact['fact_value']
+                if use_v2:
+                    cursor.execute("""
+                        SELECT fact_category, fact_type, fact_attribute, fact_value, confidence
+                        FROM user_facts_v2
+                        WHERE user_id = ? AND fact_category = ? AND is_current = 1
+                        LIMIT 5
+                    """, (user_id, category))
+                else:
+                    cursor.execute("""
+                        SELECT fact_category, fact_key AS fact_attribute, fact_value
+                        FROM user_facts
+                        WHERE user_id = ? AND fact_category = ? AND is_current = 1
+                        LIMIT 5
+                    """, (user_id, category))
 
-                    if category not in facts_hierarchy:
-                        facts_hierarchy[category] = {}
+                relevant_facts.extend([dict(row) for row in cursor.fetchall()])
 
-                    if fact_type not in facts_hierarchy[category]:
-                        facts_hierarchy[category][fact_type] = []
+        return relevant_facts
 
-                    facts_hierarchy[category][fact_type].append(f"{attribute}: {value}")
+    def _format_facts_hierarchically(self, facts: List[Dict]) -> str:
+        """
+        Formata fatos de forma hierárquica (Fase 5)
 
-                # Exibir de forma estruturada e legível
-                for category, types in facts_hierarchy.items():
-                    context_parts.append(f"\n{category}:")
-                    for fact_type, attrs in types.items():
-                        attrs_text = ", ".join(attrs)
-                        context_parts.append(f"  - {fact_type}: {attrs_text}")
+        Args:
+            facts: Lista de fatos
 
-                context_parts.append("")
-        else:
-            # Fallback para estrutura antiga
-            logger.info(f"📚 [DEBUG] Usando user_facts (estrutura antiga)")
-            cursor.execute("""
-                SELECT fact_category, fact_key, fact_value
-                FROM user_facts
-                WHERE user_id = ? AND is_current = 1
-                ORDER BY fact_category, fact_key
-            """, (user_id,))
+        Returns:
+            String formatada
+        """
+        if not facts:
+            return ""
 
-            facts = cursor.fetchall()
+        # Agrupar por categoria
+        by_category = {}
+        for fact in facts:
+            category = fact.get('fact_category', 'OUTROS')
+            if category not in by_category:
+                by_category[category] = []
 
-            # 🔍 DEBUG: Log dos fatos recuperados
-            logger.info(f"   Fatos encontrados: {len(facts)}")
-            for i, fact in enumerate(facts[:10], 1):
-                logger.info(f"   Fato {i}: {fact['fact_category']} - {fact['fact_key']}: {fact['fact_value']}")
+            attribute = fact.get('fact_attribute', '')
+            value = fact.get('fact_value', '')
+            by_category[category].append(f"{attribute}: {value}")
 
-            if facts:
-                context_parts.append("📋 FATOS CONHECIDOS:")
+        # Formatar
+        lines = []
+        for category, items in by_category.items():
+            lines.append(f"{category}:")
+            for item in items[:3]:  # Limitar a 3 por categoria
+                lines.append(f"  - {item}")
 
-                facts_by_category = {}
-                for fact in facts:
-                    category = fact['fact_category']
-                    if category not in facts_by_category:
-                        facts_by_category[category] = []
-                    facts_by_category[category].append(f"{fact['fact_key']}: {fact['fact_value']}")
+        return "\n".join(lines)
 
-                for category, items in facts_by_category.items():
-                    context_parts.append(f"\n{category}:")
-                    context_parts.append("\n".join(f"  - {item}" for item in items))
+    def _get_relevant_patterns(self, user_id: str, query: str) -> List[Dict]:
+        """
+        Busca padrões relevantes ao input atual (Fase 5)
 
-                context_parts.append("")
-        
-        # ===== 4. PADRÕES DETECTADOS =====
+        Args:
+            user_id: ID do usuário
+            query: Input do usuário
+
+        Returns:
+            Lista de padrões relevantes
+        """
+        cursor = self.conn.cursor()
+
+        # Buscar padrões com alta confiança
         cursor.execute("""
             SELECT pattern_name, pattern_description, frequency_count, confidence_score
             FROM user_patterns
             WHERE user_id = ? AND confidence_score > 0.6
             ORDER BY confidence_score DESC, frequency_count DESC
-            LIMIT 5
+            LIMIT 3
         """, (user_id,))
-        
-        patterns = cursor.fetchall()
-        
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def _compress_context_if_needed(self, context: str, max_tokens: int = 2000) -> str:
+        """
+        Comprime contexto se exceder limite de tokens (Fase 5)
+
+        Args:
+            context: Contexto completo
+            max_tokens: Limite máximo de tokens
+
+        Returns:
+            Contexto comprimido se necessário
+        """
+        # Estimativa simples: 1 token ≈ 4 caracteres
+        estimated_tokens = len(context) / 4
+
+        if estimated_tokens <= max_tokens:
+            return context
+
+        # Se exceder, truncar proporcionalmente
+        target_chars = int(max_tokens * 4 * 0.9)  # 90% do limite
+        return context[:target_chars] + "\n\n[Contexto truncado devido ao limite]"
+
+    def build_rich_context(self, user_id: str, current_input: str,
+                          k_memories: int = None,
+                          chat_history: List[Dict] = None) -> str:
+        """
+        Constrói contexto HIERÁRQUICO e ESTRATIFICADO (Fase 5)
+
+        Combina em layers:
+        1. Histórico imediato (sempre incluir)
+        2. Fatos relevantes ao input (busca inteligente)
+        3. Memórias semânticas (reranked, agrupadas por recência + consolidadas)
+        4. Padrões detectados (se relevantes)
+
+        Args:
+            user_id: ID do usuário
+            current_input: Input atual
+            k_memories: Número de memórias (None = adaptativo)
+            chat_history: Histórico da conversa atual
+
+        Returns:
+            Contexto formatado e hierárquico
+        """
+
+        logger.info(f"🏗️ [FASE 5] Construindo contexto hierárquico para user_id={user_id}")
+
+        user = self.get_user(user_id)
+        name = user['user_name'] if user else "Usuário"
+
+        context_parts = []
+
+        # ===== LAYER 1: HISTÓRICO IMEDIATO =====
+        context_parts.append("=== CONVERSA ATUAL ===\n")
+
+        if chat_history and len(chat_history) > 0:
+            recent = chat_history[-6:] if len(chat_history) > 6 else chat_history
+
+            for msg in recent:
+                role = "👤 Usuário" if msg["role"] == "user" else "🤖 Jung"
+                content = msg["content"][:150] + "..." if len(msg["content"]) > 150 else msg["content"]
+                context_parts.append(f"{role}: {content}")
+
+            context_parts.append("")
+
+        # ===== LAYER 2: FATOS RELEVANTES =====
+        relevant_facts = self._search_relevant_facts(user_id, current_input)
+
+        if relevant_facts:
+            context_parts.append("=== FATOS RELEVANTES ===\n")
+            context_parts.append(self._format_facts_hierarchically(relevant_facts))
+            context_parts.append("")
+
+
+        # ===== LAYER 3: MEMÓRIAS SEMÂNTICAS =====
+        memories = self.semantic_search(user_id, current_input, k=k_memories, chat_history=chat_history)
+
+        if memories:
+            context_parts.append("=== MEMÓRIAS RELACIONADAS ===\n")
+
+            # Separar por tipo e recência
+            consolidated = [m for m in memories if m.get('metadata', {}).get('type') == 'consolidated']
+            regular = [m for m in memories if m.get('metadata', {}).get('type') != 'consolidated']
+
+            # Agrupar regulares por recência
+            recent = [m for m in regular if m.get('metadata', {}).get('recency_tier') == 'recent']
+            older = [m for m in regular if m.get('metadata', {}).get('recency_tier') != 'recent']
+
+            # Memórias consolidadas primeiro (se existirem)
+            if consolidated:
+                context_parts.append("📦 Padrões de Longo Prazo (Consolidado):")
+                for mem in consolidated[:1]:  # Apenas 1 consolidada
+                    preview = mem.get('full_document', '')[:300]
+                    context_parts.append(f"{preview}...")
+                context_parts.append("")
+
+            # Memórias recentes
+            if recent:
+                context_parts.append("🕐 Recente (últimos 30 dias):")
+                for i, mem in enumerate(recent[:3], 1):
+                    timestamp = mem.get('timestamp', '')[:10]
+                    user_input = mem.get('user_input', '')[:100]
+                    context_parts.append(f"{i}. [{timestamp}] {user_input}...")
+                context_parts.append("")
+
+            # Memórias antigas (se relevantes)
+            if older:
+                context_parts.append("📚 Histórico:")
+                for i, mem in enumerate(older[:2], 1):
+                    timestamp = mem.get('timestamp', '')[:10]
+                    user_input = mem.get('user_input', '')[:100]
+                    context_parts.append(f"{i}. [{timestamp}] {user_input}...")
+                context_parts.append("")
+
+        # ===== LAYER 4: PADRÕES DETECTADOS =====
+        patterns = self._get_relevant_patterns(user_id, current_input)
+
         if patterns:
-            context_parts.append("🔍 PADRÕES COMPORTAMENTAIS:")
-            for pattern in patterns:
-                context_parts.append(
-                    f"  - {pattern['pattern_name']} (confiança: {pattern['confidence_score']:.0%}, "
-                    f"freq: {pattern['frequency_count']}): {pattern['pattern_description']}"
-                )
+            context_parts.append("=== PADRÕES OBSERVADOS ===\n")
+            for pattern in patterns[:2]:
+                context_parts.append(f"- {pattern['pattern_name']}: {pattern['pattern_description']}")
             context_parts.append("")
-        
-        # ===== 5. MEMÓRIAS SEMÂNTICAS =====
-        relevant_memories = self.semantic_search(user_id, current_input, k_memories, chat_history)
-        
-        if relevant_memories:
-            context_parts.append("🧠 MEMÓRIAS SEMÂNTICAS RELEVANTES:")
-            
-            for i, memory in enumerate(relevant_memories, 1):
-                timestamp = memory['timestamp'][:10] if memory['timestamp'] else 'N/A'
-                score = memory['similarity_score']
-                context_parts.append(
-                    f"\n{i}. [{timestamp}] Similaridade: {score:.2f}"
-                )
-                context_parts.append(f"   Usuário: {memory['user_input'][:150]}...")
-                
-                if memory.get('keywords'):
-                    context_parts.append(f"   Temas: {', '.join(memory['keywords'][:5])}")
-            
-            context_parts.append("")
-        
-        # ===== 6. ESTATÍSTICAS =====
-        stats = self.get_user_stats(user_id)
-        
-        if stats:
-            context_parts.append("📊 ESTATÍSTICAS:")
-            context_parts.append(f"  - Total de conversas: {stats['total_messages']}")
-            context_parts.append(f"  - Primeira interação: {stats['first_interaction'][:10]}")
-            context_parts.append("")
-        
-        # ===== 7. INSTRUÇÕES =====
-        context_parts.append("🎯 COMO USAR ESTE CONTEXTO:")
-        context_parts.append("  1. Priorize o HISTÓRICO DA CONVERSA ATUAL para contexto imediato")
-        context_parts.append("  2. Use FATOS e PADRÕES para conhecimento de longo prazo")
-        context_parts.append("  3. MEMÓRIAS SEMÂNTICAS mostram conversas similares do passado")
-        context_parts.append("  4. Conecte o input atual com TODOS esses níveis de memória")
 
-        # 🔍 DEBUG CRÍTICO: Log FIM da construção de contexto
-        logger.info(f"🏁 [DEBUG] ========== FIM build_rich_context ==========")
-        logger.info(f"🏁 [DEBUG] Contexto construído com {len(context_parts)} partes")
+        # Juntar tudo
+        full_context = "\n".join(context_parts)
 
-        return "\n".join(context_parts)
+        # Comprimir se necessário
+        full_context = self._compress_context_if_needed(full_context, max_tokens=2000)
+
+        logger.info(f"✅ [FASE 5] Contexto construído: {len(full_context)} caracteres")
+
+        return full_context
     
     # ========================================
     # EXTRAÇÃO DE FATOS
