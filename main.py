@@ -30,6 +30,70 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ============================================================================
+# MEMORY CONSOLIDATION SCHEDULER
+# ============================================================================
+
+async def consolidation_scheduler():
+    """
+    Background task que roda consolidação todo dia 1º às 03:00 UTC
+
+    Usa asyncio.sleep() para calcular próxima execução, sem dependências externas
+    """
+    from jung_memory_consolidation import run_consolidation_job_async
+    from datetime import datetime, timedelta
+    import calendar
+
+    logger.info("📦 Consolidation scheduler iniciado")
+
+    # Aguardar 1 minuto para garantir inicialização completa
+    await asyncio.sleep(60)
+
+    while True:
+        try:
+            now = datetime.utcnow()
+
+            # Calcular próximo dia 1º às 03:00 UTC
+            if now.day == 1 and now.hour < 3:
+                # Hoje é dia 1 e ainda não passou das 03:00
+                next_run = now.replace(hour=3, minute=0, second=0, microsecond=0)
+            else:
+                # Próximo mês
+                if now.month == 12:
+                    next_month = 1
+                    next_year = now.year + 1
+                else:
+                    next_month = now.month + 1
+                    next_year = now.year
+
+                next_run = datetime(next_year, next_month, 1, 3, 0, 0)
+
+            # Calcular tempo de espera
+            wait_seconds = (next_run - now).total_seconds()
+
+            logger.info(f"📅 Próxima consolidação: {next_run.strftime('%Y-%m-%d %H:%M')} UTC (em {wait_seconds/3600:.1f}h)")
+
+            # Esperar até o momento
+            await asyncio.sleep(wait_seconds)
+
+            # Executar consolidação
+            logger.info("🔄 Iniciando consolidação automática mensal...")
+            try:
+                await run_consolidation_job_async(bot_state.db)
+                logger.info("✅ Consolidação automática concluída")
+            except Exception as e:
+                logger.error(f"❌ Erro na consolidação automática: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+
+        except Exception as e:
+            logger.error(f"❌ Erro crítico no consolidation scheduler: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            # Em caso de erro, aguardar 1 hora e tentar novamente
+            await asyncio.sleep(3600)
+
+
+# ============================================================================
 # PROACTIVE MESSAGE SCHEDULER
 # ============================================================================
 
@@ -187,11 +251,9 @@ async def lifespan(app: FastAPI):
     proactive_task = asyncio.create_task(proactive_message_scheduler(telegram_app))
     logger.info("✅ Scheduler de mensagens proativas ativado!")
 
-    # ✨ Scheduler de consolidação de memórias (Fase 4)
-    # NOTA: Consolidação mensal via endpoint manual /admin/test-consolidation
-    # APScheduler AsyncIO estava causando conflitos com FastAPI lifespan
-    # Solução temporária: executar manualmente ou via cron externo
-    logger.info("ℹ️  Consolidação de memórias disponível via /admin/test-consolidation")
+    # ✨ Iniciar scheduler de consolidação de memórias (Fase 4)
+    consolidation_task = asyncio.create_task(consolidation_scheduler())
+    logger.info("✅ Scheduler de consolidação de memórias ativado (mensal: dia 1 às 03:00 UTC)")
 
     # ✨ Iniciar scheduler de ruminação (Jung Lab)
     rumination_scheduler_process = None
@@ -245,6 +307,13 @@ async def lifespan(app: FastAPI):
         await proactive_task
     except asyncio.CancelledError:
         logger.info("✅ Scheduler proativo cancelado")
+
+    # Parar scheduler de consolidação
+    consolidation_task.cancel()
+    try:
+        await consolidation_task
+    except asyncio.CancelledError:
+        logger.info("✅ Scheduler de consolidação cancelado")
 
     # Parar scheduler de ruminação
     if rumination_scheduler_process:
@@ -1010,8 +1079,10 @@ async def test_consolidation(user_id: str = None):
                 if bot_state.db.chroma_enabled:
                     consolidated_docs = bot_state.db.vectorstore._collection.get(
                         where={
-                            "user_id": user_id,
-                            "type": "consolidated"
+                            "$and": [
+                                {"user_id": {"$eq": user_id}},
+                                {"type": {"$eq": "consolidated"}}
+                            ]
                         }
                     )
 
@@ -1071,8 +1142,10 @@ async def test_consolidation(user_id: str = None):
                     if bot_state.db.chroma_enabled:
                         consolidated_docs = bot_state.db.vectorstore._collection.get(
                             where={
-                                "user_id": uid,
-                                "type": "consolidated"
+                                "$and": [
+                                    {"user_id": {"$eq": uid}},
+                                    {"type": {"$eq": "consolidated"}}
+                                ]
                             }
                         )
                         consolidated_count = len(consolidated_docs.get('ids', []))
@@ -1099,7 +1172,7 @@ async def test_consolidation(user_id: str = None):
         if bot_state.db.chroma_enabled:
             try:
                 all_consolidated = bot_state.db.vectorstore._collection.get(
-                    where={"type": "consolidated"}
+                    where={"type": {"$eq": "consolidated"}}
                 )
 
                 results["global_stats"] = {
