@@ -187,24 +187,11 @@ async def lifespan(app: FastAPI):
     proactive_task = asyncio.create_task(proactive_message_scheduler(telegram_app))
     logger.info("✅ Scheduler de mensagens proativas ativado!")
 
-    # ✨ Iniciar scheduler de consolidação de memórias (Fase 4)
-    from jung_memory_consolidation import run_consolidation_job_async
-    from apscheduler.schedulers.asyncio import AsyncIOScheduler
-    from apscheduler.triggers.cron import CronTrigger
-
-    consolidation_scheduler = AsyncIOScheduler()
-
-    # Agendar consolidação mensal (todo dia 1 às 03:00 UTC)
-    consolidation_scheduler.add_job(
-        func=lambda: run_consolidation_job_async(bot_state.db),
-        trigger=CronTrigger(day=1, hour=3, minute=0),
-        id='memory_consolidation',
-        name='Memory Consolidation Job',
-        replace_existing=True
-    )
-
-    consolidation_scheduler.start()
-    logger.info("✅ Scheduler de consolidação de memórias ativado (mensal: dia 1 às 03:00 UTC)")
+    # ✨ Scheduler de consolidação de memórias (Fase 4)
+    # NOTA: Consolidação mensal via endpoint manual /admin/test-consolidation
+    # APScheduler AsyncIO estava causando conflitos com FastAPI lifespan
+    # Solução temporária: executar manualmente ou via cron externo
+    logger.info("ℹ️  Consolidação de memórias disponível via /admin/test-consolidation")
 
     # ✨ Iniciar scheduler de ruminação (Jung Lab)
     rumination_scheduler_process = None
@@ -258,13 +245,6 @@ async def lifespan(app: FastAPI):
         await proactive_task
     except asyncio.CancelledError:
         logger.info("✅ Scheduler proativo cancelado")
-
-    # Parar scheduler de consolidação
-    try:
-        consolidation_scheduler.shutdown(wait=False)
-        logger.info("✅ Scheduler de consolidação parado")
-    except Exception as e:
-        logger.warning(f"⚠️  Erro ao parar scheduler de consolidação: {e}")
 
     # Parar scheduler de ruminação
     if rumination_scheduler_process:
