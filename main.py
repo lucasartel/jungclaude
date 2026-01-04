@@ -1202,6 +1202,69 @@ async def test_consolidation(user_id: str = None):
         }
 
 
+@app.api_route("/admin/memory-metrics", methods=["GET", "POST"])
+async def memory_metrics(user_id: str = None, format: str = "json"):
+    """
+    ENDPOINT DE MÉTRICAS: Monitoramento de Qualidade de Memória (Fase 6)
+
+    Acesse: GET https://seu-railway-url/admin/memory-metrics
+
+    Fornece métricas de qualidade do sistema de memória:
+    - Cobertura (% conversas embedadas)
+    - Gaps (períodos sem memórias)
+    - Estatísticas de retrieval
+    - Métricas globais do sistema
+
+    Parâmetros:
+    - user_id (opcional): ID do usuário para relatório individual
+    - format (opcional): "json" (padrão) ou "text" (relatório formatado)
+
+    Retorna:
+    - Se user_id fornecido: relatório individual
+    - Se user_id omitido: métricas globais do sistema
+    """
+
+    try:
+        from jung_memory_metrics import MemoryQualityMetrics, generate_formatted_system_report
+
+        metrics = MemoryQualityMetrics(bot_state.db)
+
+        # Relatório individual
+        if user_id:
+            if format == "text":
+                report = metrics.generate_user_report(user_id)
+                return {"user_id": user_id[:12] + "...", "report": report}
+            else:
+                coverage = metrics.calculate_coverage(user_id)
+                gaps = metrics.detect_memory_gaps(user_id, gap_threshold_days=7)
+                retrieval_stats = metrics.calculate_retrieval_stats(user_id)
+
+                return {
+                    "user_id": user_id[:12] + "...",
+                    "coverage": coverage,
+                    "gaps": gaps,
+                    "retrieval_stats": retrieval_stats
+                }
+
+        # Métricas globais
+        else:
+            if format == "text":
+                report = generate_formatted_system_report(bot_state.db)
+                return {"system_report": report}
+            else:
+                system_metrics = metrics.generate_system_metrics()
+                return system_metrics
+
+    except Exception as e:
+        logger.error(f"Erro no endpoint de métricas: {e}")
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 @app.api_route("/admin/test-extraction", methods=["GET", "POST"])
 async def test_extraction(request: Request = None, message: str = None):
     """

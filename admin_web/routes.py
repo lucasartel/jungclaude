@@ -1640,6 +1640,19 @@ async def extract_all_evidence(
 
 
 # ============================================================
+# MEMORY METRICS - MONITORAMENTO DE QUALIDADE (Admin Dashboard)
+# ============================================================
+
+@router.get("/memory-metrics", response_class=HTMLResponse)
+async def memory_metrics_dashboard(
+    request: Request,
+    admin: Dict = Depends(require_master)
+):
+    """Dashboard de Métricas de Qualidade de Memória (Admin only)"""
+    return templates.TemplateResponse("memory_metrics.html", {"request": request})
+
+
+# ============================================================
 # JUNG LAB - SISTEMA DE RUMINAÇÃO (Admin Dashboard)
 # ============================================================
 

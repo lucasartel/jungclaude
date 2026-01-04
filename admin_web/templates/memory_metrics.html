@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Metrics - Monitoramento de Qualidade</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 50%, #16213e 100%);
+            color: #e4e4e7;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #fbbf24;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #94a3b8;
+            font-size: 1.1rem;
+        }
+
+        .back-button {
+            display: inline-block;
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            margin-top: 15px;
+            transition: all 0.3s;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .back-button:hover {
+            background: rgba(59, 130, 246, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            transition: all 0.3s;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(251, 191, 36, 0.4);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .metric-card h3 {
+            color: #fbbf24;
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #60a5fa;
+            margin: 15px 0;
+        }
+
+        .metric-label {
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+
+        .report-section {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            margin-bottom: 30px;
+        }
+
+        .report-section h2 {
+            color: #fbbf24;
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+        }
+
+        .report-content {
+            background: rgba(15, 23, 42, 0.8);
+            padding: 25px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            line-height: 1.6;
+            color: #cbd5e1;
+            overflow-x: auto;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+            font-size: 1.2rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-excellent {
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .status-good {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .status-warning {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+        }
+
+        .status-critical {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .user-search {
+            margin-bottom: 30px;
+        }
+
+        .user-search input {
+            width: 100%;
+            max-width: 500px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            background: rgba(15, 23, 42, 0.8);
+            color: #e4e4e7;
+            font-size: 1rem;
+        }
+
+        .user-search input::placeholder {
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧩 Memory Metrics</h1>
+            <p>Monitoramento de Qualidade do Sistema de Memória</p>
+            <a href="/admin" class="back-button">← Voltar ao Dashboard</a>
+        </div>
+
+        <div class="controls">
+            <button class="btn" onclick="loadSystemMetrics()">📊 Carregar Métricas Globais</button>
+            <button class="btn btn-secondary" onclick="showUserSearch()">👤 Buscar Usuário Específico</button>
+        </div>
+
+        <div class="user-search" id="userSearch" style="display: none;">
+            <input type="text" id="userIdInput" placeholder="Digite o user_id para buscar..." onkeypress="if(event.key==='Enter') loadUserMetrics()">
+            <button class="btn" onclick="loadUserMetrics()" style="margin-left: 10px;">Buscar</button>
+        </div>
+
+        <div id="metricsContainer">
+            <div class="loading">
+                👆 Clique em "Carregar Métricas Globais" para começar
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadSystemMetrics() {
+            const container = document.getElementById('metricsContainer');
+            container.innerHTML = '<div class="loading">⏳ Carregando métricas do sistema...</div>';
+
+            try {
+                const response = await fetch('/admin/memory-metrics');
+                const data = await response.json();
+
+                if (data.error) {
+                    container.innerHTML = `<div class="report-section"><h2>❌ Erro</h2><p>${data.error}</p></div>`;
+                    return;
+                }
+
+                // Renderizar métricas
+                let html = '<div class="metrics-grid">';
+
+                // Card de usuários
+                html += `
+                    <div class="metric-card">
+                        <h3>👥 Usuários</h3>
+                        <div class="metric-value">${data.users.total_users}</div>
+                        <div class="metric-label">Total de usuários ativos</div>
+                    </div>
+                `;
+
+                // Card de conversas
+                html += `
+                    <div class="metric-card">
+                        <h3>💬 Conversas</h3>
+                        <div class="metric-value">${data.conversations.total_conversations}</div>
+                        <div class="metric-label">${data.conversations.recent_conversations_30d} nos últimos 30 dias</div>
+                    </div>
+                `;
+
+                // Card de fatos
+                html += `
+                    <div class="metric-card">
+                        <h3>🧠 Fatos Extraídos</h3>
+                        <div class="metric-value">${data.facts.total_facts}</div>
+                        <div class="metric-label">Fatos armazenados (V2)</div>
+                    </div>
+                `;
+
+                // Card de ChromaDB
+                html += `
+                    <div class="metric-card">
+                        <h3>🗄️ ChromaDB</h3>
+                        <div class="metric-value">${data.chromadb.total_documents}</div>
+                        <div class="metric-label">${data.chromadb.consolidated_memories} memórias consolidadas</div>
+                    </div>
+                `;
+
+                // Card de cobertura
+                const healthStatus = data.health_status;
+                const statusClass = `status-${healthStatus}`;
+                html += `
+                    <div class="metric-card">
+                        <h3>📈 Cobertura Global</h3>
+                        <div class="metric-value">${data.chromadb.global_coverage}%</div>
+                        <div class="metric-label">
+                            <span class="${statusClass} status-badge">${healthStatus}</span>
+                        </div>
+                    </div>
+                `;
+
+                html += '</div>';
+
+                // Top usuários
+                if (data.users.top_active_users.length > 0) {
+                    html += '<div class="report-section"><h2>🏆 Usuários Mais Ativos</h2><div class="report-content">';
+                    data.users.top_active_users.forEach((user, i) => {
+                        html += `${i + 1}. ${user.user_name} - ${user.conversation_count} conversas\n`;
+                    });
+                    html += '</div></div>';
+                }
+
+                container.innerHTML = html;
+
+            } catch (error) {
+                container.innerHTML = `<div class="report-section"><h2>❌ Erro</h2><p>${error.message}</p></div>`;
+            }
+        }
+
+        async function loadUserMetrics() {
+            const userId = document.getElementById('userIdInput').value.trim();
+            if (!userId) {
+                alert('Por favor, digite um user_id');
+                return;
+            }
+
+            const container = document.getElementById('metricsContainer');
+            container.innerHTML = `<div class="loading">⏳ Carregando métricas do usuário ${userId}...</div>`;
+
+            try {
+                // Buscar JSON
+                const jsonResponse = await fetch(`/admin/memory-metrics?user_id=${encodeURIComponent(userId)}`);
+                const jsonData = await jsonResponse.json();
+
+                // Buscar relatório formatado
+                const textResponse = await fetch(`/admin/memory-metrics?user_id=${encodeURIComponent(userId)}&format=text`);
+                const textData = await textResponse.json();
+
+                let html = '<div class="metrics-grid">';
+
+                // Card de cobertura
+                html += `
+                    <div class="metric-card">
+                        <h3>📊 Cobertura</h3>
+                        <div class="metric-value">${jsonData.coverage.coverage_percentage}%</div>
+                        <div class="metric-label">${jsonData.coverage.embedded_conversations} / ${jsonData.coverage.total_conversations} conversas embedadas</div>
+                    </div>
+                `;
+
+                // Card de gaps
+                html += `
+                    <div class="metric-card">
+                        <h3>🔍 Gaps Detectados</h3>
+                        <div class="metric-value">${jsonData.gaps.length}</div>
+                        <div class="metric-label">Períodos sem memórias (≥7 dias)</div>
+                    </div>
+                `;
+
+                // Card de retrieval
+                html += `
+                    <div class="metric-card">
+                        <h3>📈 Retrieval</h3>
+                        <div class="metric-value">${jsonData.retrieval_stats.avg_memories_retrieved}</div>
+                        <div class="metric-label">Memórias recuperadas (média)</div>
+                    </div>
+                `;
+
+                html += '</div>';
+
+                // Relatório completo
+                html += `<div class="report-section">
+                    <h2>📋 Relatório Completo</h2>
+                    <div class="report-content">${textData.report}</div>
+                </div>`;
+
+                container.innerHTML = html;
+
+            } catch (error) {
+                container.innerHTML = `<div class="report-section"><h2>❌ Erro</h2><p>${error.message}</p></div>`;
+            }
+        }
+
+        function showUserSearch() {
+            const search = document.getElementById('userSearch');
+            search.style.display = search.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // Carregar métricas globais automaticamente
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSystemMetrics();
+        });
+    </script>
+</body>
+</html>
