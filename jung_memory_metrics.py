@@ -353,7 +353,8 @@ Tópicos mais frequentes:
 
         top_users = [
             {
-                "user_id": row[0][:12] + "...",
+                "user_id": row[0],  # ID completo
+                "user_id_display": row[0][:12] + "...",  # ID truncado para display
                 "user_name": row[1],
                 "conversation_count": row[2]
             }

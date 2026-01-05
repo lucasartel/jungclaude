@@ -537,12 +537,12 @@
                             <div class="rank-number">#${index + 1}</div>
                             <div class="user-info">
                                 <h4>${user.user_name}</h4>
-                                <p>ID: ${user.user_id}</p>
+                                <p>ID: ${user.user_id_display || user.user_id}</p>
                             </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 20px;">
                             <div class="conversation-count">${user.conversation_count} conversas</div>
-                            <button class="btn-view-user" onclick="viewUserMetrics('${user.user_id.replace('...', '')}', '${user.user_name}')">
+                            <button class="btn-view-user" onclick="viewUserMetrics('${user.user_id}', '${user.user_name}')">
                                 Ver Métricas
                             </button>
                         </div>
@@ -573,10 +573,10 @@
                 html += `
                     <tr>
                         <td><strong>${user.user_name}</strong></td>
-                        <td style="font-family: monospace; color: #94a3b8;">${user.user_id}</td>
+                        <td style="font-family: monospace; color: #94a3b8;">${user.user_id_display || user.user_id}</td>
                         <td><strong style="color: #60a5fa;">${user.conversation_count}</strong></td>
                         <td>
-                            <button class="btn-view-user" onclick="viewUserMetrics('${user.user_id.replace('...', '')}', '${user.user_name}')">
+                            <button class="btn-view-user" onclick="viewUserMetrics('${user.user_id}', '${user.user_name}')">
                                 📋 Ver Relatório Completo
                             </button>
                         </td>
@@ -603,11 +603,7 @@
             modal.style.display = 'block';
 
             try {
-                // Buscar o user_id completo da lista global
-                const fullUser = globalData.users.top_active_users.find(u => u.user_id.startsWith(userId));
-                const fullUserId = fullUser ? fullUser.user_id.replace('...', '') : userId;
-
-                const response = await fetch(`/admin/api/memory-metrics?user_id=${encodeURIComponent(fullUserId)}&format=text`);
+                const response = await fetch(`/admin/api/memory-metrics?user_id=${encodeURIComponent(userId)}&format=text`);
                 const data = await response.json();
 
                 if (data.error) {
