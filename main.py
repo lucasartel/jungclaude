@@ -1202,12 +1202,12 @@ async def test_consolidation(user_id: str = None):
         }
 
 
-@app.api_route("/admin/memory-metrics", methods=["GET", "POST"])
+@app.api_route("/admin/api/memory-metrics", methods=["GET", "POST"])
 async def memory_metrics(user_id: str = None, format: str = "json"):
     """
     ENDPOINT DE MÉTRICAS: Monitoramento de Qualidade de Memória (Fase 6)
 
-    Acesse: GET https://seu-railway-url/admin/memory-metrics
+    Acesse: GET https://seu-railway-url/admin/api/memory-metrics
 
     Fornece métricas de qualidade do sistema de memória:
     - Cobertura (% conversas embedadas)

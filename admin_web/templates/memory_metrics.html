@@ -459,7 +459,7 @@
 
         async function loadSystemMetrics() {
             try {
-                const response = await fetch('/admin/memory-metrics');
+                const response = await fetch('/admin/api/memory-metrics');
                 const data = await response.json();
 
                 if (data.error) {
@@ -607,7 +607,7 @@
                 const fullUser = globalData.users.top_active_users.find(u => u.user_id.startsWith(userId));
                 const fullUserId = fullUser ? fullUser.user_id.replace('...', '') : userId;
 
-                const response = await fetch(`/admin/memory-metrics?user_id=${encodeURIComponent(fullUserId)}&format=text`);
+                const response = await fetch(`/admin/api/memory-metrics?user_id=${encodeURIComponent(fullUserId)}&format=text`);
                 const data = await response.json();
 
                 if (data.error) {
