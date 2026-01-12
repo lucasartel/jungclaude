@@ -210,6 +210,20 @@ async def setup_bot_commands(telegram_app):
 async def lifespan(app: FastAPI):
     """Gerencia o ciclo de vida da aplicação (Bot + API)"""
 
+    # 0. Aplicar migrations pendentes
+    logger.info("=" * 70)
+    logger.info("🔧 SISTEMA DE MIGRATIONS")
+    logger.info("=" * 70)
+    try:
+        from database_migrations import run_migrations_on_startup
+        migrations_ok = run_migrations_on_startup()
+        if not migrations_ok:
+            logger.error("❌ ERRO: Migrations falharam - servidor pode não funcionar corretamente")
+    except Exception as e:
+        logger.error(f"❌ ERRO ao executar migrations: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+
     # 1. Iniciar Bot Telegram
     telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not telegram_token:
