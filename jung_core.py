@@ -3575,12 +3575,12 @@ class ConflictDetector:
 
 class JungianEngine:
     """Motor de análise junguiana com sistema de conflitos arquetípicos"""
-    
+
     def __init__(self, db: HybridDatabaseManager = None):
         """Inicializa engine (db opcional para compatibilidade)"""
-        
+
         self.db = db if db else HybridDatabaseManager()
-        
+
         # Clientes LLM
         self.openai_client = OpenAI(
             api_key=Config.OPENAI_API_KEY,
@@ -3591,16 +3591,25 @@ class JungianEngine:
             base_url="https://api.x.ai/v1",
             timeout=30.0  # 30 segundos de timeout
         )
-        
+
         self.conflict_detector = ConflictDetector()
-        
+
         self.archetype_prompts = {
             "Persona": Config.PERSONA_PROMPT,
             "Sombra": Config.SOMBRA_PROMPT,
             "Velho Sábio": Config.SABIO_PROMPT,
             "Anima": Config.ANIMA_PROMPT
         }
-        
+
+        # 🧠 Context builder de identidade do agente (Fase 4)
+        try:
+            from agent_identity_context_builder import AgentIdentityContextBuilder
+            self.identity_context_builder = AgentIdentityContextBuilder(self.db)
+            logger.info("✅ AgentIdentityContextBuilder integrado")
+        except Exception as e:
+            logger.warning(f"⚠️ AgentIdentityContextBuilder não disponível: {e}")
+            self.identity_context_builder = None
+
         logger.info("✅ JungianEngine inicializado")
     
     def process_message(self, user_id: str, message: str, 
@@ -3815,14 +3824,14 @@ class JungianEngine:
                                      chat_history: List[Dict],
                                      model: str) -> str:
         """Gera resposta que EXPRESSA o conflito interno"""
-        
+
         # Formatar histórico
         history_text = ""
         if chat_history:
             for msg in chat_history[-6:]:
                 role = "Usuário" if msg["role"] == "user" else "Assistente"
                 history_text += f"{role}: {msg['content'][:100]}...\n"
-        
+
         conflict_description = ""
         for conflict in conflicts:
             arch1 = archetype_analyses[conflict.archetype_1]
@@ -3839,9 +3848,20 @@ VOZ "{conflict.archetype_2}" (intensidade {arch2.intensity:.1f}):
 
 Tensão entre elas: {conflict.tension_level:.2f}/10
 """
-        
+
+        # 🧠 Injetar contexto de identidade do agente (Fase 4)
+        agent_identity_context = Config.AGENT_IDENTITY
+        if self.identity_context_builder:
+            try:
+                dynamic_identity = self.identity_context_builder.build_context_summary_for_llm(style="concise")
+                if dynamic_identity:
+                    agent_identity_context = f"{Config.AGENT_IDENTITY}\n\n{dynamic_identity}"
+                    logger.info("✅ Contexto de identidade do agente injetado na resposta conflituosa")
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao construir contexto de identidade: {e}")
+
         prompt = Config.CONFLICTED_RESPONSE_PROMPT.format(
-            agent_identity=Config.AGENT_IDENTITY,
+            agent_identity=agent_identity_context,
             semantic_context=semantic_context[:1000],
             chat_history=history_text,
             user_input=user_input,
@@ -3888,14 +3908,14 @@ Tensão entre elas: {conflict.tension_level:.2f}/10
                                      chat_history: List[Dict],
                                      model: str) -> str:
         """Gera resposta harmoniosa"""
-        
+
         # Formatar histórico
         history_text = ""
         if chat_history:
             for msg in chat_history[-6:]:
                 role = "Usuário" if msg["role"] == "user" else "Assistente"
                 history_text += f"{role}: {msg['content'][:100]}...\n"
-        
+
         # Identificar voz dominante (maior intensidade)
         dominant_archetype = max(archetype_analyses.items(), key=lambda x: x[1].intensity)
         dominant_name = dominant_archetype[0]
@@ -3905,8 +3925,19 @@ Tensão entre elas: {conflict.tension_level:.2f}/10
         for name, analysis in archetype_analyses.items():
             analyses_summary += f"\n{name}: {analysis.voice_reaction[:100]}... (impulso: {analysis.impulse}, intensidade: {analysis.intensity:.1f})"
 
+        # 🧠 Injetar contexto de identidade do agente (Fase 4)
+        agent_identity_context = Config.AGENT_IDENTITY
+        if self.identity_context_builder:
+            try:
+                dynamic_identity = self.identity_context_builder.build_context_summary_for_llm(style="concise")
+                if dynamic_identity:
+                    agent_identity_context = f"{Config.AGENT_IDENTITY}\n\n{dynamic_identity}"
+                    logger.info("✅ Contexto de identidade do agente injetado na resposta")
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao construir contexto de identidade: {e}")
+
         prompt = Config.HARMONIOUS_RESPONSE_PROMPT.format(
-            agent_identity=Config.AGENT_IDENTITY,
+            agent_identity=agent_identity_context,
             analyses_summary=analyses_summary,
             dominant_voice=f"{dominant_name} - {dominant_analysis.voice_reaction[:200]}",
             semantic_context=semantic_context[:1000],
