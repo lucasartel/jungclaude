@@ -278,6 +278,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Erro ao iniciar scheduler de identidade: {e}")
 
+    # ✨ Iniciar scheduler de bridge identidade-ruminação (Fase 3)
+    try:
+        from identity_rumination_bridge import identity_rumination_sync_scheduler
+        bridge_task = asyncio.create_task(identity_rumination_sync_scheduler())
+        logger.info("✅ Scheduler de bridge identidade-ruminação ativado (a cada 6h)")
+    except Exception as e:
+        logger.error(f"❌ Erro ao iniciar scheduler de bridge: {e}")
+
     # ✨ Iniciar scheduler de ruminação (Jung Lab)
     rumination_scheduler_process = None
     try:
