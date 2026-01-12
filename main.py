@@ -269,6 +269,15 @@ async def lifespan(app: FastAPI):
     consolidation_task = asyncio.create_task(consolidation_scheduler())
     logger.info("✅ Scheduler de consolidação de memórias ativado (mensal: dia 1 às 03:00 UTC)")
 
+    # ✨ Iniciar scheduler de identidade do agente (Fase 2)
+    try:
+        from agent_identity_consolidation_job import identity_consolidation_scheduler
+        from identity_config import IDENTITY_CONSOLIDATION_INTERVAL_HOURS
+        identity_task = asyncio.create_task(identity_consolidation_scheduler())
+        logger.info(f"✅ Scheduler de identidade do agente ativado (a cada {IDENTITY_CONSOLIDATION_INTERVAL_HOURS}h)")
+    except Exception as e:
+        logger.error(f"❌ Erro ao iniciar scheduler de identidade: {e}")
+
     # ✨ Iniciar scheduler de ruminação (Jung Lab)
     rumination_scheduler_process = None
     try:
