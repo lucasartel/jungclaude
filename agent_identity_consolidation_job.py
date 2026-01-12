@@ -11,7 +11,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from openai import OpenAI
+from anthropic import Anthropic
 import os
 
 from agent_identity_extractor import AgentIdentityExtractor
@@ -96,12 +96,12 @@ async def run_agent_identity_consolidation():
         logger.info(f"📨 Encontradas {len(conversations)} conversas para processar")
 
         # Criar extrator
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
-            logger.error("❌ OPENAI_API_KEY não encontrada")
+            logger.error("❌ ANTHROPIC_API_KEY não encontrada")
             return
 
-        llm_client = OpenAI(api_key=api_key)
+        llm_client = Anthropic(api_key=api_key)
         extractor = AgentIdentityExtractor(db, llm_client)
 
         # Processar conversas

@@ -17,7 +17,7 @@ import json
 import os
 from datetime import datetime
 from typing import Dict, List, Optional
-from openai import OpenAI
+from anthropic import Anthropic
 
 from identity_config import (
     ADMIN_USER_ID,
@@ -47,19 +47,19 @@ class AgentIdentityExtractor:
     - Senso de agência do agente
     """
 
-    def __init__(self, db_connection, llm_client: Optional[OpenAI] = None):
+    def __init__(self, db_connection, llm_client: Optional[Anthropic] = None):
         """
         Args:
             db_connection: Conexão SQLite (HybridDatabaseManager)
-            llm_client: Cliente OpenAI (opcional, cria novo se None)
+            llm_client: Cliente Anthropic (opcional, cria novo se None)
         """
         self.db = db_connection
 
         if llm_client is None:
-            api_key = os.getenv("OPENAI_API_KEY")
+            api_key = os.getenv("ANTHROPIC_API_KEY")
             if not api_key:
-                raise ValueError("OPENAI_API_KEY não encontrada no ambiente")
-            self.llm = OpenAI(api_key=api_key)
+                raise ValueError("ANTHROPIC_API_KEY não encontrada no ambiente")
+            self.llm = Anthropic(api_key=api_key)
         else:
             self.llm = llm_client
 
@@ -96,15 +96,16 @@ class AgentIdentityExtractor:
         extraction_prompt = self._build_extraction_prompt(user_input, agent_response)
 
         try:
-            response = self.llm.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": extraction_prompt}],
-                response_format={"type": "json_object"},
+            response = self.llm.messages.create(
+                model="claude-3-5-haiku-20241022",
+                max_tokens=4096,
                 temperature=0.3,
-                max_tokens=2000
+                messages=[{"role": "user", "content": extraction_prompt}]
             )
 
-            extracted = json.loads(response.choices[0].message.content)
+            # Extrair JSON do conteúdo da resposta
+            content = response.content[0].text
+            extracted = json.loads(content)
 
             # Adicionar metadados
             extracted["conversation_id"] = conversation_id
