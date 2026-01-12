@@ -3672,14 +3672,14 @@ class JungianEngine:
         if conflicts:
             logger.info(f"⚡ {len(conflicts)} conflito(s) detectado(s)")
             response = self._generate_conflicted_response(
-                message, semantic_context, archetype_analyses, 
+                user_id, message, semantic_context, archetype_analyses,
                 conflicts, complexity, chat_history, model
             )
             tension_level = max([c.tension_level for c in conflicts])
         else:
             logger.info("✅ Sem conflitos - resposta harmônica")
             response = self._generate_harmonious_response(
-                message, semantic_context, archetype_analyses, 
+                user_id, message, semantic_context, archetype_analyses,
                 complexity, chat_history, model
             )
             tension_level = 0.0
@@ -3817,7 +3817,7 @@ class JungianEngine:
                 intensity=0.5
             )
     
-    def _generate_conflicted_response(self, user_input: str, semantic_context: str,
+    def _generate_conflicted_response(self, user_id: str, user_input: str, semantic_context: str,
                                      archetype_analyses: Dict[str, ArchetypeInsight],
                                      conflicts: List[ArchetypeConflict],
                                      complexity: str,
@@ -3849,14 +3849,18 @@ VOZ "{conflict.archetype_2}" (intensidade {arch2.intensity:.1f}):
 Tensão entre elas: {conflict.tension_level:.2f}/10
 """
 
-        # 🧠 Injetar contexto de identidade do agente (Fase 4)
+        # 🧠 Injetar contexto de identidade do agente (Fase 4) - APENAS MASTER ADMIN
         agent_identity_context = Config.AGENT_IDENTITY
         if self.identity_context_builder:
             try:
-                dynamic_identity = self.identity_context_builder.build_context_summary_for_llm(style="concise")
-                if dynamic_identity:
-                    agent_identity_context = f"{Config.AGENT_IDENTITY}\n\n{dynamic_identity}"
-                    logger.info("✅ Contexto de identidade do agente injetado na resposta conflituosa")
+                from identity_config import ADMIN_USER_ID
+                if user_id == ADMIN_USER_ID:
+                    dynamic_identity = self.identity_context_builder.build_context_summary_for_llm(
+                        user_id=user_id, style="concise"
+                    )
+                    if dynamic_identity:
+                        agent_identity_context = f"{Config.AGENT_IDENTITY}\n\n{dynamic_identity}"
+                        logger.info("✅ Contexto de identidade do agente injetado (conflicted) - Master Admin")
             except Exception as e:
                 logger.warning(f"⚠️ Erro ao construir contexto de identidade: {e}")
 
@@ -3902,7 +3906,7 @@ Tensão entre elas: {conflict.tension_level:.2f}/10
             logger.error(f"❌ Erro inesperado ao gerar resposta conflituosa: {type(e).__name__} - {e}")
             return "Desculpe, tive dificuldades para processar isso."
     
-    def _generate_harmonious_response(self, user_input: str, semantic_context: str,
+    def _generate_harmonious_response(self, user_id: str, user_input: str, semantic_context: str,
                                      archetype_analyses: Dict[str, ArchetypeInsight],
                                      complexity: str,
                                      chat_history: List[Dict],
@@ -3925,14 +3929,18 @@ Tensão entre elas: {conflict.tension_level:.2f}/10
         for name, analysis in archetype_analyses.items():
             analyses_summary += f"\n{name}: {analysis.voice_reaction[:100]}... (impulso: {analysis.impulse}, intensidade: {analysis.intensity:.1f})"
 
-        # 🧠 Injetar contexto de identidade do agente (Fase 4)
+        # 🧠 Injetar contexto de identidade do agente (Fase 4) - APENAS MASTER ADMIN
         agent_identity_context = Config.AGENT_IDENTITY
         if self.identity_context_builder:
             try:
-                dynamic_identity = self.identity_context_builder.build_context_summary_for_llm(style="concise")
-                if dynamic_identity:
-                    agent_identity_context = f"{Config.AGENT_IDENTITY}\n\n{dynamic_identity}"
-                    logger.info("✅ Contexto de identidade do agente injetado na resposta")
+                from identity_config import ADMIN_USER_ID
+                if user_id == ADMIN_USER_ID:
+                    dynamic_identity = self.identity_context_builder.build_context_summary_for_llm(
+                        user_id=user_id, style="concise"
+                    )
+                    if dynamic_identity:
+                        agent_identity_context = f"{Config.AGENT_IDENTITY}\n\n{dynamic_identity}"
+                        logger.info("✅ Contexto de identidade do agente injetado (harmonious) - Master Admin")
             except Exception as e:
                 logger.warning(f"⚠️ Erro ao construir contexto de identidade: {e}")
 
