@@ -1494,8 +1494,53 @@ except Exception as e:
 
 
 # ============================================================================
-# ENDPOINT TEMPORÁRIO: FORÇAR MIGRATION DE IDENTIDADE
+# ENDPOINTS TEMPORÁRIOS DE DIAGNÓSTICO
 # ============================================================================
+@app.get("/admin/check-identity-tables")
+async def check_identity_tables(request: Request):
+    """
+    DIAGNÓSTICO: Verifica quais tabelas agent_* existem no banco
+
+    ⚠️ REMOVER APÓS USO!
+    """
+    try:
+        from jung_core import HybridDatabaseManager
+
+        db = HybridDatabaseManager()
+        cursor = db.conn.cursor()
+
+        # Listar todas as tabelas do banco
+        cursor.execute("""
+            SELECT name FROM sqlite_master
+            WHERE type='table'
+            ORDER BY name
+        """)
+        all_tables = [row[0] for row in cursor.fetchall()]
+
+        # Filtrar tabelas agent_*
+        agent_tables = [t for t in all_tables if t.startswith('agent_')]
+
+        # Verificar schema_migrations
+        cursor.execute("SELECT migration_file, applied_at FROM schema_migrations ORDER BY applied_at DESC LIMIT 10")
+        migrations = [{"file": row[0], "applied_at": row[1]} for row in cursor.fetchall()]
+
+        return {
+            "success": True,
+            "database_path": str(db.db_path),
+            "total_tables": len(all_tables),
+            "agent_tables": agent_tables,
+            "agent_tables_count": len(agent_tables),
+            "expected_count": 8,
+            "all_tables_sample": all_tables[:20],  # Apenas primeiras 20
+            "applied_migrations": migrations
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 @app.get("/admin/force-identity-migration")
 async def force_identity_migration(request: Request):
     """

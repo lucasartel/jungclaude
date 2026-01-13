@@ -463,7 +463,7 @@ async def run_identity_rumination_sync():
 
     try:
         # Importar aqui para evitar import circular
-        from jung_database import HybridDatabaseManager
+        from jung_core import HybridDatabaseManager
 
         # Conectar ao banco
         db_path = find_database()
