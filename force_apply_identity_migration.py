@@ -1,0 +1,126 @@
+"""
+Script para forçar aplicação da migration de identidade do agente
+
+Uso:
+    python force_apply_identity_migration.py
+"""
+
+import sqlite3
+import logging
+from pathlib import Path
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def find_database():
+    """Encontra o banco de dados"""
+    possible_paths = [
+        Path("/data/jung_hybrid.db"),  # Railway
+        Path("data/jung_hybrid.db"),   # Local
+        Path("jung_hybrid.db"),         # Root
+    ]
+
+    for path in possible_paths:
+        if path.exists():
+            return path
+
+    # Se não encontrou, retornar o primeiro (Railway)
+    return possible_paths[0]
+
+
+def check_tables_exist(cursor):
+    """Verifica se as tabelas de identidade já existem"""
+    cursor.execute("""
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name LIKE 'agent_%'
+    """)
+    tables = [row[0] for row in cursor.fetchall()]
+    return tables
+
+
+def apply_identity_migration(db_path: Path):
+    """Aplica a migration de identidade do agente"""
+    logger.info("=" * 70)
+    logger.info("🔧 FORÇANDO APLICAÇÃO DA MIGRATION DE IDENTIDADE")
+    logger.info("=" * 70)
+    logger.info(f"Banco: {db_path}")
+
+    # Conectar ao banco
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+
+    try:
+        # Verificar tabelas existentes
+        existing_tables = check_tables_exist(cursor)
+        logger.info(f"📊 Tabelas agent_* existentes: {existing_tables}")
+
+        if len(existing_tables) >= 8:
+            logger.info("✅ As 8 tabelas já existem! Migration já foi aplicada.")
+            logger.info(f"   Tabelas: {', '.join(existing_tables)}")
+            return
+
+        # Ler migration file
+        migration_file = Path("migrations/006_agent_identity_nuclear.sql")
+        if not migration_file.exists():
+            logger.error(f"❌ Migration file não encontrado: {migration_file}")
+            return
+
+        logger.info(f"📝 Lendo migration: {migration_file}")
+        with open(migration_file, 'r', encoding='utf-8') as f:
+            migration_sql = f.read()
+
+        # Aplicar migration
+        logger.info("⚙️ Aplicando migration...")
+        cursor.executescript(migration_sql)
+        conn.commit()
+
+        # Verificar se foi aplicada
+        existing_tables_after = check_tables_exist(cursor)
+        logger.info(f"📊 Tabelas agent_* após migration: {existing_tables_after}")
+
+        if len(existing_tables_after) >= 8:
+            logger.info("✅ Migration aplicada com sucesso!")
+            logger.info(f"   {len(existing_tables_after)} tabelas criadas")
+
+            # Registrar na tabela de migrations
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    migration_file TEXT NOT NULL UNIQUE,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    success INTEGER DEFAULT 1
+                )
+            """)
+
+            cursor.execute("""
+                INSERT OR IGNORE INTO schema_migrations (migration_file, success)
+                VALUES ('006_agent_identity_nuclear.sql', 1)
+            """)
+            conn.commit()
+            logger.info("✅ Migration registrada em schema_migrations")
+        else:
+            logger.error(f"❌ Migration falhou! Esperava 8 tabelas, encontrou {len(existing_tables_after)}")
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao aplicar migration: {e}")
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+if __name__ == "__main__":
+    db_path = find_database()
+    logger.info(f"🗄️ Usando banco: {db_path}")
+
+    if not db_path.exists():
+        logger.error(f"❌ Banco de dados não encontrado: {db_path}")
+        exit(1)
+
+    apply_identity_migration(db_path)
+
+    logger.info("")
+    logger.info("=" * 70)
+    logger.info("✅ Script concluído")
+    logger.info("=" * 70)

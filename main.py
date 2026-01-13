@@ -1493,6 +1493,36 @@ except Exception as e:
     logger.warning(f"⚠️  Rotas de identidade do agente não disponíveis: {e}")
 
 
+# ============================================================================
+# ENDPOINT TEMPORÁRIO: FORÇAR MIGRATION DE IDENTIDADE
+# ============================================================================
+@app.post("/admin/force-identity-migration")
+async def force_identity_migration(request: Request):
+    """
+    TEMPORÁRIO: Força aplicação da migration de identidade do agente
+
+    Remover após uso!
+    """
+    try:
+        from force_apply_identity_migration import apply_identity_migration, find_database
+
+        db_path = find_database()
+        logger.info(f"🔧 Forçando migration de identidade em: {db_path}")
+
+        apply_identity_migration(db_path)
+
+        return {
+            "success": True,
+            "message": "Migration aplicada com sucesso",
+            "database": str(db_path)
+        }
+    except Exception as e:
+        logger.error(f"❌ Erro ao forçar migration: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 
 if __name__ == "__main__":
     # Rodar com uvicorn
