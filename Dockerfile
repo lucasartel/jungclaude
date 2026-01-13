@@ -20,8 +20,17 @@ COPY *.py .
 # Copiar o diretório admin_web com templates e static
 COPY admin_web/ ./admin_web/
 
+# CRÍTICO: Copiar pasta migrations com os SQL files
+COPY migrations/ ./migrations/
+
 # Criar diretórios necessários
 RUN mkdir -p /data /app/chroma_db /app/logs
+
+# Verificar se migration file existe (debug)
+RUN ls -la /app/migrations/ && \
+    test -f /app/migrations/006_agent_identity_nuclear.sql && \
+    echo "✅ Migration file encontrado no build" || \
+    (echo "❌ Migration file NÃO encontrado no build" && exit 1)
 
 EXPOSE 8000
 
