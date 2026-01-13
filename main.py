@@ -1504,7 +1504,7 @@ async def check_identity_tables(request: Request):
     ⚠️ REMOVER APÓS USO!
     """
     try:
-        from jung_core import HybridDatabaseManager
+        from jung_core import HybridDatabaseManager, Config
 
         db = HybridDatabaseManager()
         cursor = db.conn.cursor()
@@ -1526,7 +1526,7 @@ async def check_identity_tables(request: Request):
 
         return {
             "success": True,
-            "database_path": str(db.db_path),
+            "database_path": Config.SQLITE_PATH,
             "total_tables": len(all_tables),
             "agent_tables": agent_tables,
             "agent_tables_count": len(agent_tables),
