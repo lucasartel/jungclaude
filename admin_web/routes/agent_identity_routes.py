@@ -32,7 +32,7 @@ async def get_agent_identity_stats(
     """
     try:
         from agent_identity_context_builder import AgentIdentityContextBuilder
-        from jung_database import HybridDatabaseManager
+        from jung_core import HybridDatabaseManager
 
         db = HybridDatabaseManager()
         builder = AgentIdentityContextBuilder(db)
@@ -65,7 +65,7 @@ async def get_agent_identity_context(
     """
     try:
         from agent_identity_context_builder import AgentIdentityContextBuilder
-        from jung_database import HybridDatabaseManager
+        from jung_core import HybridDatabaseManager
 
         db = HybridDatabaseManager()
         builder = AgentIdentityContextBuilder(db)
@@ -106,7 +106,7 @@ async def get_nuclear_beliefs(
     Restrito ao master admin
     """
     try:
-        from jung_database import HybridDatabaseManager
+        from jung_core import HybridDatabaseManager
         from identity_config import AGENT_INSTANCE
 
         db = HybridDatabaseManager()
@@ -174,7 +174,7 @@ async def get_active_contradictions(
     Restrito ao master admin
     """
     try:
-        from jung_database import HybridDatabaseManager
+        from jung_core import HybridDatabaseManager
         from identity_config import AGENT_INSTANCE
 
         db = HybridDatabaseManager()
@@ -242,7 +242,7 @@ async def get_narrative_chapters(
     Restrito ao master admin
     """
     try:
-        from jung_database import HybridDatabaseManager
+        from jung_core import HybridDatabaseManager
         from identity_config import AGENT_INSTANCE
 
         db = HybridDatabaseManager()
