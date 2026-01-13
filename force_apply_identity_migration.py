@@ -72,11 +72,56 @@ def apply_identity_migration(db_path: Path):
 
         # Aplicar migration
         logger.info("⚙️ Aplicando migration...")
-        cursor.executescript(migration_sql)
-        conn.commit()
+        logger.info(f"📄 Migration tem {len(migration_sql)} caracteres")
+
+        # Dividir SQL em statements individuais (ignora comentários e linhas vazias)
+        statements = []
+        current_statement = []
+
+        for line in migration_sql.split('\n'):
+            stripped = line.strip()
+            # Ignorar comentários e linhas vazias
+            if not stripped or stripped.startswith('--'):
+                continue
+
+            current_statement.append(line)
+
+            # Detectar fim de statement
+            if stripped.endswith(';'):
+                statement_text = '\n'.join(current_statement)
+                if statement_text.strip():
+                    statements.append(statement_text)
+                current_statement = []
+
+        logger.info(f"📝 Dividiu migration em {len(statements)} statements")
+
+        # Executar cada statement individualmente
+        executed = 0
+        failed = 0
+        for i, statement in enumerate(statements):
+            try:
+                cursor.execute(statement)
+                executed += 1
+                if i < 3:  # Log apenas os 3 primeiros
+                    logger.info(f"  ✅ Statement {i+1}: {statement[:80]}...")
+            except Exception as stmt_error:
+                failed += 1
+                logger.error(f"  ❌ Statement {i+1} falhou: {stmt_error}")
+                logger.error(f"     SQL: {statement[:200]}...")
+                # Continuar executando os outros
+
+        logger.info(f"📊 Executados: {executed} | Falhados: {failed}")
+
+        try:
+            conn.commit()
+            logger.info("✅ commit() completou sem exceção")
+        except Exception as commit_error:
+            logger.error(f"❌ Erro em commit(): {commit_error}")
+            raise
 
         # Verificar se foi aplicada
         existing_tables_after = check_tables_exist(cursor)
+        logger.info(f"🔍 Verificação pós-migration:")
         logger.info(f"📊 Tabelas agent_* após migration: {existing_tables_after}")
 
         if len(existing_tables_after) >= 8:
