@@ -60,10 +60,24 @@ def apply_identity_migration(db_path: Path):
             logger.info(f"   Tabelas: {', '.join(existing_tables)}")
             return
 
-        # Ler migration file
-        migration_file = Path("migrations/006_agent_identity_nuclear.sql")
+        # Ler migration file (usar caminho relativo ao script)
+        script_dir = Path(__file__).parent
+        migration_file = script_dir / "migrations" / "006_agent_identity_nuclear.sql"
+
+        logger.info(f"📁 Script dir: {script_dir}")
+        logger.info(f"📁 Migration file path: {migration_file}")
+
         if not migration_file.exists():
             logger.error(f"❌ Migration file não encontrado: {migration_file}")
+            logger.error(f"   Working directory: {Path.cwd()}")
+            # Tentar listar o diretório migrations para debug
+            migrations_dir = script_dir / "migrations"
+            if migrations_dir.exists():
+                logger.error(f"   Arquivos em {migrations_dir}:")
+                for f in migrations_dir.iterdir():
+                    logger.error(f"     - {f.name}")
+            else:
+                logger.error(f"   Diretório migrations não existe em {script_dir}")
             return
 
         logger.info(f"📝 Lendo migration: {migration_file}")
