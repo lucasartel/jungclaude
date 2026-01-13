@@ -471,7 +471,7 @@ async def run_identity_rumination_sync():
             logger.error(f"❌ Banco de dados não encontrado: {db_path}")
             return
 
-        db = HybridDatabaseManager(str(db_path))
+        db = HybridDatabaseManager()
         bridge = IdentityRuminationBridge(db)
 
         # Executar sincronizações

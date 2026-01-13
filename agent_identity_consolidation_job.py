@@ -59,7 +59,7 @@ async def run_agent_identity_consolidation():
 
     try:
         # Importar aqui para evitar import circular
-        from jung_database import HybridDatabaseManager
+        from jung_core import HybridDatabaseManager
 
         # Conectar ao banco
         db_path = find_database()
