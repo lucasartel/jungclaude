@@ -1496,12 +1496,14 @@ except Exception as e:
 # ============================================================================
 # ENDPOINT TEMPORÁRIO: FORÇAR MIGRATION DE IDENTIDADE
 # ============================================================================
-@app.post("/admin/force-identity-migration")
+@app.get("/admin/force-identity-migration")
 async def force_identity_migration(request: Request):
     """
     TEMPORÁRIO: Força aplicação da migration de identidade do agente
 
-    Remover após uso!
+    Acesse no navegador: https://railway-url/admin/force-identity-migration
+
+    ⚠️ REMOVER APÓS USO!
     """
     try:
         from force_apply_identity_migration import apply_identity_migration, find_database
@@ -1513,8 +1515,9 @@ async def force_identity_migration(request: Request):
 
         return {
             "success": True,
-            "message": "Migration aplicada com sucesso",
-            "database": str(db_path)
+            "message": "✅ Migration de identidade aplicada com sucesso!",
+            "database": str(db_path),
+            "next_step": "Recarregue o dashboard: /admin/agent-identity/dashboard"
         }
     except Exception as e:
         logger.error(f"❌ Erro ao forçar migration: {e}")
