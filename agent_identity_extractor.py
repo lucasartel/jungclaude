@@ -133,7 +133,30 @@ class AgentIdentityExtractor:
                     logger.warning(f"⚠️  Conteúdo não parece ser JSON válido. Primeiros 200 chars: {content[:200]}")
                     return {}
 
-            extracted = json.loads(content)
+            # Tentar parse do JSON com fallback para encontrar apenas o primeiro objeto
+            try:
+                extracted = json.loads(content)
+            except json.JSONDecodeError as e:
+                # Se "Extra data", tentar extrair apenas o primeiro objeto JSON válido
+                if "Extra data" in str(e):
+                    # Encontrar onde termina o primeiro objeto JSON
+                    brace_count = 0
+                    json_end_pos = 0
+                    for i, char in enumerate(content):
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                json_end_pos = i + 1
+                                break
+                    if json_end_pos > 0:
+                        content = content[:json_end_pos]
+                        extracted = json.loads(content)
+                    else:
+                        raise
+                else:
+                    raise
 
             # Adicionar metadados
             extracted["conversation_id"] = conversation_id
