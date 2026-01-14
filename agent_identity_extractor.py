@@ -105,6 +105,19 @@ class AgentIdentityExtractor:
 
             # Extrair JSON do conteúdo da resposta
             content = response.content[0].text
+
+            # Remover blocos de código markdown se presentes
+            if "```json" in content:
+                # Extrair conteúdo entre ```json e ```
+                start = content.find("```json") + 7
+                end = content.find("```", start)
+                content = content[start:end].strip()
+            elif "```" in content:
+                # Extrair conteúdo entre ``` e ```
+                start = content.find("```") + 3
+                end = content.find("```", start)
+                content = content[start:end].strip()
+
             extracted = json.loads(content)
 
             # Adicionar metadados
