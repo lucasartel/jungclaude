@@ -24,7 +24,7 @@ IDENTITY_CONSOLIDATION_INTERVAL_HOURS = 6  # Job de consolidação a cada 6 hora
 IDENTITY_RUMINATION_SYNC_INTERVAL_HOURS = 6  # Sync com ruminação a cada 6 horas
 
 # Limites de Processamento
-MAX_CONVERSATIONS_PER_CONSOLIDATION = 50  # Máximo de conversas por job
+MAX_CONVERSATIONS_PER_CONSOLIDATION = 20  # Máximo de conversas por job
 BACKLOG_PROCESSING_BATCH_SIZE = 100  # Tamanho do batch para processar backlog
 
 # Configurações de Context Building
