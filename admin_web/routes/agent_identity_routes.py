@@ -8,10 +8,11 @@ Data: 2026-01-12
 """
 
 from fastapi import APIRouter, Request, Depends
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from typing import Dict
 import logging
 import json
+import time
 
 from admin_web.auth.middleware import require_master
 
@@ -301,6 +302,130 @@ async def get_narrative_chapters(
         }
 
 
+@router.post("/api/agent-identity/consolidate")
+async def run_manual_consolidation(
+    admin: Dict = Depends(require_master)
+):
+    """
+    Executa consolidação manual do sistema de identidade
+
+    Processa conversas do usuário master que ainda não foram analisadas
+    para extração de elementos identitários do agente.
+
+    Requer: Master Admin only
+    """
+    from identity_config import ADMIN_USER_ID, MAX_CONVERSATIONS_PER_CONSOLIDATION
+    from agent_identity_extractor import AgentIdentityExtractor
+    from jung_core import HybridDatabaseManager
+
+    try:
+        start_time = time.time()
+
+        # Conectar ao banco
+        db = HybridDatabaseManager()
+        cursor = db.conn.cursor()
+
+        # Buscar conversas do master admin não processadas
+        cursor.execute("""
+            SELECT c.id, c.user_input, c.agent_response, c.timestamp
+            FROM conversations c
+            LEFT JOIN agent_identity_extractions e ON c.id = e.conversation_id
+            WHERE c.user_id = ?
+              AND e.conversation_id IS NULL
+            ORDER BY c.timestamp DESC
+            LIMIT ?
+        """, (ADMIN_USER_ID, MAX_CONVERSATIONS_PER_CONSOLIDATION))
+
+        conversations = cursor.fetchall()
+
+        if not conversations:
+            return JSONResponse({
+                "success": True,
+                "message": "Nenhuma conversa nova para processar",
+                "stats": {
+                    "conversations_processed": 0,
+                    "elements_extracted": 0,
+                    "processing_time_seconds": 0
+                }
+            })
+
+        # Inicializar extrator
+        extractor = AgentIdentityExtractor(db)
+
+        # Processar cada conversa
+        total_elements = 0
+        conversations_processed = 0
+
+        for conv in conversations:
+            conv_id, user_input, agent_response, timestamp = conv
+
+            try:
+                # Extrair elementos identitários
+                extracted = extractor.extract_from_conversation(
+                    conversation_id=conv_id,
+                    user_id=ADMIN_USER_ID,
+                    user_input=user_input,
+                    agent_response=agent_response
+                )
+
+                # Armazenar elementos
+                if extractor.store_extracted_identity(extracted):
+                    conversations_processed += 1
+                    total_elements += sum(len(v) for v in extracted.values() if isinstance(v, list))
+
+                # Delay para rate limiting
+                time.sleep(0.5)
+
+            except Exception as e:
+                logger.error(f"Erro ao processar conversa {conv_id}: {e}")
+                continue
+
+        # Calcular estatísticas
+        processing_time = time.time() - start_time
+
+        # Obter estatísticas atualizadas
+        cursor.execute("""
+            SELECT
+                (SELECT COUNT(*) FROM agent_identity_core WHERE agent_instance = 'jung_v1' AND is_current = 1) as nuclear_count,
+                (SELECT AVG(certainty) FROM agent_identity_core WHERE agent_instance = 'jung_v1' AND is_current = 1) as avg_certainty,
+                (SELECT COUNT(*) FROM agent_identity_contradictions WHERE agent_instance = 'jung_v1' AND status IN ('unresolved', 'integrating')) as contradictions_count,
+                (SELECT COUNT(*) FROM agent_narrative_chapters WHERE agent_instance = 'jung_v1') as chapters_count,
+                (SELECT COUNT(*) FROM agent_possible_selves WHERE agent_instance = 'jung_v1' AND status = 'active') as possible_selves_count,
+                (SELECT COUNT(*) FROM agent_agency_memory WHERE agent_instance = 'jung_v1') as agency_moments_count
+        """)
+        current_stats = cursor.fetchone()
+
+        logger.info(f"✅ Consolidação manual executada por {admin['email']}")
+        logger.info(f"   📊 {conversations_processed} conversas processadas")
+        logger.info(f"   🧠 {total_elements} elementos extraídos")
+        logger.info(f"   ⏱️  {processing_time:.2f}s")
+
+        return JSONResponse({
+            "success": True,
+            "message": f"Consolidação executada com sucesso! {conversations_processed} conversas processadas.",
+            "stats": {
+                "conversations_processed": conversations_processed,
+                "elements_extracted": total_elements,
+                "processing_time_seconds": round(processing_time, 2)
+            },
+            "current_identity_stats": {
+                "nuclear_beliefs": current_stats[0] or 0,
+                "avg_certainty": round(current_stats[1] or 0, 2),
+                "active_contradictions": current_stats[2] or 0,
+                "narrative_chapters": current_stats[3] or 0,
+                "possible_selves": current_stats[4] or 0,
+                "agency_moments": current_stats[5] or 0
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Erro na consolidação manual: {e}", exc_info=True)
+        return JSONResponse(
+            {"success": False, "error": str(e)},
+            status_code=500
+        )
+
+
 @router.get("/dashboard")
 async def agent_identity_dashboard(
     request: Request,
@@ -481,13 +606,139 @@ async def agent_identity_dashboard(
             color: #999;
             font-style: italic;
         }
+
+        /* Mensagens de Feedback */
+        .message-box {
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            display: none;
+            font-weight: 500;
+            animation: slideDown 0.3s ease;
+            white-space: pre-wrap;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 2px solid #10b981;
+            color: #059669;
+        }
+
+        .message-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 2px solid #ef4444;
+            color: #dc2626;
+        }
+
+        .message-info {
+            background: rgba(59, 130, 246, 0.1);
+            border: 2px solid #3b82f6;
+            color: #2563eb;
+        }
+
+        /* Loading state do botão */
+        button.loading {
+            opacity: 0.6;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        button.loading::after {
+            content: "...";
+            animation: dots 1.5s steps(3, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: "."; }
+            40% { content: ".."; }
+            60%, 100% { content: "..."; }
+        }
+
+        /* Controles do Dashboard */
+        .dashboard-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .dashboard-controls h1 {
+            margin: 0;
+        }
+
+        .controls-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-consolidate {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .btn-consolidate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-refresh {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-refresh:hover {
+            background: #f7f8fc;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🧠 Jung - Identidade Nuclear do Agente</h1>
+        <!-- Controles do Dashboard -->
+        <div class="dashboard-controls">
+            <h1>🧠 Jung - Identidade Nuclear do Agente</h1>
+            <div class="controls-buttons">
+                <button
+                    id="consolidate-btn"
+                    class="btn-consolidate"
+                    onclick="runConsolidation()"
+                >
+                    ⚙️ Executar Consolidação Manual
+                </button>
+                <button
+                    class="btn-refresh"
+                    onclick="loadAllData()"
+                >
+                    🔄 Atualizar Dados
+                </button>
+            </div>
+        </div>
 
-        <button class="refresh-btn" onclick="loadAllData()">🔄 Atualizar Dados</button>
+        <!-- Mensagens de Feedback -->
+        <div id="message" class="message-box"></div>
 
         <!-- Estatísticas Gerais -->
         <div class="card">
@@ -693,6 +944,79 @@ async def agent_identity_dashboard(
             loadBeliefs();
             loadContradictions();
             loadNarrative();
+        }
+
+        // Função para mostrar mensagens de feedback
+        function showMessage(text, type) {
+            const msgBox = document.getElementById('message');
+            msgBox.className = 'message-box message-' + type;
+            msgBox.textContent = text;
+            msgBox.style.display = 'block';
+
+            // Auto-fechar após 5 segundos
+            setTimeout(() => {
+                msgBox.style.display = 'none';
+            }, 5000);
+        }
+
+        // Função para executar consolidação manual
+        async function runConsolidation() {
+            const button = document.getElementById('consolidate-btn');
+            const originalText = button.textContent;
+
+            try {
+                // Desabilitar botão e mostrar loading
+                button.classList.add('loading');
+                button.textContent = '⚙️ Consolidando';
+
+                showMessage('🔄 Iniciando consolidação de identidade...', 'info');
+
+                // Fazer requisição POST
+                const response = await fetch('/admin/api/agent-identity/consolidate', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Sucesso: mostrar estatísticas
+                    const stats = data.stats;
+                    const currentStats = data.current_identity_stats;
+
+                    let message = `✅ ${data.message}\n\n`;
+                    message += `📊 Conversas processadas: ${stats.conversations_processed}\n`;
+                    message += `🧠 Elementos extraídos: ${stats.elements_extracted}\n`;
+                    message += `⏱️  Tempo: ${stats.processing_time_seconds}s\n\n`;
+                    message += `📈 Estado atual:\n`;
+                    message += `   • ${currentStats.nuclear_beliefs} crenças nucleares\n`;
+                    message += `   • ${currentStats.active_contradictions} contradições ativas\n`;
+                    message += `   • ${currentStats.narrative_chapters} capítulos narrativos`;
+
+                    showMessage(message, 'success');
+
+                    // Recarregar dados após 2 segundos
+                    setTimeout(() => {
+                        loadAllData();
+                    }, 2000);
+                } else {
+                    // Erro retornado pela API
+                    showMessage('❌ Erro: ' + (data.error || 'Desconhecido'), 'error');
+                }
+
+            } catch (error) {
+                // Erro de rede/conexão
+                showMessage('❌ Erro ao executar consolidação: ' + error.message, 'error');
+                console.error('Erro na consolidação:', error);
+
+            } finally {
+                // Restaurar botão
+                button.classList.remove('loading');
+                button.textContent = originalText;
+            }
         }
 
         // Carregar dados ao iniciar
