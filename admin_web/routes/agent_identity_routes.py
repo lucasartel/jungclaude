@@ -302,7 +302,7 @@ async def get_narrative_chapters(
         }
 
 
-@router.post("/api/agent-identity/consolidate")
+@router.post("/consolidate")
 async def run_manual_consolidation(
     admin: Dict = Depends(require_master)
 ):
@@ -972,7 +972,7 @@ async def agent_identity_dashboard(
                 showMessage('🔄 Iniciando consolidação de identidade...', 'info');
 
                 // Fazer requisição POST
-                const response = await fetch('/admin/api/agent-identity/consolidate', {
+                const response = await fetch('/admin/agent-identity/consolidate', {
                     method: 'POST',
                     credentials: 'include',
                     headers: {
