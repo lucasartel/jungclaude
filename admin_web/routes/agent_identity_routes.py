@@ -362,7 +362,7 @@ async def run_manual_consolidation(
             try:
                 # Extrair elementos identitários
                 extracted = extractor.extract_from_conversation(
-                    conversation_id=conv_id,
+                    conversation_id=str(conv_id),
                     user_id=ADMIN_USER_ID,
                     user_input=user_input,
                     agent_response=ai_response
