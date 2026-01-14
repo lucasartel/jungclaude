@@ -106,6 +106,10 @@ class AgentIdentityExtractor:
             # Extrair JSON do conteúdo da resposta
             content = response.content[0].text
 
+            # Log do conteúdo bruto para debug
+            if ENABLE_IDENTITY_DEBUG_LOGS:
+                logger.debug(f"📄 Conteúdo bruto da resposta: {content[:200]}...")
+
             # Remover blocos de código markdown se presentes
             if "```json" in content:
                 # Extrair conteúdo entre ```json e ```
@@ -117,6 +121,17 @@ class AgentIdentityExtractor:
                 start = content.find("```") + 3
                 end = content.find("```", start)
                 content = content[start:end].strip()
+
+            # Se conteúdo vazio após limpeza, tentar encontrar JSON no texto
+            if not content or content[0] not in ['{', '[']:
+                # Procurar por JSON no texto (começando com { e terminando com })
+                json_start = content.find('{')
+                json_end = content.rfind('}')
+                if json_start >= 0 and json_end > json_start:
+                    content = content[json_start:json_end+1]
+                else:
+                    logger.warning(f"⚠️  Conteúdo não parece ser JSON válido. Primeiros 200 chars: {content[:200]}")
+                    return {}
 
             extracted = json.loads(content)
 
