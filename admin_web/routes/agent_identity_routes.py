@@ -327,7 +327,7 @@ async def run_manual_consolidation(
 
         # Buscar conversas do master admin não processadas
         cursor.execute("""
-            SELECT c.id, c.user_input, c.agent_response, c.timestamp
+            SELECT c.id, c.user_input, c.ai_response, c.timestamp
             FROM conversations c
             LEFT JOIN agent_identity_extractions e ON c.id = e.conversation_id
             WHERE c.user_id = ?
@@ -357,7 +357,7 @@ async def run_manual_consolidation(
         conversations_processed = 0
 
         for conv in conversations:
-            conv_id, user_input, agent_response, timestamp = conv
+            conv_id, user_input, ai_response, timestamp = conv
 
             try:
                 # Extrair elementos identitários
@@ -365,7 +365,7 @@ async def run_manual_consolidation(
                     conversation_id=conv_id,
                     user_id=ADMIN_USER_ID,
                     user_input=user_input,
-                    agent_response=agent_response
+                    agent_response=ai_response
                 )
 
                 # Armazenar elementos
