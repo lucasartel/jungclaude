@@ -1492,6 +1492,21 @@ try:
 except Exception as e:
     logger.warning(f"⚠️  Rotas de identidade do agente não disponíveis: {e}")
 
+# ============================================================================
+# ROTAS TRI/IRT (Item Response Theory) - Sistema Psicométrico Avançado
+# ============================================================================
+try:
+    from admin_web.routes.irt_routes import router as irt_router, init_irt_routes
+
+    if hasattr(bot_state, 'db') and bot_state.db:
+        init_irt_routes(bot_state.db)
+        app.include_router(irt_router)
+        logger.info("✅ Rotas TRI/IRT carregadas (protegidas - Master Admin only)")
+    else:
+        logger.warning("⚠️  DatabaseManager não disponível - rotas TRI/IRT não carregadas")
+except Exception as e:
+    logger.warning(f"⚠️  Rotas TRI/IRT não disponíveis: {e}")
+
 
 # ============================================================================
 # ENDPOINTS TEMPORÁRIOS DE DIAGNÓSTICO

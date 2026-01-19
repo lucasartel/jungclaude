@@ -40,6 +40,16 @@ from jung_core import (
     send_to_xai
 )
 
+# ✅ IMPORTS TRI (Item Response Theory) v1.0
+try:
+    from fragment_detector import FragmentDetector, DetectionResult
+    from irt_engine import IRTEngine, IRTDomain
+    TRI_ENABLED = True
+except ImportError:
+    TRI_ENABLED = False
+    FragmentDetector = None
+    IRTEngine = None
+
 # ============================================================
 # LOGGER
 # ============================================================
@@ -315,35 +325,189 @@ class ProactiveAdvancedDB:
 
 class ProactiveAdvancedSystem:
     """Sistema proativo HÍBRIDO com personalidade complexa e conhecimento autônomo"""
-    
+
     def __init__(self, db: HybridDatabaseManager):
         self.db = db
         self.proactive_db = ProactiveAdvancedDB(db)
-        
+
         # ✅ Configurações dinâmicas por ambiente
         self.inactivity_threshold_hours = INACTIVITY_THRESHOLD_HOURS
         self.cooldown_hours = COOLDOWN_HOURS
         self.min_conversations_required = MIN_CONVERSATIONS_REQUIRED
-        
+
+        # ✅ TRI System (Fragment Detection)
+        self.tri_enabled = TRI_ENABLED
+        self.fragment_detector = None
+        self.irt_engine = None
+
+        if self.tri_enabled:
+            try:
+                self.fragment_detector = FragmentDetector(db_connection=None)  # Sync mode
+                logger.info("✅ TRI: FragmentDetector inicializado")
+            except Exception as e:
+                logger.warning(f"⚠️ TRI: Erro ao inicializar FragmentDetector: {e}")
+                self.tri_enabled = False
+
         logger.info(f"⚙️ Sistema Proativo configurado:")
         logger.info(f"   • Inatividade: {self.inactivity_threshold_hours}h")
         logger.info(f"   • Cooldown: {self.cooldown_hours}h")
         logger.info(f"   • Conversas mínimas: {self.min_conversations_required}")
+        logger.info(f"   • TRI Habilitado: {self.tri_enabled}")
     
     def reset_timer(self, user_id: str):
         """✅ RESET CRONÔMETRO - Chamado quando usuário envia mensagem"""
-        
+
         cursor = self.db.conn.cursor()
-        
+
         cursor.execute("""
             UPDATE users
             SET last_seen = CURRENT_TIMESTAMP
             WHERE user_id = ?
         """, (user_id,))
-        
+
         self.db.conn.commit()
-        
+
         logger.info(f"⏱️  Cronômetro resetado para usuário {user_id[:8]}")
+
+    # =========================================================================
+    # TRI FRAGMENT DETECTION - Detecção de Fragmentos Comportamentais
+    # =========================================================================
+
+    def detect_fragments_in_message(
+        self,
+        message: str,
+        user_id: str,
+        message_id: Optional[str] = None,
+        context: Optional[Dict] = None
+    ) -> Optional[Dict]:
+        """
+        🧬 TRI: Detecta fragmentos comportamentais Big Five em uma mensagem.
+
+        Este método deve ser chamado quando o usuário envia uma mensagem.
+        A detecção acontece em background, sem afetar o fluxo de conversa.
+
+        Args:
+            message: Texto da mensagem do usuário
+            user_id: ID do usuário
+            message_id: ID da mensagem (opcional)
+            context: Contexto adicional (humor, tensão, etc.)
+
+        Returns:
+            Dict com resumo das detecções ou None se TRI desabilitado
+        """
+        if not self.tri_enabled or not self.fragment_detector:
+            return None
+
+        try:
+            # Detectar fragmentos
+            result = self.fragment_detector.detect(
+                message=message,
+                user_id=user_id,
+                message_id=message_id,
+                context=context
+            )
+
+            if not result.matches:
+                return None
+
+            # Log resumido
+            logger.info(
+                f"🧬 TRI: {len(result.matches)} fragmentos detectados "
+                f"para {user_id[:8]} (conf: {result.total_confidence:.2f})"
+            )
+
+            # Preparar resumo para log/debug
+            summary = {
+                "user_id": user_id,
+                "fragments_detected": len(result.matches),
+                "total_confidence": result.total_confidence,
+                "processing_time_ms": result.processing_time_ms,
+                "by_domain": {},
+                "matches": []
+            }
+
+            for match in result.matches:
+                # Agrupar por domínio
+                if match.domain not in summary["by_domain"]:
+                    summary["by_domain"][match.domain] = 0
+                summary["by_domain"][match.domain] += 1
+
+                # Detalhes do match
+                summary["matches"].append({
+                    "fragment_id": match.fragment_id,
+                    "facet_code": match.facet_code,
+                    "confidence": match.confidence,
+                    "intensity": match.intensity
+                })
+
+                logger.debug(
+                    f"   [{match.facet_code}] {match.description[:50]}... "
+                    f"(conf: {match.confidence:.2f}, int: {match.intensity})"
+                )
+
+            return summary
+
+        except Exception as e:
+            logger.error(f"🧬 TRI: Erro na detecção: {e}")
+            return None
+
+    def get_tri_profile_summary(self, user_id: str) -> Optional[Dict]:
+        """
+        🧬 TRI: Retorna resumo do perfil TRI de um usuário.
+
+        Útil para exibição no dashboard ou relatórios.
+
+        Returns:
+            Dict com estatísticas TRI ou None
+        """
+        if not self.tri_enabled or not self.fragment_detector:
+            return None
+
+        try:
+            # Buscar resumo do detector
+            # Note: Este método é async no detector, mas aqui fazemos sync query
+            cursor = self.db.conn.cursor()
+
+            # Contar fragmentos por domínio
+            cursor.execute("""
+                SELECT
+                    f.domain,
+                    COUNT(*) as fragment_count,
+                    AVG(df.intensity) as avg_intensity,
+                    AVG(df.confidence) as avg_confidence
+                FROM detected_fragments df
+                JOIN irt_fragments f ON df.fragment_id = f.fragment_id
+                WHERE df.user_id = ?
+                GROUP BY f.domain
+            """, (user_id,))
+
+            rows = cursor.fetchall()
+
+            if not rows:
+                return {"status": "no_data", "message": "Nenhum fragmento detectado ainda"}
+
+            summary = {
+                "status": "ok",
+                "user_id": user_id,
+                "total_fragments": 0,
+                "domains": {}
+            }
+
+            for row in rows:
+                domain = row["domain"]
+                count = row["fragment_count"]
+                summary["total_fragments"] += count
+                summary["domains"][domain] = {
+                    "fragments": count,
+                    "avg_intensity": round(row["avg_intensity"], 2) if row["avg_intensity"] else 0,
+                    "avg_confidence": round(row["avg_confidence"], 2) if row["avg_confidence"] else 0
+                }
+
+            return summary
+
+        except Exception as e:
+            logger.error(f"🧬 TRI: Erro ao obter resumo: {e}")
+            return {"status": "error", "message": str(e)}
     
     def _select_next_archetype_pair(self, user_id: str) -> ArchetypePair:
         """Seleciona próximo par arquetípico (rotação inteligente)"""
