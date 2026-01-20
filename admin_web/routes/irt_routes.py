@@ -645,8 +645,8 @@ async def seed_tri_fragments(
             for frag in all_fragments:
                 cursor.execute("""
                     INSERT INTO irt_item_parameters
-                        (fragment_id, discrimination_a, threshold_b1, threshold_b2, threshold_b3, threshold_b4)
-                    VALUES (?, 1.0, -2.0, -1.0, 0.0, 1.0)
+                        (fragment_id, discrimination, threshold_1, threshold_2, threshold_3, threshold_4)
+                    VALUES (?, 1.0, -1.5, -0.5, 0.5, 1.5)
                 """, (frag["fragment_id"],))
 
             _db_manager.conn.commit()
