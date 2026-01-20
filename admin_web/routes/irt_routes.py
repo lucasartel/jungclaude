@@ -75,6 +75,7 @@ async def irt_dashboard(
 
     try:
         cursor = _db_manager.conn.cursor()
+        logger.info("🔍 [IRT Dashboard] Iniciando verificação de tabelas...")
 
         # 1. Verificar se TODAS as tabelas TRI existem
         required_tables = [
@@ -88,17 +89,29 @@ async def irt_dashboard(
 
         existing_tables = []
         for table in required_tables:
-            cursor.execute(f"""
-                SELECT name FROM sqlite_master
-                WHERE type='table' AND name='{table}'
-            """)
-            if cursor.fetchone():
-                existing_tables.append(table)
+            try:
+                cursor.execute(f"""
+                    SELECT name FROM sqlite_master
+                    WHERE type='table' AND name='{table}'
+                """)
+                result = cursor.fetchone()
+                if result:
+                    existing_tables.append(table)
+                    logger.info(f"   ✅ Tabela '{table}' existe")
+                else:
+                    logger.info(f"   ❌ Tabela '{table}' NÃO existe")
+            except Exception as table_err:
+                logger.error(f"   ❌ Erro ao verificar tabela '{table}': {table_err}")
 
         tri_tables_exist = len(existing_tables) == len(required_tables)
+        logger.info(f"🔍 [IRT Dashboard] Tabelas: {len(existing_tables)}/{len(required_tables)} existem")
+        logger.info(f"🔍 [IRT Dashboard] tri_tables_exist = {tri_tables_exist}")
 
         if not tri_tables_exist:
             # TRI não migrado ainda (ou migração incompleta)
+            logger.info("🔍 [IRT Dashboard] Retornando página de migração pendente")
+            missing = [t for t in required_tables if t not in existing_tables]
+            logger.info(f"🔍 [IRT Dashboard] Tabelas faltando: {missing}")
             return templates.TemplateResponse(
                 "irt/dashboard.html",
                 {
@@ -107,28 +120,37 @@ async def irt_dashboard(
                     "tri_status": "not_migrated",
                     "stats": None,
                     "existing_tables": existing_tables,
-                    "missing_tables": [t for t in required_tables if t not in existing_tables]
+                    "missing_tables": missing
                 }
             )
+
+        logger.info("🔍 [IRT Dashboard] Todas as tabelas existem, coletando estatísticas...")
 
         # 2. Estatísticas gerais
         stats = {}
 
         # Total de fragmentos no seed
+        logger.info("🔍 [IRT Dashboard] Query 1: COUNT irt_fragments")
         cursor.execute("SELECT COUNT(*) FROM irt_fragments")
         stats["total_fragments_seed"] = cursor.fetchone()[0]
+        logger.info(f"   → total_fragments_seed = {stats['total_fragments_seed']}")
 
         # Total de detecções
+        logger.info("🔍 [IRT Dashboard] Query 2: COUNT detected_fragments")
         cursor.execute("SELECT COUNT(*) FROM detected_fragments")
         row = cursor.fetchone()
         stats["total_detections"] = row[0] if row else 0
+        logger.info(f"   → total_detections = {stats['total_detections']}")
 
         # Usuários únicos com detecções
+        logger.info("🔍 [IRT Dashboard] Query 3: COUNT DISTINCT user_id")
         cursor.execute("SELECT COUNT(DISTINCT user_id) FROM detected_fragments")
         row = cursor.fetchone()
         stats["unique_users_with_detections"] = row[0] if row else 0
+        logger.info(f"   → unique_users = {stats['unique_users_with_detections']}")
 
         # Distribuição por domínio
+        logger.info("🔍 [IRT Dashboard] Query 4: by_domain")
         cursor.execute("""
             SELECT f.domain, COUNT(*) as count
             FROM detected_fragments df
@@ -137,8 +159,10 @@ async def irt_dashboard(
             ORDER BY count DESC
         """)
         stats["by_domain"] = {row[0]: row[1] for row in cursor.fetchall()}
+        logger.info(f"   → by_domain = {stats['by_domain']}")
 
         # Top 10 usuários por fragmentos
+        logger.info("🔍 [IRT Dashboard] Query 5: top_users")
         cursor.execute("""
             SELECT
                 df.user_id,
@@ -159,20 +183,39 @@ async def irt_dashboard(
                 "fragment_count": row[2],
                 "avg_intensity": round(row[3], 2) if row[3] else 0
             })
+        logger.info(f"   → top_users count = {len(stats['top_users'])}")
 
         # Estimativas de traço salvas
+        logger.info("🔍 [IRT Dashboard] Query 6: COUNT irt_trait_estimates")
         cursor.execute("SELECT COUNT(*) FROM irt_trait_estimates")
         row = cursor.fetchone()
         stats["total_trait_estimates"] = row[0] if row else 0
+        logger.info(f"   → total_trait_estimates = {stats['total_trait_estimates']}")
 
-        # Quality checks
-        cursor.execute("SELECT COUNT(*) FROM psychometric_quality_checks WHERE passed = 1")
-        row = cursor.fetchone()
-        stats["quality_checks_passed"] = row[0] if row else 0
+        # Quality checks - verificar schema primeiro
+        logger.info("🔍 [IRT Dashboard] Query 7: Verificando schema de psychometric_quality_checks")
+        cursor.execute("PRAGMA table_info(psychometric_quality_checks)")
+        columns = [col[1] for col in cursor.fetchall()]
+        logger.info(f"   → Colunas existentes: {columns}")
 
-        cursor.execute("SELECT COUNT(*) FROM psychometric_quality_checks WHERE passed = 0")
-        row = cursor.fetchone()
-        stats["quality_checks_failed"] = row[0] if row else 0
+        if 'passed' in columns:
+            logger.info("🔍 [IRT Dashboard] Query 7a: COUNT passed=1")
+            cursor.execute("SELECT COUNT(*) FROM psychometric_quality_checks WHERE passed = 1")
+            row = cursor.fetchone()
+            stats["quality_checks_passed"] = row[0] if row else 0
+
+            logger.info("🔍 [IRT Dashboard] Query 7b: COUNT passed=0")
+            cursor.execute("SELECT COUNT(*) FROM psychometric_quality_checks WHERE passed = 0")
+            row = cursor.fetchone()
+            stats["quality_checks_failed"] = row[0] if row else 0
+        else:
+            logger.warning("🔍 [IRT Dashboard] Coluna 'passed' não existe - usando defaults")
+            stats["quality_checks_passed"] = 0
+            stats["quality_checks_failed"] = 0
+
+        logger.info(f"   → quality_checks_passed = {stats['quality_checks_passed']}")
+        logger.info(f"   → quality_checks_failed = {stats.get('quality_checks_failed', 0)}")
+        logger.info("🔍 [IRT Dashboard] Estatísticas coletadas com sucesso!")
 
         return templates.TemplateResponse(
             "irt/dashboard.html",
