@@ -1006,6 +1006,20 @@ O que você decide?
         # Enviar resposta
         await update.message.reply_text(response)
 
+        # ✅ TRI: Detectar fragmentos comportamentais Big Five
+        if bot_state.proactive and bot_state.proactive.tri_enabled:
+            try:
+                tri_result = bot_state.proactive.detect_fragments_in_message(
+                    message=message_text,
+                    user_id=user_id,
+                    message_id=str(update.message.message_id),
+                    context={"response": response[:200]}  # Contexto da resposta
+                )
+                if tri_result:
+                    logger.debug(f"🧬 TRI: {tri_result['fragments_detected']} fragmentos detectados")
+            except Exception as tri_err:
+                logger.warning(f"⚠️ TRI: Erro na detecção (não crítico): {tri_err}")
+
         # Detectar padrões periodicamente
         if bot_state.total_messages_processed % 10 == 0:
             bot_state.db.detect_and_save_patterns(user_id)

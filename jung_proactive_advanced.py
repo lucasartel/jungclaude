@@ -416,10 +416,35 @@ class ProactiveAdvancedSystem:
                 f"para {user_id[:8]} (conf: {result.total_confidence:.2f})"
             )
 
+            # ✅ SALVAR detecções no banco de dados SQLite
+            cursor = self.db.conn.cursor()
+            saved_count = 0
+            for match in result.matches:
+                try:
+                    cursor.execute("""
+                        INSERT INTO detected_fragments
+                            (user_id, fragment_id, intensity, detection_confidence, source_quote, detected_at)
+                        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """, (
+                        user_id,
+                        match.fragment_id,
+                        match.intensity,
+                        match.confidence,
+                        match.source_text[:500] if match.source_text else None
+                    ))
+                    saved_count += 1
+                except Exception as save_err:
+                    logger.warning(f"🧬 TRI: Erro ao salvar fragmento {match.fragment_id}: {save_err}")
+
+            if saved_count > 0:
+                self.db.conn.commit()
+                logger.info(f"🧬 TRI: {saved_count} fragmentos salvos no banco")
+
             # Preparar resumo para log/debug
             summary = {
                 "user_id": user_id,
                 "fragments_detected": len(result.matches),
+                "fragments_saved": saved_count,
                 "total_confidence": result.total_confidence,
                 "processing_time_ms": result.processing_time_ms,
                 "by_domain": {},
