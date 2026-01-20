@@ -47,6 +47,31 @@
     {% else %}
     <!-- Status: Ativo -->
 
+    {% if stats.total_fragments_seed == 0 %}
+    <!-- Alerta: Tabelas existem mas sem fragmentos -->
+    <div class="rounded-xl p-6 mb-6" style="background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.5);">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full flex items-center justify-center" style="background: rgba(251, 191, 36, 0.2);">
+                <svg class="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+            </div>
+            <div class="flex-1">
+                <h3 class="text-lg font-semibold text-yellow-300">Fragmentos não cadastrados</h3>
+                <p class="text-gray-400 text-sm">
+                    As tabelas TRI existem, mas os 150 fragmentos Big Five ainda não foram inseridos.
+                    Execute o seed para popular os dados iniciais.
+                </p>
+            </div>
+            <button onclick="runSeed()"
+                class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors font-medium">
+                Executar Seed
+            </button>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <!-- Total Fragmentos Seed -->
@@ -268,6 +293,31 @@
                 window.location.reload();
             } else {
                 alert('Erro na migração: ' + (result.detail || result.message));
+            }
+        } catch (error) {
+            alert('Erro: ' + error.message);
+        }
+    }
+
+    // Função para executar seed de fragmentos
+    async function runSeed() {
+        if (!confirm('Executar seed? Isso inserirá 150 fragmentos Big Five nas tabelas TRI.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/admin/irt/seed/fragments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                alert('Seed executado com sucesso! ' + (result.message || ''));
+                window.location.reload();
+            } else {
+                alert('Erro no seed: ' + (result.detail || result.message));
             }
         } catch (error) {
             alert('Erro: ' + error.message);

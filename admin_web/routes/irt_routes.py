@@ -559,6 +559,14 @@ async def seed_tri_fragments(
     try:
         logger.info("🌱 [IRT Seed] Iniciando seed de fragmentos...")
 
+        # Garantir que o diretório raiz está no path
+        import sys
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+            logger.info(f"🌱 [IRT Seed] Adicionado ao path: {project_root}")
+
         # Importar fragmentos
         from irt_fragments_seed import (
             EXTRAVERSION_FRAGMENTS,
