@@ -76,22 +76,38 @@ async def irt_dashboard(
     try:
         cursor = _db_manager.conn.cursor()
 
-        # 1. Verificar se tabelas TRI existem
-        cursor.execute("""
-            SELECT name FROM sqlite_master
-            WHERE type='table' AND name='irt_fragments'
-        """)
-        tri_tables_exist = cursor.fetchone() is not None
+        # 1. Verificar se TODAS as tabelas TRI existem
+        required_tables = [
+            "irt_fragments",
+            "irt_item_parameters",
+            "detected_fragments",
+            "irt_trait_estimates",
+            "facet_scores",
+            "psychometric_quality_checks"
+        ]
+
+        existing_tables = []
+        for table in required_tables:
+            cursor.execute(f"""
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name='{table}'
+            """)
+            if cursor.fetchone():
+                existing_tables.append(table)
+
+        tri_tables_exist = len(existing_tables) == len(required_tables)
 
         if not tri_tables_exist:
-            # TRI não migrado ainda
+            # TRI não migrado ainda (ou migração incompleta)
             return templates.TemplateResponse(
                 "irt/dashboard.html",
                 {
                     "request": request,
                     "admin": admin,
                     "tri_status": "not_migrated",
-                    "stats": None
+                    "stats": None,
+                    "existing_tables": existing_tables,
+                    "missing_tables": [t for t in required_tables if t not in existing_tables]
                 }
             )
 
