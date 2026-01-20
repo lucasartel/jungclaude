@@ -544,6 +544,123 @@ async def run_tri_migration(
         raise HTTPException(500, f"Erro na migração: {str(e)}")
 
 
+@router.post("/seed/fragments")
+async def seed_tri_fragments(
+    admin: Dict = Depends(require_master)
+):
+    """
+    Popula a tabela irt_fragments com os 150 fragmentos Big Five.
+
+    Usar quando as tabelas existem mas estão vazias.
+    """
+    if not _db_manager:
+        raise HTTPException(503, "DatabaseManager não disponível")
+
+    try:
+        logger.info("🌱 [IRT Seed] Iniciando seed de fragmentos...")
+
+        # Importar fragmentos
+        from irt_fragments_seed import (
+            EXTRAVERSION_FRAGMENTS,
+            OPENNESS_FRAGMENTS,
+            CONSCIENTIOUSNESS_FRAGMENTS,
+            AGREEABLENESS_FRAGMENTS,
+            NEUROTICISM_FRAGMENTS
+        )
+
+        all_fragments = (
+            EXTRAVERSION_FRAGMENTS +
+            OPENNESS_FRAGMENTS +
+            CONSCIENTIOUSNESS_FRAGMENTS +
+            AGREEABLENESS_FRAGMENTS +
+            NEUROTICISM_FRAGMENTS
+        )
+
+        logger.info(f"🌱 [IRT Seed] Total de fragmentos a inserir: {len(all_fragments)}")
+
+        cursor = _db_manager.conn.cursor()
+
+        # Verificar quantos já existem
+        cursor.execute("SELECT COUNT(*) FROM irt_fragments")
+        existing_count = cursor.fetchone()[0]
+        logger.info(f"🌱 [IRT Seed] Fragmentos existentes: {existing_count}")
+
+        if existing_count >= 150:
+            return JSONResponse(content={
+                "status": "skipped",
+                "message": f"Já existem {existing_count} fragmentos. Seed não necessário.",
+                "existing_count": existing_count
+            })
+
+        # Limpar tabela se tiver dados parciais
+        if existing_count > 0:
+            logger.info("🌱 [IRT Seed] Limpando fragmentos parciais...")
+            cursor.execute("DELETE FROM irt_fragments")
+
+        # Inserir fragmentos
+        inserted = 0
+        for frag in all_fragments:
+            try:
+                # Converter example_phrases para string JSON
+                import json
+                example_phrases_json = json.dumps(frag.get("example_phrases", []), ensure_ascii=False)
+
+                cursor.execute("""
+                    INSERT INTO irt_fragments
+                        (fragment_id, domain, facet_code, description, detection_pattern, example_phrases)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (
+                    frag["fragment_id"],
+                    frag["domain"],
+                    frag["facet_code"],
+                    frag["description"],
+                    frag.get("detection_pattern", ""),
+                    example_phrases_json
+                ))
+                inserted += 1
+
+                if inserted % 30 == 0:
+                    logger.info(f"🌱 [IRT Seed] Progresso: {inserted}/{len(all_fragments)}")
+
+            except Exception as frag_err:
+                logger.error(f"🌱 [IRT Seed] Erro no fragmento {frag.get('fragment_id')}: {frag_err}")
+
+        _db_manager.conn.commit()
+        logger.info(f"🌱 [IRT Seed] Seed completo! {inserted} fragmentos inseridos.")
+
+        # Também inserir parâmetros padrão GRM
+        logger.info("🌱 [IRT Seed] Inserindo parâmetros GRM padrão...")
+        cursor.execute("SELECT COUNT(*) FROM irt_item_parameters")
+        params_count = cursor.fetchone()[0]
+
+        if params_count == 0:
+            for frag in all_fragments:
+                cursor.execute("""
+                    INSERT INTO irt_item_parameters
+                        (fragment_id, discrimination_a, threshold_b1, threshold_b2, threshold_b3, threshold_b4)
+                    VALUES (?, 1.0, -2.0, -1.0, 0.0, 1.0)
+                """, (frag["fragment_id"],))
+
+            _db_manager.conn.commit()
+            logger.info(f"🌱 [IRT Seed] {len(all_fragments)} parâmetros GRM inseridos.")
+
+        return JSONResponse(content={
+            "status": "success",
+            "message": f"Seed completo! {inserted} fragmentos inseridos.",
+            "fragments_inserted": inserted,
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except ImportError as e:
+        logger.error(f"🌱 [IRT Seed] Erro de import: {e}")
+        raise HTTPException(500, f"Módulo de fragmentos não encontrado: {e}")
+    except Exception as e:
+        logger.error(f"🌱 [IRT Seed] Erro: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(500, f"Erro no seed: {str(e)}")
+
+
 @router.get("/migration/status")
 async def get_migration_status(
     admin: Dict = Depends(require_master)
