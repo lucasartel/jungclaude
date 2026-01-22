@@ -252,6 +252,7 @@ EVOLUÇÃO:
 Seja conciso mas informativo. Máximo 200 palavras."""
 
         try:
+            # Usar Claude Sonnet 4.5 (único provider)
             if self.db.anthropic_client:
                 response = self.db.anthropic_client.messages.create(
                     model="claude-sonnet-4-5-20250929",
@@ -259,13 +260,6 @@ Seja conciso mas informativo. Máximo 200 palavras."""
                     messages=[{"role": "user", "content": prompt}]
                 )
                 summary = response.content[0].text.strip()
-            elif self.db.xai_client:
-                response = self.db.xai_client.chat.completions.create(
-                    model="grok-beta",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=500
-                )
-                summary = response.choices[0].message.content.strip()
             else:
                 # Fallback: resumo manual básico
                 summary = f"Consolidação de {len(memories)} conversas sobre {topic}."

@@ -481,7 +481,8 @@ if __name__ == "__main__":
         exit(1)
 
     # Criar context builder
-    db = HybridDatabaseManager(str(db_path))
+    # HybridDatabaseManager usa variáveis de ambiente, não aceita path como argumento
+    db = HybridDatabaseManager()
     builder = AgentIdentityContextBuilder(db)
 
     # Teste 1: Contexto completo

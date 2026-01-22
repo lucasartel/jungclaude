@@ -474,13 +474,12 @@ Forneça análise MBTI completa em JSON com esta estrutura EXATA:
 
 Responda APENAS com o JSON."""
 
-        # Chamar Grok
+        # Chamar Claude via send_to_xai (usa llm_providers internamente)
         from jung_core import send_to_xai
         import json as json_lib
 
         response = send_to_xai(
             prompt=analysis_prompt,
-            model="grok-4-fast-reasoning",
             temperature=0.7,
             max_tokens=1500
         )
@@ -993,11 +992,10 @@ O que você decide?
             "content": message_text
         })
 
-        # Processar com JungianEngine
+        # Processar com JungianEngine (usa Claude Sonnet 4.5)
         result = bot_state.jung_engine.process_message(
             user_id=user_id,
             message=message_text,
-            model="grok-4-fast-reasoning",
             chat_history=chat_history
         )
 

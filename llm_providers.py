@@ -1,14 +1,13 @@
 """
-llm_providers.py - Abstração de Provedores LLM
-================================================
+llm_providers.py - Provider LLM Unificado (Claude Sonnet 4.5)
+=============================================================
 
-Sistema de alternância entre Grok (xAI) e Claude (Anthropic).
-Permite trocar de provedor via variável de ambiente LLM_PROVIDER.
+Sistema unificado de LLM usando exclusivamente Claude Sonnet 4.5.
+OpenAI é mantido apenas para embeddings (em outros módulos).
+
+Modelo único: claude-sonnet-4-5-20250929
 
 Uso:
-    No .env, adicione: LLM_PROVIDER=grok  (ou claude)
-
-    No código:
     from llm_providers import get_llm_response
 
     response = get_llm_response(
@@ -17,24 +16,27 @@ Uso:
         max_tokens=2000
     )
 
-Modelos suportados:
-    - Grok: grok-4-fast-reasoning (padrão atual)
-    - Claude: claude-3-5-haiku-20241022 (modelo mais barato)
-
 Autor: Sistema Jung Claude
-Data: 2025-11-27
+Data: 2025-01-22
+Versão: 2.0 (Unificado para Claude)
 """
 
 import os
 import logging
 from typing import Optional
 from abc import ABC, abstractmethod
-from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# ABSTRACT BASE CLASS
+# CONFIGURAÇÃO - MODELO ÚNICO
+# ============================================================
+
+DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
+
+
+# ============================================================
+# ABSTRACT BASE CLASS (mantida para compatibilidade)
 # ============================================================
 
 class LLMProvider(ABC):
@@ -57,74 +59,23 @@ class LLMProvider(ABC):
 
 
 # ============================================================
-# GROK PROVIDER (xAI)
-# ============================================================
-
-class GrokProvider(LLMProvider):
-    """Provedor Grok (xAI) - Atual"""
-
-    def __init__(self):
-        self.api_key = os.getenv("XAI_API_KEY")
-
-        if not self.api_key:
-            raise ValueError("❌ XAI_API_KEY não encontrado no .env")
-
-        self.model = "grok-4-fast-reasoning"
-
-        logger.info(f"✅ GrokProvider inicializado (modelo: {self.model})")
-
-    def get_response(
-        self,
-        prompt: str,
-        temperature: float = 0.7,
-        max_tokens: int = 2000
-    ) -> str:
-        """Gera resposta via Grok API"""
-
-        try:
-            client = OpenAI(
-                api_key=self.api_key,
-                base_url="https://api.x.ai/v1",
-                timeout=30.0
-            )
-
-            completion = client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
-
-            return completion.choices[0].message.content
-
-        except Exception as e:
-            logger.error(f"❌ Erro ao chamar Grok API: {e}")
-            raise Exception(f"Erro ao chamar Grok API: {e}")
-
-    def get_model_name(self) -> str:
-        return f"Grok ({self.model})"
-
-
-# ============================================================
-# CLAUDE PROVIDER (Anthropic)
+# CLAUDE PROVIDER (ÚNICO)
 # ============================================================
 
 class ClaudeProvider(LLMProvider):
-    """Provedor Claude (Anthropic) - Alternativa"""
+    """
+    Provedor Claude (Anthropic) - Único provider suportado.
 
-    def __init__(self, model: str = "claude-sonnet-4-5-20250929"):
+    Modelo padrão: claude-sonnet-4-5-20250929
+    """
+
+    def __init__(self, model: str = DEFAULT_MODEL):
         self.api_key = os.getenv("ANTHROPIC_API_KEY")
 
         if not self.api_key:
             raise ValueError("❌ ANTHROPIC_API_KEY não encontrado no .env")
 
-        # Modelos Claude disponíveis (família 4.x):
-        # - claude-sonnet-4-5-20250929: Sonnet 4.5 (recomendado - melhor balanço inteligência/velocidade/custo)
-        # - claude-haiku-4-5-20251001: Haiku 4.5 (mais rápido e barato)
-        # - claude-opus-4-5-20251101: Opus 4.5 (mais poderoso)
-        # - claude-opus-4-1-20250805: Opus 4.1
         self.model = model
-
         logger.info(f"✅ ClaudeProvider inicializado (modelo: {self.model})")
 
     def get_response(
@@ -136,15 +87,14 @@ class ClaudeProvider(LLMProvider):
         """Gera resposta via Claude API"""
 
         try:
-            # Importar apenas quando necessário (para não quebrar se não tiver instalado)
-            try:
-                import anthropic
-            except ImportError:
-                raise ImportError(
-                    "❌ Biblioteca 'anthropic' não instalada!\n"
-                    "   Execute: pip install anthropic"
-                )
+            import anthropic
+        except ImportError:
+            raise ImportError(
+                "❌ Biblioteca 'anthropic' não instalada!\n"
+                "   Execute: pip install anthropic"
+            )
 
+        try:
             client = anthropic.Anthropic(api_key=self.api_key)
 
             message = client.messages.create(
@@ -167,41 +117,28 @@ class ClaudeProvider(LLMProvider):
 
 
 # ============================================================
-# FACTORY
+# FACTORY (simplificada - sempre retorna Claude)
 # ============================================================
 
 def create_llm_provider(provider_name: Optional[str] = None) -> LLMProvider:
     """
-    Factory para criar provedor LLM baseado em variável de ambiente.
+    Factory para criar provedor LLM.
+
+    NOTA: Sempre retorna ClaudeProvider independente do parâmetro.
+    O parâmetro provider_name é mantido por compatibilidade mas ignorado.
 
     Args:
-        provider_name: Nome do provedor ("grok" ou "claude")
-                      Se None, usa variável LLM_PROVIDER do .env
+        provider_name: Ignorado (mantido por compatibilidade)
 
     Returns:
-        Instância de LLMProvider (Grok ou Claude)
-
-    Raises:
-        ValueError: Se provedor não for reconhecido
+        Instância de ClaudeProvider
     """
+    # Ignorar provider_name - sempre usar Claude
+    if provider_name and provider_name.lower() != "claude":
+        logger.warning(f"⚠️ Provider '{provider_name}' solicitado, mas usando Claude (único suportado)")
 
-    if provider_name is None:
-        provider_name = os.getenv("LLM_PROVIDER", "grok").lower()
-
-    provider_name = provider_name.lower().strip()
-
-    logger.info(f"🔧 Criando LLM Provider: {provider_name}")
-
-    if provider_name == "grok":
-        return GrokProvider()
-    elif provider_name == "claude":
-        return ClaudeProvider()
-    else:
-        raise ValueError(
-            f"❌ Provedor '{provider_name}' não reconhecido.\n"
-            f"   Opções válidas: 'grok' ou 'claude'\n"
-            f"   Configure no .env: LLM_PROVIDER=grok (ou claude)"
-        )
+    logger.info(f"🔧 Criando LLM Provider: Claude ({DEFAULT_MODEL})")
+    return ClaudeProvider()
 
 
 # ============================================================
@@ -217,9 +154,9 @@ def get_llm_response(
     max_tokens: int = 2000
 ) -> str:
     """
-    Função auxiliar para obter resposta do LLM atual.
+    Função auxiliar para obter resposta do LLM.
 
-    Usa o provider configurado em LLM_PROVIDER (padrão: grok).
+    Usa Claude Sonnet 4.5 como único provider.
     O provider é inicializado apenas uma vez (singleton).
 
     Args:
@@ -254,6 +191,13 @@ def get_current_model_name() -> str:
     return _provider_instance.get_model_name()
 
 
+def reset_provider():
+    """Reseta o singleton do provider (útil para testes)"""
+    global _provider_instance
+    _provider_instance = None
+    logger.info("🔄 LLM Provider resetado")
+
+
 # ============================================================
 # TESTES
 # ============================================================
@@ -264,33 +208,21 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     print("="*60)
-    print("TESTE: LLM Providers")
+    print("TESTE: LLM Provider (Claude Sonnet 4.5)")
     print("="*60)
 
-    # Testar Grok
-    print("\n[1] Testando Grok...")
-    os.environ["LLM_PROVIDER"] = "grok"
-    _provider_instance = None  # Reset singleton
+    print(f"\nModelo configurado: {DEFAULT_MODEL}")
 
     try:
-        response = get_llm_response("Responda em uma palavra: qual a cor do céu?", max_tokens=10)
-        print(f"✅ Grok respondeu: {response}")
-        print(f"   Modelo: {get_current_model_name()}")
-    except Exception as e:
-        print(f"❌ Erro: {e}")
-
-    # Testar Claude
-    print("\n[2] Testando Claude...")
-    os.environ["LLM_PROVIDER"] = "claude"
-    _provider_instance = None  # Reset singleton
-
-    try:
-        response = get_llm_response("Responda em uma palavra: qual a cor do céu?", max_tokens=10)
+        response = get_llm_response(
+            "Responda em uma palavra: qual a cor do céu?",
+            max_tokens=10
+        )
         print(f"✅ Claude respondeu: {response}")
         print(f"   Modelo: {get_current_model_name()}")
     except Exception as e:
         print(f"❌ Erro: {e}")
 
     print("\n" + "="*60)
-    print("✅ Testes concluídos")
+    print("✅ Teste concluído")
     print("="*60)

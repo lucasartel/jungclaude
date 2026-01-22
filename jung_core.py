@@ -464,16 +464,7 @@ class HybridDatabaseManager:
             timeout=30.0  # 30 segundos de timeout
         )
 
-        # ===== XAI Client (para Grok) =====
-        if Config.XAI_API_KEY:
-            self.xai_client = OpenAI(
-                api_key=Config.XAI_API_KEY,
-                base_url="https://api.x.ai/v1"
-            )
-        else:
-            self.xai_client = None
-
-        # ===== Anthropic Client (para Claude) =====
+        # ===== Anthropic Client (para Claude) - ÚNICO PROVIDER LLM =====
         try:
             import anthropic
             if Config.ANTHROPIC_API_KEY:
@@ -492,11 +483,10 @@ class HybridDatabaseManager:
         # ===== LLM Fact Extractor =====
         logger.info(f"🔍 [DEBUG] LLM_FACT_EXTRACTOR_AVAILABLE = {LLM_FACT_EXTRACTOR_AVAILABLE}")
         logger.info(f"🔍 [DEBUG] anthropic_client = {self.anthropic_client is not None}")
-        logger.info(f"🔍 [DEBUG] xai_client = {self.xai_client is not None}")
 
         if LLM_FACT_EXTRACTOR_AVAILABLE:
             try:
-                # Preferir Claude por ser mais confiável para extração estruturada
+                # Usar Claude como único provider
                 if self.anthropic_client:
                     logger.info("🔧 Inicializando LLMFactExtractor com Claude...")
                     self.fact_extractor = LLMFactExtractor(
@@ -504,15 +494,8 @@ class HybridDatabaseManager:
                         model="claude-sonnet-4-5-20250929"
                     )
                     logger.info("✅ LLM Fact Extractor inicializado (Claude Sonnet 4.5)")
-                elif self.xai_client:
-                    logger.info("🔧 Inicializando LLMFactExtractor com Grok...")
-                    self.fact_extractor = LLMFactExtractor(
-                        llm_client=self.xai_client,
-                        model="grok-beta"
-                    )
-                    logger.info("✅ LLM Fact Extractor inicializado (Grok)")
                 else:
-                    logger.warning("⚠️ Nenhum cliente LLM disponível para fact extractor")
+                    logger.warning("⚠️ Anthropic client não disponível para fact extractor")
                     self.fact_extractor = None
             except Exception as e:
                 logger.error(f"❌ Erro ao inicializar LLM Fact Extractor: {e}")
@@ -3539,15 +3522,16 @@ class JungianEngine:
 
         self.db = db if db else HybridDatabaseManager()
 
-        # Clientes LLM
+        # Cliente OpenAI (para embeddings apenas)
         self.openai_client = OpenAI(
             api_key=Config.OPENAI_API_KEY,
             timeout=30.0  # 30 segundos de timeout
         )
-        self.xai_client = OpenAI(
-            api_key=Config.XAI_API_KEY,
-            base_url="https://api.x.ai/v1",
-            timeout=30.0  # 30 segundos de timeout
+
+        # Cliente Anthropic (único provider LLM)
+        import anthropic
+        self.anthropic_client = anthropic.Anthropic(
+            api_key=Config.ANTHROPIC_API_KEY
         )
 
         self.conflict_detector = ConflictDetector()
@@ -3715,22 +3699,15 @@ class JungianEngine:
         )
         
         try:
-            if model.startswith("grok"):
-                completion = self.xai_client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7,
-                    max_tokens=1500
-                )
-            else:
-                completion = self.openai_client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7,
-                    max_tokens=1500
-                )
-            
-            response_text = completion.choices[0].message.content
+            # Usar Claude Sonnet 4.5 como único provider
+            message = self.anthropic_client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=1500,
+                temperature=0.7,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            response_text = message.content[0].text
             
             # Extrair JSON
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
@@ -3838,20 +3815,15 @@ Tensão entre elas: {conflict.tension_level:.2f}/10
         logger.info(f"====================================================")
 
         try:
-            if model.startswith("grok"):
-                completion = self.xai_client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.8
-                )
-            else:
-                completion = self.openai_client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.8
-                )
-            
-            return completion.choices[0].message.content
+            # Usar Claude Sonnet 4.5 como único provider
+            message = self.anthropic_client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=2000,
+                temperature=0.8,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            return message.content[0].text
 
         except (TimeoutError, ConnectionError) as e:
             logger.error(f"❌ Erro de conexão/timeout ao gerar resposta conflituosa: {e}")
@@ -3917,20 +3889,15 @@ Tensão entre elas: {conflict.tension_level:.2f}/10
         logger.info(f"====================================================")
 
         try:
-            if model.startswith("grok"):
-                completion = self.xai_client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7
-                )
-            else:
-                completion = self.openai_client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7
-                )
-            
-            return completion.choices[0].message.content
+            # Usar Claude Sonnet 4.5 como único provider
+            message = self.anthropic_client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=2000,
+                temperature=0.7,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            return message.content[0].text
 
         except (TimeoutError, ConnectionError) as e:
             logger.error(f"❌ Erro de conexão/timeout ao gerar resposta harmoniosa: {e}")
@@ -3995,35 +3962,33 @@ Tensão entre elas: {conflict.tension_level:.2f}/10
 # FUNÇÕES AUXILIARES (COMPATIBILIDADE)
 # ============================================================
 
-def send_to_xai(prompt: str, model: str = "grok-4-fast-reasoning",
+def send_to_xai(prompt: str, model: str = None,
                 temperature: float = 0.7, max_tokens: int = 2000) -> str:
     """
-    ✅ ATUALIZADO: Usa abstração de LLM providers (Grok ou Claude)
+    Envia prompt para Claude Sonnet 4.5 (único provider LLM).
 
-    Envia prompt para o LLM configurado (Grok por padrão, ou Claude se LLM_PROVIDER=claude)
-    (Função auxiliar para compatibilidade com código existente)
+    NOTA: Nome mantido por compatibilidade. Internamente usa Claude.
 
     Args:
         prompt: Texto para o LLM
-        model: IGNORADO (mantido para compatibilidade, usa provider do .env)
+        model: IGNORADO (mantido para compatibilidade)
         temperature: Temperatura (0.0 = determinístico, 1.0 = criativo)
         max_tokens: Máximo de tokens na resposta
 
     Returns:
         Resposta do LLM como string
     """
-
-    # Importar abstração de providers
     from llm_providers import get_llm_response
-
-    # O parâmetro 'model' é ignorado - o modelo é definido pelo provider
-    # (Grok: grok-4-fast-reasoning, Claude: claude-3-5-haiku-20241022)
 
     return get_llm_response(
         prompt=prompt,
         temperature=temperature,
         max_tokens=max_tokens
     )
+
+
+# Alias para código novo
+send_to_llm = send_to_xai
 
 def create_user_hash(identifier: str) -> str:
     """Cria hash único para usuário"""

@@ -654,8 +654,7 @@ Formule UM tópico central em 2-5 palavras. Exemplos:
 Responda APENAS com o tópico:"""
             
             refined_topic = send_to_xai(
-                prompt=refinement_prompt,  # ✅ CORRIGIDO
-                model="grok-4-fast-reasoning",
+                prompt=refinement_prompt,
                 max_tokens=50
             )
             
@@ -699,10 +698,8 @@ Responda APENAS com o tópico em 2-5 palavras. Exemplos:
 Tópico:"""
         
         try:
-            # 🔧 CORRIGIDO: Usar argumento 'prompt' em vez de 'messages'
             response = send_to_xai(
-                prompt=extraction_prompt,  # ✅ CORRIGIDO
-                model="grok-4-fast-reasoning",
+                prompt=extraction_prompt,
                 max_tokens=50
             )
             
@@ -877,10 +874,8 @@ Tom esperado: {archetype_pair.description}
 
         
         try:
-            # 🔧 CORRIGIDO: Usar argumento 'prompt' em vez de 'messages'
             response = send_to_xai(
-                prompt=knowledge_prompt,  # ✅ CORRIGIDO
-                model="grok-4-fast-reasoning",
+                prompt=knowledge_prompt,
                 temperature=0.8,
                 max_tokens=500
             )

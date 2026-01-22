@@ -67,7 +67,8 @@ async def run_agent_identity_consolidation():
             logger.error(f"❌ Banco de dados não encontrado: {db_path}")
             return
 
-        db = HybridDatabaseManager(str(db_path))
+        # HybridDatabaseManager usa variáveis de ambiente, não aceita path como argumento
+        db = HybridDatabaseManager()
         cursor = db.conn.cursor()
 
         # Buscar conversas do master admin não processadas

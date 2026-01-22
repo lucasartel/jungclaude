@@ -377,8 +377,8 @@ async def user_agent_data_page(request: Request, user_id: str, admin: Dict = Dep
 # ============================================================================
 
 @router.get("/api/sync-status")
-async def get_sync_status(admin: Dict = Depends(require_master)):
-    """Retorna status de sincronização para o header"""
+async def get_sync_status(admin: Dict = Depends(require_org_admin)):
+    """Retorna status de sincronização para o header - acessível para org_admin"""
     # Lógica simplificada para o header
     return HTMLResponse(
         '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Sistema Online</span>'
@@ -457,18 +457,17 @@ async def analyze_user_mbti(request: Request, user_id: str, admin: Dict = Depend
     """Analisa padrão MBTI do usuário usando Grok (acessível para org_admin)"""
     import re
     import json
-    from openai import OpenAI
 
     db = get_db()
 
-    # Verificar se XAI_API_KEY está disponível
-    xai_api_key = os.getenv("XAI_API_KEY")
-    if not xai_api_key:
+    # Verificar se ANTHROPIC_API_KEY está disponível
+    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not anthropic_api_key:
         return JSONResponse({
-            "error": "XAI_API_KEY não configurada",
+            "error": "ANTHROPIC_API_KEY não configurada",
             "type_indicator": "XXXX",
             "confidence": 0,
-            "summary": "Configure a variável XAI_API_KEY para habilitar análise MBTI"
+            "summary": "Configure a variável ANTHROPIC_API_KEY para habilitar análise MBTI"
         }, status_code=503)
 
     # Buscar conversas do usuário
@@ -510,7 +509,7 @@ async def analyze_user_mbti(request: Request, user_id: str, admin: Dict = Depend
     avg_tension = sum(conv.get('tension_level', 0) for conv in conversations) / total_conversations
     avg_affective = sum(conv.get('affective_charge', 0) for conv in conversations) / total_conversations
 
-    # Prompt para Grok
+    # Prompt para Claude
     prompt = f"""
 Analise o padrão psicológico deste usuário seguindo princípios junguianos e o modelo MBTI.
 
@@ -546,23 +545,21 @@ Retorne JSON com esta estrutura EXATA:
 """
 
     try:
-        # Chamar Grok
-        client = OpenAI(
-            api_key=xai_api_key,
-            base_url="https://api.x.ai/v1"
-        )
+        # Chamar Claude Sonnet 4.5
+        import anthropic
+        client = anthropic.Anthropic(api_key=anthropic_api_key)
 
-        response = client.chat.completions.create(
-            model="grok-4-fast-reasoning",
-            messages=[
-                {"role": "system", "content": "Você é um analista jungiano especializado em MBTI. Responda APENAS com JSON válido."},
-                {"role": "user", "content": prompt}
-            ],
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=2000,
             temperature=0.3,
-            max_tokens=2000
+            system="Você é um analista jungiano especializado em MBTI. Responda APENAS com JSON válido.",
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
         )
 
-        content = response.choices[0].message.content
+        content = response.content[0].text
 
         # Extrair JSON
         json_match = re.search(r'\{.*\}', content, re.DOTALL)

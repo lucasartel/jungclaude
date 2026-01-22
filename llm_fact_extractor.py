@@ -2,11 +2,13 @@
 llm_fact_extractor.py - Extrator de Fatos com LLM
 ==================================================
 
-Sistema inteligente de extração de fatos usando LLM (Grok/Claude)
+Sistema inteligente de extração de fatos usando Claude Sonnet 4.5
 para capturar informações estruturadas das conversas.
 
+Modelo único: claude-sonnet-4-5-20250929
+
 Autor: Sistema Jung
-Data: 2025-12-19
+Data: 2025-01-22
 """
 
 import json
@@ -167,11 +169,11 @@ MENSAGEM DO USUÁRIO:
 
 Retorne APENAS o JSON no formato especificado, sem texto adicional."""
 
-    def __init__(self, llm_client, model: str = "grok-beta"):
+    def __init__(self, llm_client, model: str = "claude-sonnet-4-5-20250929"):
         """
         Args:
-            llm_client: Cliente LLM (OpenAI/XAI)
-            model: Modelo a usar (grok-beta, gpt-4o-mini, etc.)
+            llm_client: Cliente Anthropic
+            model: Modelo Claude a usar (padrão: claude-sonnet-4-5-20250929)
         """
         self.llm = llm_client
         self.model = model
@@ -210,34 +212,14 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
         prompt = self.EXTRACTION_PROMPT.format(user_input=user_input)
 
         try:
-            # Chamar LLM
-            if self.model.startswith("claude"):
-                # Anthropic Claude
-                response = self.llm.messages.create(
-                    model=self.model,
-                    max_tokens=2000,
-                    temperature=0.1,
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                response_text = response.content[0].text.strip()
-            elif self.model.startswith("grok"):
-                # XAI / Grok
-                response = self.llm.chat.completions.create(
-                    model=self.model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.1,
-                    max_tokens=2000
-                )
-                response_text = response.choices[0].message.content.strip()
-            else:
-                # OpenAI
-                response = self.llm.chat.completions.create(
-                    model=self.model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.1,
-                    max_tokens=2000
-                )
-                response_text = response.choices[0].message.content.strip()
+            # Chamar Claude (único provider)
+            response = self.llm.messages.create(
+                model=self.model,
+                max_tokens=2000,
+                temperature=0.1,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            response_text = response.content[0].text.strip()
 
             # Parsear JSON - Melhorado para lidar com diferentes formatos
             # Remover markdown code blocks se presentes
@@ -709,19 +691,18 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
 
 def test_extractor():
     """Teste rápido do extrator"""
-    from openai import OpenAI
+    import anthropic
     import os
     from dotenv import load_dotenv
 
     load_dotenv()
 
-    # Inicializar cliente (usar Grok para teste)
-    client = OpenAI(
-        api_key=os.getenv("XAI_API_KEY"),
-        base_url="https://api.x.ai/v1"
+    # Inicializar cliente Claude
+    client = anthropic.Anthropic(
+        api_key=os.getenv("ANTHROPIC_API_KEY")
     )
 
-    extractor = LLMFactExtractor(client, model="grok-beta")
+    extractor = LLMFactExtractor(client, model="claude-sonnet-4-5-20250929")
 
     # Mensagens de teste
     test_messages = [
