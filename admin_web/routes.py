@@ -700,8 +700,8 @@ async def user_psychometrics_page(request: Request, user_id: str, admin: Dict = 
     })
 
 @router.post("/api/user/{user_id}/regenerate-psychometrics")
-async def regenerate_psychometrics(user_id: str, admin: Dict = Depends(require_master)):
-    """Força regeneração das análises psicométricas (cria nova versão)"""
+async def regenerate_psychometrics(user_id: str, admin: Dict = Depends(require_org_admin)):
+    """Força regeneração das análises psicométricas (cria nova versão) - acessível para org_admin"""
     db = get_db()
 
     try:
@@ -729,10 +729,11 @@ async def regenerate_psychometrics(user_id: str, admin: Dict = Depends(require_m
 
 
 @router.post("/api/user/{user_id}/generate-personal-report")
-async def generate_personal_report(user_id: str, admin: Dict = Depends(require_master)):
+async def generate_personal_report(user_id: str, admin: Dict = Depends(require_org_admin)):
     """
     Gera laudo psicométrico detalhado para o USUÁRIO
     6 parágrafos focados em autoconhecimento e desenvolvimento pessoal
+    Acessível para org_admin
     """
     from llm_providers import create_llm_provider
     import json as json_lib
@@ -934,10 +935,11 @@ Gere o laudo:"""
 
 
 @router.post("/api/user/{user_id}/generate-hr-report")
-async def generate_hr_report(user_id: str, admin: Dict = Depends(require_master)):
+async def generate_hr_report(user_id: str, admin: Dict = Depends(require_org_admin)):
     """
     Gera laudo psicométrico detalhado para o RH/GESTOR
     6 parágrafos focados em adequação organizacional e gestão de talentos
+    Acessível para org_admin
     """
     from llm_providers import create_llm_provider
     import json as json_lib
@@ -1111,9 +1113,9 @@ Gere o laudo:"""
 
 
 @router.get("/user/{user_id}/psychometrics/download-pdf")
-async def download_psychometrics_pdf(user_id: str, admin: Dict = Depends(require_master)):
+async def download_psychometrics_pdf(user_id: str, admin: Dict = Depends(require_org_admin)):
     """
-    Download de relatório psicométrico em PDF
+    Download de relatório psicométrico em PDF - acessível para org_admin
 
     Gera PDF profissional com todas as 4 análises:
     - Big Five (OCEAN)
