@@ -615,11 +615,12 @@ async def seed_tri_fragments(
 
                 cursor.execute("""
                     INSERT INTO irt_fragments
-                        (fragment_id, domain, facet_code, description, detection_pattern, example_phrases)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                        (fragment_id, domain, facet, facet_code, description, detection_pattern, example_phrases)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
                     frag["fragment_id"],
                     frag["domain"],
+                    frag["facet"],  # Campo obrigatório NOT NULL
                     frag["facet_code"],
                     frag["description"],
                     frag.get("detection_pattern", ""),
