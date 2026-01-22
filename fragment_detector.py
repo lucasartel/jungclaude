@@ -12,6 +12,7 @@ Versão: 1.0.0
 """
 
 import re
+import json
 import logging
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
@@ -47,7 +48,8 @@ class DetectionConfig:
     """Configurações do detector de fragmentos"""
 
     # Limiar de confiança para registro (0.0 a 1.0)
-    CONFIDENCE_THRESHOLD = 0.6
+    # Reduzido de 0.6 para 0.35 para permitir detecções baseadas em frases de exemplo
+    CONFIDENCE_THRESHOLD = 0.35
 
     # Máximo de fragmentos por mensagem
     MAX_FRAGMENTS_PER_MESSAGE = 5
@@ -310,18 +312,32 @@ class FragmentDetector:
                 confidence += 0.5
 
         # 2. Tentar frases de exemplo
-        example_phrases = fragment.get("example_phrases", [])
+        example_phrases_raw = fragment.get("example_phrases", [])
+
+        # Parsear JSON se necessário (example_phrases pode ser string JSON)
+        if isinstance(example_phrases_raw, str):
+            try:
+                example_phrases = json.loads(example_phrases_raw)
+            except (json.JSONDecodeError, TypeError):
+                example_phrases = []
+        else:
+            example_phrases = example_phrases_raw if example_phrases_raw else []
+
         for phrase in example_phrases:
-            if self._fuzzy_match(phrase.lower(), message.lower()):
+            is_match = self._fuzzy_match(phrase.lower(), message.lower())
+            if is_match:
                 matched_patterns.append(f"example:{phrase[:30]}...")
                 if not source_text:
                     source_text = self._extract_context(message, phrase)
-                confidence += 0.3
+                confidence += 0.4  # Aumentado de 0.3 para 0.4
+                logger.debug(f"🎯 Match encontrado: '{phrase}' em fragmento {fragment_id}")
                 break  # Uma frase é suficiente
 
         # Se não houve match, retornar None
         if confidence == 0.0:
             return None
+
+        logger.info(f"✅ Fragmento detectado: {fragment_id} (confiança: {confidence:.2f})")
 
         # Ajustar confiança baseado no tamanho da mensagem
         if len(message) < DetectionConfig.MIN_MESSAGE_LENGTH:
@@ -348,13 +364,19 @@ class FragmentDetector:
             source_text=source_text[:100] if source_text else message[:50]
         )
 
-    def _fuzzy_match(self, phrase: str, text: str, threshold: float = 0.7) -> bool:
+    def _fuzzy_match(self, phrase: str, text: str, threshold: float = 0.5) -> bool:
         """
         Verifica se uma frase está presente no texto de forma fuzzy.
 
-        Usa containment check com normalização.
+        Usa múltiplas estratégias:
+        1. Substring direto (match exato da frase)
+        2. Containment check com normalização (50% das palavras)
         """
-        # Normalizar
+        # 1. Verificar substring direto primeiro (mais preciso)
+        if phrase in text:
+            return True
+
+        # 2. Normalizar e verificar overlap de palavras
         phrase_words = set(phrase.split())
         text_words = set(text.split())
 
