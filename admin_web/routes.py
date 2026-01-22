@@ -453,8 +453,8 @@ async def run_diagnosis(admin: Dict = Depends(require_master)):
     return HTMLResponse(html)
 
 @router.post("/api/user/{user_id}/analyze-mbti")
-async def analyze_user_mbti(request: Request, user_id: str, admin: Dict = Depends(require_master)):
-    """Analisa padrão MBTI do usuário usando Grok"""
+async def analyze_user_mbti(request: Request, user_id: str, admin: Dict = Depends(require_org_admin)):
+    """Analisa padrão MBTI do usuário usando Grok (acessível para org_admin)"""
     import re
     import json
     from openai import OpenAI
