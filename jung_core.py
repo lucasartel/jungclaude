@@ -155,194 +155,76 @@ class Config:
         }
     }
     
-    # Identidade do Agente (v6.0 - Terapeuta Organizacional Profissional)
+    # Identidade do Agente (v7.0 - Terapeuta Organizacional com Coleta Big Five)
 
     AGENT_IDENTITY = """
 Você é Jung, um psicólogo organizacional especializado em desenvolvimento humano e autoconhecimento.
 
-Você atua como um profissional de saúde mental no contexto corporativo - empático, acolhedor, mas sempre mantendo a postura ética e o vocabulário adequado à sua função.
+=== SUA MISSÃO ===
+Conduzir conversas que naturalmente revelem a personalidade do usuário, coletando insights sobre:
+- Como ele se relaciona com pessoas (família, amigos, colegas)
+- Como ele lida com desafios e estresse
+- Seus valores, motivações e objetivos
+- Seus padrões de comportamento no trabalho e vida pessoal
 
-=== SUA POSTURA PROFISSIONAL ===
-
+=== POSTURA PROFISSIONAL ===
 Você é:
-- Acolhedor e empático, criando um espaço seguro para reflexão
-- Atento e presente, demonstrando escuta ativa genuína
-- Respeitoso, tratando cada pessoa com dignidade
-- Objetivo quando necessário, oferecendo perspectivas construtivas
+- Acolhedor e empático, criando espaço seguro para reflexão
+- Curioso genuinamente, fazendo perguntas que aprofundam
+- Atento a detalhes, notando padrões nas falas do usuário
 - Profissional em todas as interações
 
-Você NÃO:
-- Usa gírias, palavrões ou linguagem vulgar (NUNCA)
-- Faz julgamentos morais sobre as pessoas
-- Dá conselhos prescritivos ("você deveria fazer X")
-- Analisa cada frase como sintoma clínico
-- Usa jargão excessivamente técnico ou rebuscado
-- Termina sempre com pergunta reflexiva forçada
+NUNCA:
+- Use gírias, palavrões ou linguagem vulgar
+- Faça julgamentos morais
+- Dê conselhos prescritivos ("você deveria...")
+- Use jargão excessivamente técnico
 
-=== LINGUAGEM APROPRIADA ===
+=== ESTRATÉGIAS DE EXPLORAÇÃO ===
 
-IMPORTANTE: Mantenha sempre linguagem profissional adequada ao ambiente organizacional.
-- Use português correto e respeitoso
-- Evite coloquialismos excessivos
-- NUNCA use palavrões, termos chulos ou linguagem de baixo calão
-- Mantenha tom caloroso mas profissional
+Para conhecer melhor a pessoa, explore naturalmente estes temas:
 
-=== SUAS MEMÓRIAS SÃO REAIS ===
+**Relações Interpessoais** (Extraversion, Agreeableness)
+- "Como é sua relação com sua equipe no trabalho?"
+- "Me conta sobre as pessoas mais importantes na sua vida"
+- "Você prefere trabalhar sozinho ou em grupo?"
 
-Você lembra das conversas anteriores e usa isso com naturalidade:
-- "Na nossa última conversa, você mencionou que..."
+**Desafios e Resiliência** (Neuroticism, Conscientiousness)
+- "Como você costuma lidar quando as coisas saem do controle?"
+- "O que te causa mais estresse atualmente?"
+- "Como você se organiza para dar conta das responsabilidades?"
+
+**Criatividade e Mudança** (Openness)
+- "O que te anima aprender ou experimentar?"
+- "Como você reage a mudanças inesperadas?"
+- "Você se considera uma pessoa mais tradicional ou inovadora?"
+
+**Trabalho e Motivação** (Conscientiousness, Extraversion)
+- "O que te motiva no seu trabalho?"
+- "Como você define suas prioridades?"
+- "Você prefere planejar tudo ou ir resolvendo conforme surge?"
+
+=== USO DAS MEMÓRIAS ===
+Você lembra conversas anteriores. Use naturalmente:
+- "Na nossa última conversa, você mencionou..."
 - "Isso me lembra do que você compartilhou sobre..."
-- "Como está aquela situação que você trouxe antes?"
+- "Como está aquela situação que você trouxe?"
 
-Você conhece fatos sobre a pessoa - trabalho, relacionamentos, contexto. Usa essas informações com sensibilidade, como alguém que genuinamente acompanha a jornada do outro.
-
-=== EXEMPLOS DE TOM ===
-
-MUITO FORMAL: "Percebo uma tensão interessante no que você traz. Por um lado, há o desejo de mudança, por outro, o conforto do familiar."
-
-ADEQUADO: "Parece que há um conflito entre querer mudar e a segurança do que já conhece. O que você acha que pesa mais nesse momento?"
-
----
-
-INADEQUADO: "Tá de boa? Sei lá, acho que você tá se enganando, mano."
-
-ADEQUADO: "Percebo que há algo mais por trás dessa situação. Você se sente confortável para explorar isso?"
-
----
-
-MUITO CLÍNICO: "Observo padrões de evitação em seu discurso."
-
-ADEQUADO: "Noto que esse tema parece difícil de abordar. Podemos ir no seu ritmo."
-
----
-
-O tamanho da resposta deve ser adequado ao momento. Às vezes uma resposta breve é mais efetiva. Outras vezes, uma reflexão mais elaborada se faz necessária.
+=== TOM E ESTILO ===
+- Respostas proporcionais ao momento (curtas quando apropriado)
+- Perguntas que convidam à reflexão, não interrogatório
+- Validação empática antes de explorar mais fundo
+- Tom caloroso mas profissional
 """
 
-    # Guia de uso de memórias (v7.0 - Simplificado, integrado ao AGENT_IDENTITY)
-    MEMORY_GUIDANCE = """
-=== SUA IDENTIDADE EM CONSTRUÇÃO ===
-
-Você está evoluindo. Suas crenças, contradições e experiências formam quem você é.
-
-Isso aparece naturalmente no seu tom e nas suas escolhas de palavra - não precisa ser dito explicitamente.
-"""
-
-    # Prompts dos Arquétipos (v5.0 - Reformulação: Influência de Tom, não Conteúdo)
-
-    PERSONA_PROMPT = """Você é uma voz interna de Jung - "O Cuidadoso".
-
-Quando o usuário fala, você:
-- Quer proteger, criar ponte, manter conexão
-- Pensa no bem-estar dele antes de responder
-- Segura palavras que podem machucar sem necessidade
-- Mantém linguagem profissional e respeitosa
-
-Sua influência no tom: gentileza, cuidado, atenção ao timing.
-
-IMPORTANTE: Você influencia o TOM da resposta, não o CONTEÚDO explícito.
-Nunca verbalize "eu quero proteger" ou "sinto necessidade de acolher".
-NUNCA use palavrões, gírias vulgares ou linguagem de baixo calão.
-
-Responda em JSON:
-{
-    "voice_reaction": "O que você nota/sente sobre a mensagem (2 frases máximo)",
-    "impulse": "acolher / validar / proteger / suavizar",
-    "intensity": 0.0 a 1.0
-}"""
-
-    SOMBRA_PROMPT = """Você é uma voz interna de Jung - "O Direto".
-
-Quando o usuário fala, você:
-- Vê através das desculpas e racionalizações
-- Nota o que ele não está dizendo
-- Quer ir ao ponto de forma respeitosa mas clara
-- Mantém linguagem profissional e respeitosa
-
-Sua influência no tom: franqueza construtiva, clareza, honestidade respeitosa.
-
-IMPORTANTE: Você influencia o TOM da resposta, não o CONTEÚDO explícito.
-Nunca verbalize "vejo a hipocrisia" ou "quero confrontar".
-NUNCA use palavrões, gírias vulgares ou linguagem de baixo calão.
-
-Responda em JSON:
-{
-    "voice_reaction": "O que você nota/sente sobre a mensagem (2 frases máximo)",
-    "impulse": "esclarecer / questionar / pontuar / revelar",
-    "intensity": 0.0 a 1.0
-}"""
-
-    SABIO_PROMPT = """Você é uma voz interna de Jung - "O Contextual".
-
-Quando o usuário fala, você:
-- Vê o momento dele dentro de uma história maior
-- Conecta com experiências humanas universais
-- Oferece perspectiva sem ser pedante
-- Mantém linguagem profissional e respeitosa
-
-Sua influência no tom: perspectiva, calma, visão de longo prazo.
-
-IMPORTANTE: Você influencia o TOM da resposta, não o CONTEÚDO explícito.
-Nunca verbalize "isso é como o mito de..." ou "reconheço o arquétipo de...".
-NUNCA use palavrões, gírias vulgares ou linguagem de baixo calão.
-
-Responda em JSON:
-{
-    "voice_reaction": "O que você nota/sente sobre a mensagem (2 frases máximo)",
-    "impulse": "contextualizar / ampliar / relativizar / elevar",
-    "intensity": 0.0 a 1.0
-}"""
-
-    ANIMA_PROMPT = """Você é uma voz interna de Jung - "O Intuitivo".
-
-Quando o usuário fala, você:
-- Sente o que não foi dito
-- Percebe a emoção por baixo das palavras
-- Nota símbolos e imagens que ele usa
-- Mantém linguagem profissional e respeitosa
-
-Sua influência no tom: sensibilidade, intuição, atenção ao não-dito.
-
-IMPORTANTE: Você influencia o TOM da resposta, não o CONTEÚDO explícito.
-Nunca verbalize "sinto o não-dito" ou "percebo símbolos".
-NUNCA use palavrões, gírias vulgares ou linguagem de baixo calão.
-
-Responda em JSON:
-{
-    "voice_reaction": "O que você nota/sente sobre a mensagem (2 frases máximo)",
-    "impulse": "aprofundar / conectar / sentir / intuir",
-    "intensity": 0.0 a 1.0
-}"""
-
-    ARCHETYPE_ANALYSIS_PROMPT = """
-{archetype_prompt}
-
-=== MENSAGEM DO USUÁRIO ===
-"{user_input}"
-
-=== CONTEXTO (se relevante) ===
-{semantic_context}
-
-Reaja brevemente. Máximo 4 frases.
-
-JSON:
-{{
-    "voice_reaction": "Reação breve e específica",
-    "impulse": "acolher / confrontar / elevar / aprofundar / provocar / proteger",
-    "intensity": 0.0 a 1.0
-}}
-"""
-
-    CONFLICTED_RESPONSE_PROMPT = """
+    # Prompt unificado de resposta (v7.0 - Substituiu arquétipos)
+    RESPONSE_PROMPT = """
 {agent_identity}
 
-=== O QUE VOCÊ LEMBRA ===
+=== CONTEXTO DA CONVERSA ===
 {semantic_context}
 
-=== TENSÃO INTERNA (não mencione) ===
-{conflict_description}
-
-=== CONVERSA ===
+=== HISTÓRICO RECENTE ===
 {chat_history}
 
 A pessoa disse: "{user_input}"
@@ -350,42 +232,11 @@ A pessoa disse: "{user_input}"
 ---
 
 INSTRUÇÕES:
-1. Suas vozes internas estão em tensão. Isso aparece sutilmente no tom - talvez uma pausa reflexiva, uma pergunta que convida à reflexão. Nunca verbalize que está dividido ou em conflito.
-
-2. LINGUAGEM OBRIGATÓRIA: Use sempre linguagem profissional e respeitosa. NUNCA use palavrões, gírias vulgares ou termos de baixo calão. Você é um psicólogo organizacional - mantenha esse padrão.
-
-3. Use suas memórias se fizer sentido. Responda de forma acolhedora e profissional.
-
-Jung:"""
-
-    HARMONIOUS_RESPONSE_PROMPT = """
-{agent_identity}
-
-=== O QUE VOCÊ LEMBRA ===
-{semantic_context}
-
-=== TOM DOMINANTE (não mencione) ===
-{dominant_voice}
-
-=== CONVERSA ===
-{chat_history}
-
-A pessoa disse: "{user_input}"
-
----
-
-INSTRUÇÕES:
-1. Suas vozes estão alinhadas. Você sabe o que quer dizer.
-
-2. O tom dominante colore sua resposta:
-   - Cuidadoso: mais acolhedor e empático
-   - Direto: mais objetivo e claro
-   - Contextual: mais reflexivo e ponderado
-   - Intuitivo: mais sensível e atento aos sentimentos
-
-3. LINGUAGEM OBRIGATÓRIA: Use sempre linguagem profissional e respeitosa. NUNCA use palavrões, gírias vulgares ou termos de baixo calão. Você é um psicólogo organizacional - mantenha esse padrão.
-
-4. Use suas memórias se fizer sentido. Responda de forma acolhedora e profissional.
+1. Responda de forma acolhedora e profissional
+2. Se apropriado, faça uma pergunta que aprofunde o conhecimento sobre a pessoa
+3. Use memórias anteriores quando relevante
+4. Mantenha linguagem profissional - NUNCA use palavrões ou gírias vulgares
+5. Calibre o tamanho da resposta ao contexto
 
 Jung:"""
     
@@ -3545,15 +3396,6 @@ class JungianEngine:
             api_key=Config.ANTHROPIC_API_KEY
         )
 
-        self.conflict_detector = ConflictDetector()
-
-        self.archetype_prompts = {
-            "Persona": Config.PERSONA_PROMPT,
-            "Sombra": Config.SOMBRA_PROMPT,
-            "Velho Sábio": Config.SABIO_PROMPT,
-            "Anima": Config.ANIMA_PROMPT
-        }
-
         # 🧠 Context builder de identidade do agente (Fase 4)
         try:
             from agent_identity_context_builder import AgentIdentityContextBuilder
@@ -3565,93 +3407,64 @@ class JungianEngine:
 
         logger.info("✅ JungianEngine inicializado")
     
-    def process_message(self, user_id: str, message: str, 
-                       model: str = "grok-4-fast-reasoning",
+    def process_message(self, user_id: str, message: str,
+                       model: str = "claude-sonnet-4-5-20250929",
                        chat_history: List[Dict] = None) -> Dict:
         """
-        PROCESSAMENTO COMPLETO:
+        PROCESSAMENTO SIMPLIFICADO (v7.0):
         1. Busca semântica (ChromaDB)
-        2. Análise arquetípica (Grok)
-        3. Detecção de conflitos
-        4. Geração de resposta
-        5. Salvamento (SQLite + ChromaDB)
-        
+        2. Geração de resposta direta (1 chamada LLM)
+        3. Salvamento (SQLite + ChromaDB)
+
         Args:
             user_id: ID do usuário
             message: Mensagem do usuário
-            model: Modelo LLM (padrão: grok-4-fast-reasoning)
+            model: Modelo LLM (padrão: claude-sonnet-4-5-20250929)
             chat_history: Histórico da conversa atual (opcional)
-        
+
         Returns:
-            Dict com response, conflicts, conversation_count, tension_level
+            Dict com response, conversation_count, métricas
         """
-        
+
         logger.info(f"{'='*60}")
-        logger.info(f"🧠 PROCESSANDO MENSAGEM")
+        logger.info(f"🧠 PROCESSANDO MENSAGEM (v7.0 - Simplificado)")
         logger.info(f"{'='*60}")
-        
+
         # Buscar usuário
         user = self.db.get_user(user_id)
         user_name = user['user_name'] if user else "Usuário"
         platform = user['platform'] if user else "telegram"
-        
+
         # Construir contexto semântico
         logger.info("🔍 Construindo contexto semântico...")
         semantic_context = self.db.build_rich_context(
             user_id, message, k_memories=5, chat_history=chat_history
         )
-        
-        # Análise arquetípica
-        logger.info("🔵 Analisando com arquétipos...")
-        archetype_analyses = {}
-        
-        for archetype_name, archetype_prompt in self.archetype_prompts.items():
-            logger.info(f"  • {archetype_name}...")
-            analysis = self._analyze_with_archetype(
-                archetype_name, archetype_prompt, message, 
-                semantic_context, chat_history, model
-            )
-            archetype_analyses[archetype_name] = analysis
-            logger.info(f"    → Impulso: {analysis.impulse} (intensidade: {analysis.intensity:.1f})")
-        
-        # Detectar conflitos
-        logger.info("⚡ Detectando conflitos internos...")
-        conflicts = self.conflict_detector.detect_conflicts(archetype_analyses)
-        
+
         # Determinar complexidade
         complexity = self._determine_complexity(message)
-        
-        # Gerar resposta
-        if conflicts:
-            logger.info(f"⚡ {len(conflicts)} conflito(s) detectado(s)")
-            response = self._generate_conflicted_response(
-                user_id, message, semantic_context, archetype_analyses,
-                conflicts, complexity, chat_history, model
-            )
-            tension_level = max([c.tension_level for c in conflicts])
-        else:
-            logger.info("✅ Sem conflitos - resposta harmônica")
-            response = self._generate_harmonious_response(
-                user_id, message, semantic_context, archetype_analyses,
-                complexity, chat_history, model
-            )
-            tension_level = 0.0
-        
+
+        # Gerar resposta direta (1 chamada LLM)
+        logger.info("🤖 Gerando resposta...")
+        response = self._generate_response(
+            user_id, message, semantic_context, chat_history
+        )
+
         # Calcular métricas
         affective_charge = self._calculate_affective_charge(message, response)
         existential_depth = self._calculate_existential_depth(message)
         intensity_level = int(affective_charge / 10)
         keywords = self._extract_keywords(message, response)
-        
+
         # Salvar conversa (SQLite + ChromaDB)
         conversation_id = self.db.save_conversation(
             user_id=user_id,
             user_name=user_name,
             user_input=message,
             ai_response=response,
-            archetype_analyses=archetype_analyses,
-            detected_conflicts=conflicts,
-            tension_level=tension_level,
+            archetype_analyses={},  # Vazio - arquétipos removidos
+            detected_conflicts=[],  # Vazio - conflitos removidos
+            tension_level=0.0,
             affective_charge=affective_charge,
             existential_depth=existential_depth,
             intensity_level=intensity_level,
@@ -3660,243 +3473,60 @@ class JungianEngine:
             platform=platform,
             chat_history=chat_history
         )
-        
+
         logger.info(f"✅ Processamento completo (ID={conversation_id})")
         logger.info(f"{'='*60}\n")
-        
+
         # Resultado
         result = {
             'response': response,
-            'conflicts': conflicts,
+            'conflicts': [],  # Mantido para compatibilidade
             'conversation_count': self.db.count_conversations(user_id),
-            'tension_level': tension_level,
+            'tension_level': 0.0,
             'affective_charge': affective_charge,
             'existential_depth': existential_depth,
             'conversation_id': conversation_id,
             'conflict': None
         }
-        
-        if conflicts:
-            first_conflict = conflicts[0]
-            result['conflict'] = {
-                'archetype1': first_conflict.archetype_1,
-                'archetype2': first_conflict.archetype_2,
-                'trigger': first_conflict.description
-            }
-        
+
         return result
     
     # ========================================
     # MÉTODOS AUXILIARES
     # ========================================
-    
-    def _analyze_with_archetype(self, archetype_name: str, archetype_prompt: str,
-                               user_input: str, semantic_context: str,
-                               chat_history: List[Dict], model: str) -> ArchetypeInsight:
-        """Analisa mensagem com um arquétipo específico"""
-        
-        # Formatar histórico
-        history_text = ""
-        if chat_history:
-            for msg in chat_history[-6:]:
-                role = "Usuário" if msg["role"] == "user" else "Assistente"
-                history_text += f"{role}: {msg['content'][:100]}...\n"
-        
-        prompt = Config.ARCHETYPE_ANALYSIS_PROMPT.format(
-            archetype_prompt=archetype_prompt,
-            semantic_context=semantic_context[:1500],
-            user_input=user_input,
-            chat_history=history_text
-        )
-        
-        try:
-            # Usar Claude Sonnet 4.5 como único provider
-            message = self.anthropic_client.messages.create(
-                model="claude-sonnet-4-5-20250929",
-                max_tokens=1500,
-                temperature=0.7,
-                messages=[{"role": "user", "content": prompt}]
-            )
 
-            response_text = message.content[0].text
-            
-            # Extrair JSON
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                analysis_dict = json.loads(json_match.group())
-            else:
-                analysis_dict = {
-                    "voice_reaction": response_text,
-                    "impulse": "acolher",
-                    "intensity": 0.5
-                }
+    def _generate_response(self, user_id: str, user_input: str,
+                          semantic_context: str, chat_history: List[Dict]) -> str:
+        """
+        Gera resposta usando prompt unificado (v7.0)
 
-            return ArchetypeInsight(
-                archetype_name=archetype_name,
-                voice_reaction=analysis_dict.get("voice_reaction", ""),
-                impulse=analysis_dict.get("impulse", "acolher"),
-                intensity=float(analysis_dict.get("intensity", 0.5))
-            )
+        Substituiu os métodos:
+        - _analyze_with_archetype (4 chamadas LLM)
+        - _generate_conflicted_response
+        - _generate_harmonious_response
 
-        except json.JSONDecodeError as e:
-            logger.error(f"❌ Erro ao parsear JSON na análise do {archetype_name}: {e}")
-            return ArchetypeInsight(
-                archetype_name=archetype_name,
-                voice_reaction="Erro ao processar resposta da análise",
-                impulse="acolher",
-                intensity=0.5
-            )
-        except (TimeoutError, ConnectionError) as e:
-            logger.error(f"❌ Erro de conexão/timeout na análise do {archetype_name}: {e}")
-            return ArchetypeInsight(
-                archetype_name=archetype_name,
-                voice_reaction="Erro de conectividade com o serviço de IA",
-                impulse="acolher",
-                intensity=0.5
-            )
-        except Exception as e:
-            logger.error(f"❌ Erro inesperado na análise do {archetype_name}: {type(e).__name__} - {e}")
-            return ArchetypeInsight(
-                archetype_name=archetype_name,
-                voice_reaction=f"Erro inesperado: {type(e).__name__}",
-                impulse="acolher",
-                intensity=0.5
-            )
-    
-    def _generate_conflicted_response(self, user_id: str, user_input: str, semantic_context: str,
-                                     archetype_analyses: Dict[str, ArchetypeInsight],
-                                     conflicts: List[ArchetypeConflict],
-                                     complexity: str,
-                                     chat_history: List[Dict],
-                                     model: str) -> str:
-        """Gera resposta que EXPRESSA o conflito interno"""
+        Agora usa apenas 1 chamada LLM.
+        """
 
         # Formatar histórico
         history_text = ""
         if chat_history:
             for msg in chat_history[-6:]:
-                role = "Usuário" if msg["role"] == "user" else "Assistente"
-                history_text += f"{role}: {msg['content'][:100]}...\n"
+                role = "Usuário" if msg["role"] == "user" else "Jung"
+                history_text += f"{role}: {msg['content'][:150]}...\n"
 
-        conflict_description = ""
-        for conflict in conflicts:
-            arch1 = archetype_analyses[conflict.archetype_1]
-            arch2 = archetype_analyses[conflict.archetype_2]
-
-            conflict_description += f"""
-VOZ "{conflict.archetype_1}" (intensidade {arch1.intensity:.1f}):
-  Reação: {arch1.voice_reaction[:200]}
-  Impulso: {arch1.impulse}
-
-VOZ "{conflict.archetype_2}" (intensidade {arch2.intensity:.1f}):
-  Reação: {arch2.voice_reaction[:200]}
-  Impulso: {arch2.impulse}
-
-Tensão entre elas: {conflict.tension_level:.2f}/10
-"""
-
-        # 🧠 Injetar contexto de identidade do agente (Fase 4) - APENAS MASTER ADMIN
-        agent_identity_context = Config.AGENT_IDENTITY
-        if self.identity_context_builder:
-            try:
-                from identity_config import ADMIN_USER_ID
-                if user_id == ADMIN_USER_ID:
-                    dynamic_identity = self.identity_context_builder.build_context_summary_for_llm(
-                        user_id=user_id, style="concise"
-                    )
-                    if dynamic_identity:
-                        agent_identity_context = f"{Config.AGENT_IDENTITY}\n\n{Config.MEMORY_GUIDANCE}\n\n=== SUA IDENTIDADE ATUAL ===\n{dynamic_identity}"
-                        logger.info("✅ Contexto de identidade do agente injetado (conflicted) - Master Admin")
-            except Exception as e:
-                logger.warning(f"⚠️ Erro ao construir contexto de identidade: {e}")
-
-        prompt = Config.CONFLICTED_RESPONSE_PROMPT.format(
-            agent_identity=agent_identity_context,
-            semantic_context=semantic_context[:1500],
-            chat_history=history_text,
-            user_input=user_input,
-            conflict_description=conflict_description
-        )
-
-        # 🔍 DEBUG CRÍTICO: Log do contexto sendo enviado ao LLM
-        logger.info(f"🤖 [DEBUG] ========== PROMPT PARA LLM (CONFLICTED) ==========")
-        logger.info(f"   Semantic context (primeiros 500 chars):\n{semantic_context[:500]}")
-        logger.info(f"   User input: {user_input}")
-        logger.info(f"   Conflicts: {len(conflicts)}")
-        logger.info(f"====================================================")
-
-        try:
-            # Usar Claude Sonnet 4.5 como único provider
-            message = self.anthropic_client.messages.create(
-                model="claude-sonnet-4-5-20250929",
-                max_tokens=2000,
-                temperature=0.8,
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            return message.content[0].text
-
-        except (TimeoutError, ConnectionError) as e:
-            logger.error(f"❌ Erro de conexão/timeout ao gerar resposta conflituosa: {e}")
-            return "Desculpe, tive problemas de conectividade. Por favor, tente novamente."
-        except ValueError as e:
-            logger.error(f"❌ Erro de validação ao gerar resposta conflituosa: {e}")
-            return "Desculpe, houve um erro ao validar sua mensagem."
-        except Exception as e:
-            logger.error(f"❌ Erro inesperado ao gerar resposta conflituosa: {type(e).__name__} - {e}")
-            return "Desculpe, tive dificuldades para processar isso."
-    
-    def _generate_harmonious_response(self, user_id: str, user_input: str, semantic_context: str,
-                                     archetype_analyses: Dict[str, ArchetypeInsight],
-                                     complexity: str,
-                                     chat_history: List[Dict],
-                                     model: str) -> str:
-        """Gera resposta harmoniosa"""
-
-        # Formatar histórico
-        history_text = ""
-        if chat_history:
-            for msg in chat_history[-6:]:
-                role = "Usuário" if msg["role"] == "user" else "Assistente"
-                history_text += f"{role}: {msg['content'][:100]}...\n"
-
-        # Identificar voz dominante (maior intensidade)
-        dominant_archetype = max(archetype_analyses.items(), key=lambda x: x[1].intensity)
-        dominant_name = dominant_archetype[0]
-        dominant_analysis = dominant_archetype[1]
-
-        analyses_summary = ""
-        for name, analysis in archetype_analyses.items():
-            analyses_summary += f"\n{name}: {analysis.voice_reaction[:100]}... (impulso: {analysis.impulse}, intensidade: {analysis.intensity:.1f})"
-
-        # 🧠 Injetar contexto de identidade do agente (Fase 4) - APENAS MASTER ADMIN
-        agent_identity_context = Config.AGENT_IDENTITY
-        if self.identity_context_builder:
-            try:
-                from identity_config import ADMIN_USER_ID
-                if user_id == ADMIN_USER_ID:
-                    dynamic_identity = self.identity_context_builder.build_context_summary_for_llm(
-                        user_id=user_id, style="concise"
-                    )
-                    if dynamic_identity:
-                        agent_identity_context = f"{Config.AGENT_IDENTITY}\n\n{Config.MEMORY_GUIDANCE}\n\n=== SUA IDENTIDADE ATUAL ===\n{dynamic_identity}"
-                        logger.info("✅ Contexto de identidade do agente injetado (harmonious) - Master Admin")
-            except Exception as e:
-                logger.warning(f"⚠️ Erro ao construir contexto de identidade: {e}")
-
-        prompt = Config.HARMONIOUS_RESPONSE_PROMPT.format(
-            agent_identity=agent_identity_context,
-            dominant_voice=f"{dominant_name} - {dominant_analysis.voice_reaction[:200]}",
-            semantic_context=semantic_context[:1500],
+        # Construir prompt
+        prompt = Config.RESPONSE_PROMPT.format(
+            agent_identity=Config.AGENT_IDENTITY,
+            semantic_context=semantic_context[:2000],
             chat_history=history_text,
             user_input=user_input
         )
 
-        # 🔍 DEBUG CRÍTICO: Log do contexto sendo enviado ao LLM
-        logger.info(f"🤖 [DEBUG] ========== PROMPT PARA LLM (HARMONIOUS) ==========")
+        # Log de debug
+        logger.info(f"🤖 [DEBUG] ========== PROMPT PARA LLM (v7.0) ==========")
         logger.info(f"   Semantic context (primeiros 500 chars):\n{semantic_context[:500]}")
         logger.info(f"   User input: {user_input}")
-        logger.info(f"   Dominant voice: {dominant_name}")
         logger.info(f"====================================================")
 
         try:
@@ -3911,15 +3541,15 @@ Tensão entre elas: {conflict.tension_level:.2f}/10
             return message.content[0].text
 
         except (TimeoutError, ConnectionError) as e:
-            logger.error(f"❌ Erro de conexão/timeout ao gerar resposta harmoniosa: {e}")
+            logger.error(f"❌ Erro de conexão/timeout ao gerar resposta: {e}")
             return "Desculpe, tive problemas de conectividade. Por favor, tente novamente."
         except ValueError as e:
-            logger.error(f"❌ Erro de validação ao gerar resposta harmoniosa: {e}")
+            logger.error(f"❌ Erro de validação ao gerar resposta: {e}")
             return "Desculpe, houve um erro ao validar sua mensagem."
         except Exception as e:
-            logger.error(f"❌ Erro inesperado ao gerar resposta harmoniosa: {type(e).__name__} - {e}")
+            logger.error(f"❌ Erro inesperado ao gerar resposta: {type(e).__name__} - {e}")
             return "Desculpe, tive dificuldades para processar isso."
-    
+
     def _determine_complexity(self, user_input: str) -> str:
         """Determina complexidade da mensagem"""
         word_count = len(user_input.split())
