@@ -2227,60 +2227,234 @@ Resposta: {ai_response}
     def extract_and_save_facts_v2(self, user_id: str, user_input: str,
                                   conversation_id: int) -> List[Dict]:
         """
-        Extrai fatos estruturados usando LLM + fallback regex
+        Extrai fatos estruturados usando LLM + fallback regex.
+        Detecta e processa correções ANTES de extrair fatos novos.
 
-        VERSÃO 2: Usa LLMFactExtractor + tabela user_facts_v2
+        VERSÃO 3: Com suporte a correções genéricas via CorrectionDetector
         """
 
         extracted_facts = []
 
-        # Debug: verificar estado do fact_extractor
-        logger.info(f"🔍 [DEBUG] hasattr(self, 'fact_extractor') = {hasattr(self, 'fact_extractor')}")
-        if hasattr(self, 'fact_extractor'):
-            logger.info(f"🔍 [DEBUG] self.fact_extractor = {self.fact_extractor}")
+        if not (hasattr(self, 'fact_extractor') and self.fact_extractor):
+            logger.info("🔄 fact_extractor indisponível, usando método legado...")
+            return self.extract_and_save_facts(user_id, user_input, conversation_id)
 
-        # Tentar extração com LLM
-        if hasattr(self, 'fact_extractor') and self.fact_extractor:
-            try:
-                logger.info("🤖 Extraindo fatos com LLM...")
-                facts = self.fact_extractor.extract_facts(user_input, user_id)
+        try:
+            # ETAPA 1: Buscar fatos existentes para contexto de correção
+            existing_facts = self._get_current_facts(user_id)
+            logger.info(f"📋 {len(existing_facts)} fatos existentes carregados para contexto")
 
-                # Salvar cada fato extraído
-                for fact in facts:
-                    self._save_fact_v2(
-                        user_id=user_id,
-                        category=fact.category,
-                        fact_type=fact.fact_type,
-                        attribute=fact.attribute,
-                        value=fact.value,
-                        confidence=fact.confidence,
-                        extraction_method='llm',
-                        context=fact.context,
-                        conversation_id=conversation_id
-                    )
+            # ETAPA 2: Extrair fatos e detectar correções (nova assinatura)
+            logger.info("🤖 Analisando mensagem (fatos + correções)...")
+            facts, corrections = self.fact_extractor.extract_facts(
+                user_input, user_id, existing_facts
+            )
 
-                    extracted_facts.append({
-                        'category': fact.category,
-                        'type': fact.fact_type,
-                        'attribute': fact.attribute,
-                        'value': fact.value,
-                        'confidence': fact.confidence
-                    })
+            # ETAPA 3: Processar correções detectadas
+            for correction in corrections:
+                self._apply_correction(user_id, correction, conversation_id)
+                extracted_facts.append({
+                    'category': correction.category,
+                    'type': correction.fact_type,
+                    'attribute': correction.attribute,
+                    'value': correction.new_value,
+                    'confidence': correction.confidence,
+                    'is_correction': True
+                })
 
-                if extracted_facts:
-                    logger.info(f"✅ Extraídos {len(extracted_facts)} fatos com LLM")
+            # ETAPA 4: Salvar fatos novos
+            for fact in facts:
+                self._save_fact_v2(
+                    user_id=user_id,
+                    category=fact.category,
+                    fact_type=fact.fact_type,
+                    attribute=fact.attribute,
+                    value=fact.value,
+                    confidence=fact.confidence,
+                    extraction_method='llm',
+                    context=fact.context,
+                    conversation_id=conversation_id
+                )
+                extracted_facts.append({
+                    'category': fact.category,
+                    'type': fact.fact_type,
+                    'attribute': fact.attribute,
+                    'value': fact.value,
+                    'confidence': fact.confidence,
+                    'is_correction': False
+                })
 
-            except Exception as e:
-                logger.error(f"❌ Erro na extração com LLM: {e}")
-                import traceback
-                logger.error(traceback.format_exc())
+            if extracted_facts:
+                n_corr = sum(1 for f in extracted_facts if f.get('is_correction'))
+                n_new = len(extracted_facts) - n_corr
+                logger.info(f"✅ Processados: {n_new} fatos novos, {n_corr} correções")
 
-        # Se LLM não extraiu nada ou falhou, usar fallback para método antigo
+        except Exception as e:
+            logger.error(f"❌ Erro na extração com LLM: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+        # Fallback se nada foi extraído
         if not extracted_facts:
-            logger.info("🔄 LLM não extraiu fatos, usando método antigo como fallback...")
+            logger.info("🔄 LLM não extraiu fatos, usando método legado...")
             extracted_facts = self.extract_and_save_facts(user_id, user_input, conversation_id)
 
         return extracted_facts
+
+    def _get_current_facts(self, user_id: str) -> List[Dict]:
+        """Retorna todos os fatos atuais do usuário (is_current=1)."""
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT fact_category, fact_type, fact_attribute, fact_value, confidence
+                FROM user_facts_v2
+                WHERE user_id = ? AND is_current = 1
+                ORDER BY fact_type, fact_attribute
+            """, (user_id,))
+            rows = cursor.fetchall()
+            return [
+                {
+                    'category': r[0],
+                    'fact_type': r[1],
+                    'attribute': r[2],
+                    'fact_value': r[3],
+                    'confidence': r[4]
+                }
+                for r in rows
+            ]
+
+    def _apply_correction(self, user_id: str, correction, conversation_id: int):
+        """
+        Aplica uma correção detectada:
+        1. Versiona o fato antigo no SQLite
+        2. Anota memórias no ChromaDB
+
+        Args:
+            correction: CorrectionIntent com os detalhes da correção
+        """
+        from correction_detector import generate_correction_feedback
+
+        logger.info(
+            f"🔧 Aplicando correção: {correction.fact_type}.{correction.attribute} "
+            f"'{correction.old_value}' → '{correction.new_value}'"
+        )
+
+        # 1. Buscar fato atual para anotar ChromaDB
+        old_fact = self._find_current_fact(user_id, correction.fact_type, correction.attribute)
+
+        # 2. Salvar nova versão (versionamento automático em _save_fact_v2)
+        self._save_fact_v2(
+            user_id=user_id,
+            category=correction.category,
+            fact_type=correction.fact_type,
+            attribute=correction.attribute,
+            value=correction.new_value,
+            confidence=correction.confidence,
+            extraction_method='correction',
+            context=correction.context[:500] if correction.context else None,
+            conversation_id=conversation_id
+        )
+        logger.info(f"   ✅ SQLite atualizado")
+
+        # 3. Sincronizar ChromaDB com anotação de correção
+        if old_fact:
+            self._annotate_chromadb_correction(user_id, old_fact, correction)
+
+        # 4. Log feedback (para debug/monitoramento)
+        feedback = generate_correction_feedback(correction)
+        if feedback:
+            logger.info(f"   💬 Feedback de correção ambígua: {feedback}")
+
+    def _find_current_fact(self, user_id: str, fact_type: str, attribute: str) -> Optional[Dict]:
+        """Busca o fato atual (is_current=1) de um tipo/atributo específico."""
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT id, fact_category, fact_type, fact_attribute, fact_value
+                FROM user_facts_v2
+                WHERE user_id = ?
+                  AND fact_type = ?
+                  AND fact_attribute = ?
+                  AND is_current = 1
+                LIMIT 1
+            """, (user_id, fact_type, attribute))
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'id': row[0], 'category': row[1],
+                    'fact_type': row[2], 'attribute': row[3], 'fact_value': row[4]
+                }
+            return None
+
+    def _annotate_chromadb_correction(self, user_id: str, old_fact: Dict, correction):
+        """
+        Anota memórias no ChromaDB que referenciam um fato que foi corrigido.
+
+        Estratégia: adicionar metadado 'fact_correction' em vez de deletar.
+        Assim o contexto histórico é preservado, mas o build_rich_context
+        pode identificar que aquela informação foi corrigida.
+
+        Args:
+            old_fact: Fato anterior (com 'fact_value')
+            correction: CorrectionIntent com old_value e new_value
+        """
+        if not self.chroma_enabled or not self.vectorstore:
+            return
+
+        old_value = old_fact.get('fact_value', '')
+        if not old_value:
+            return
+
+        try:
+            # Buscar memórias que mencionam o valor antigo
+            results = self.vectorstore.similarity_search_with_score(
+                old_value,
+                k=20,
+                filter={"user_id": str(user_id)}
+            )
+
+            annotated = 0
+            for doc, score in results:
+                # Verificar se o documento realmente menciona o valor antigo
+                if old_value.lower() not in doc.page_content.lower():
+                    continue
+
+                # Montar metadado de correção
+                new_metadata = dict(doc.metadata)
+                correction_note = f"{old_value} → {correction.new_value}"
+
+                # Acumular se já houver correções anteriores
+                existing = new_metadata.get('fact_corrections', '')
+                if correction_note not in existing:
+                    new_metadata['fact_corrections'] = (
+                        f"{existing}|{correction_note}".strip('|')
+                    )
+
+                    # Atualizar documento no ChromaDB (delete + re-add)
+                    doc_id = doc.metadata.get('conversation_id')
+                    if doc_id:
+                        self._update_chroma_document(
+                            f"conv_{doc_id}", doc.page_content, new_metadata
+                        )
+                        annotated += 1
+
+            logger.info(f"   ✅ ChromaDB: {annotated} memória(s) anotada(s) com correção")
+
+        except Exception as e:
+            logger.warning(f"   ⚠️ Erro ao anotar ChromaDB: {e}")
+
+    def _update_chroma_document(self, doc_id: str, content: str, new_metadata: Dict):
+        """
+        Atualiza um documento no ChromaDB (delete + re-add).
+        O ChromaDB não suporta update nativo de metadados.
+        """
+        try:
+            self.vectorstore.delete([doc_id])
+            from langchain.schema import Document
+            doc = Document(page_content=content, metadata=new_metadata)
+            self.vectorstore.add_documents([doc], ids=[doc_id])
+        except Exception as e:
+            logger.warning(f"   ⚠️ Erro ao atualizar documento ChromaDB {doc_id}: {e}")
 
     def _save_fact_v2(self, user_id: str, category: str, fact_type: str,
                      attribute: str, value: str, confidence: float = 1.0,

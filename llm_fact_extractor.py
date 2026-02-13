@@ -14,10 +14,19 @@ Data: 2025-01-22
 import json
 import logging
 import re
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, asdict
 
 logger = logging.getLogger(__name__)
+
+# Import do detector de correções
+try:
+    from correction_detector import CorrectionDetector, CorrectionIntent
+    CORRECTION_DETECTOR_AVAILABLE = True
+except ImportError:
+    CORRECTION_DETECTOR_AVAILABLE = False
+    CorrectionDetector = None
+    CorrectionIntent = None
 
 
 @dataclass
@@ -178,33 +187,56 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
         self.llm = llm_client
         self.model = model
 
-    def extract_facts(self, user_input: str, user_id: str = None) -> List[ExtractedFact]:
+        # Inicializar detector de correções
+        if CORRECTION_DETECTOR_AVAILABLE:
+            self.correction_detector = CorrectionDetector(
+                llm_client=llm_client,
+                model=model
+            )
+            logger.info("✅ CorrectionDetector integrado ao LLMFactExtractor")
+        else:
+            self.correction_detector = None
+            logger.warning("⚠️ CorrectionDetector não disponível")
+
+    def extract_facts(self, user_input: str, user_id: str = None,
+                      existing_facts: List[Dict] = None) -> Tuple[List[ExtractedFact], List["CorrectionIntent"]]:
         """
-        Extrai fatos da mensagem do usuário usando LLM
+        Extrai fatos da mensagem do usuário usando LLM.
+        Detecta correções ANTES de extrair fatos novos.
 
         Args:
             user_input: Mensagem do usuário
             user_id: ID do usuário (para logging)
+            existing_facts: Fatos atuais do usuário (melhora detecção de correções)
 
         Returns:
-            Lista de ExtractedFact
+            Tupla (fatos_novos, correções_detectadas)
         """
-        logger.info(f"🤖 [LLM EXTRACTOR] Extraindo fatos de: {user_input[:100]}...")
+        logger.info(f"🤖 [LLM EXTRACTOR] Analisando: {user_input[:100]}...")
 
+        # ETAPA 1: Detectar correções primeiro
+        corrections = []
+        if self.correction_detector:
+            corrections = self.correction_detector.detect(user_input, existing_facts or [])
+            if corrections:
+                logger.info(f"   🔧 {len(corrections)} correção(ões) detectada(s) - pulando extração normal")
+                # Não extrai como fato novo para evitar duplicidade
+                return [], corrections
+
+        # ETAPA 2: Extração normal de fatos novos
         try:
-            # Tentar extração com LLM
             facts = self._extract_with_llm(user_input)
 
             if facts:
                 logger.info(f"   ✅ LLM extraiu {len(facts)} fatos")
-                return facts
+                return facts, []
             else:
                 logger.warning(f"   ⚠️ LLM não extraiu fatos, tentando fallback...")
-                return self._extract_with_regex(user_input)
+                return self._extract_with_regex(user_input), []
 
         except Exception as e:
             logger.error(f"   ❌ Erro no LLM: {e}, usando fallback regex")
-            return self._extract_with_regex(user_input)
+            return self._extract_with_regex(user_input), []
 
     def _extract_with_llm(self, user_input: str) -> List[ExtractedFact]:
         """Extração usando LLM"""
