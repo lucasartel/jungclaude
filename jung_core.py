@@ -96,8 +96,13 @@ class Config:
     # APIs
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
     XAI_API_KEY = os.getenv("XAI_API_KEY")
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+    # Modelos
+    CONVERSATION_MODEL = os.getenv("CONVERSATION_MODEL", "mistralai/mistral-large")
+    INTERNAL_MODEL = os.getenv("INTERNAL_MODEL", "claude-sonnet-4-5-20250929")
     
     TELEGRAM_ADMIN_IDS = [
         int(id.strip()) 
@@ -3564,11 +3569,23 @@ class JungianEngine:
             timeout=30.0  # 30 segundos de timeout
         )
 
-        # Cliente Anthropic (único provider LLM)
+        # Cliente Anthropic (tarefas internas: extração de fatos, detecção de correções)
         import anthropic
         self.anthropic_client = anthropic.Anthropic(
             api_key=Config.ANTHROPIC_API_KEY
         )
+
+        # Cliente OpenRouter/Mistral (conversação com o usuário)
+        if Config.OPENROUTER_API_KEY:
+            self.openrouter_client = OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=Config.OPENROUTER_API_KEY,
+                timeout=60.0
+            )
+            logger.info(f"✅ OpenRouter client inicializado (modelo: {Config.CONVERSATION_MODEL})")
+        else:
+            self.openrouter_client = None
+            logger.warning("⚠️ OPENROUTER_API_KEY não configurada - usando Claude para conversação")
 
         # 🧠 Context builder de identidade do agente (Fase 4)
         try:
@@ -3582,7 +3599,7 @@ class JungianEngine:
         logger.info("✅ JungianEngine inicializado")
     
     def process_message(self, user_id: str, message: str,
-                       model: str = "claude-sonnet-4-5-20250929",
+                       model: str = None,
                        chat_history: List[Dict] = None) -> Dict:
         """
         PROCESSAMENTO SIMPLIFICADO (v7.0):
@@ -3593,7 +3610,7 @@ class JungianEngine:
         Args:
             user_id: ID do usuário
             message: Mensagem do usuário
-            model: Modelo LLM (padrão: claude-sonnet-4-5-20250929)
+            model: Ignorado (modelo definido por CONVERSATION_MODEL em Config)
             chat_history: Histórico da conversa atual (opcional)
 
         Returns:
@@ -3704,15 +3721,26 @@ class JungianEngine:
         logger.info(f"====================================================")
 
         try:
-            # Usar Claude Sonnet 4.5 como único provider
-            message = self.anthropic_client.messages.create(
-                model="claude-sonnet-4-5-20250929",
-                max_tokens=2000,
-                temperature=0.7,
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            return message.content[0].text
+            # Usar Mistral via OpenRouter para conversação (se disponível)
+            if self.openrouter_client:
+                logger.info(f"🤖 Usando OpenRouter/Mistral ({Config.CONVERSATION_MODEL}) para conversação")
+                response = self.openrouter_client.chat.completions.create(
+                    model=Config.CONVERSATION_MODEL,
+                    max_tokens=2000,
+                    temperature=0.7,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                return response.choices[0].message.content
+            else:
+                # Fallback: Claude (quando OPENROUTER_API_KEY não está configurada)
+                logger.info("🤖 Fallback para Claude (OPENROUTER_API_KEY não configurada)")
+                message = self.anthropic_client.messages.create(
+                    model=Config.INTERNAL_MODEL,
+                    max_tokens=2000,
+                    temperature=0.7,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                return message.content[0].text
 
         except (TimeoutError, ConnectionError) as e:
             logger.error(f"❌ Erro de conexão/timeout ao gerar resposta: {e}")
