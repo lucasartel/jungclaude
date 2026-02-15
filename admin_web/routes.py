@@ -460,14 +460,15 @@ async def analyze_user_mbti(request: Request, user_id: str, admin: Dict = Depend
 
     db = get_db()
 
-    # Verificar se ANTHROPIC_API_KEY está disponível
+    # Verificar chave de LLM disponível (OpenRouter primário, Anthropic fallback)
+    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
     anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not anthropic_api_key:
+    if not openrouter_api_key and not anthropic_api_key:
         return JSONResponse({
-            "error": "ANTHROPIC_API_KEY não configurada",
+            "error": "Nenhuma chave de LLM configurada (OPENROUTER_API_KEY ou ANTHROPIC_API_KEY)",
             "type_indicator": "XXXX",
             "confidence": 0,
-            "summary": "Configure a variável ANTHROPIC_API_KEY para habilitar análise MBTI"
+            "summary": "Configure OPENROUTER_API_KEY para habilitar análise MBTI"
         }, status_code=503)
 
     # Buscar conversas do usuário
@@ -545,12 +546,19 @@ Retorne JSON com esta estrutura EXATA:
 """
 
     try:
-        # Chamar Claude Sonnet 4.5
-        import anthropic
-        client = anthropic.Anthropic(api_key=anthropic_api_key)
+        # Chamar LLM via OpenRouter (primário) ou Anthropic (fallback)
+        from llm_providers import AnthropicCompatWrapper
+        internal_model = os.getenv("INTERNAL_MODEL", "z-ai/glm-5")
+        if openrouter_api_key:
+            from openai import OpenAI
+            _or_client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=openrouter_api_key)
+            client = AnthropicCompatWrapper(_or_client, internal_model)
+        else:
+            import anthropic
+            client = anthropic.Anthropic(api_key=anthropic_api_key)
 
         response = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+            model=internal_model,
             max_tokens=2000,
             temperature=0.3,
             system="Você é um analista jungiano especializado em MBTI. Responda APENAS com JSON válido.",

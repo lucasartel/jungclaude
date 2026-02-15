@@ -1,24 +1,14 @@
 """
-llm_providers.py - Provider LLM Unificado (Claude Sonnet 4.5)
-=============================================================
+llm_providers.py - Provider LLM Unificado
+==========================================
 
-Sistema unificado de LLM usando exclusivamente Claude Sonnet 4.5.
-OpenAI é mantido apenas para embeddings (em outros módulos).
+Rota primária: z-ai/glm-5 via OpenRouter (OPENROUTER_API_KEY)
+Fallback:      Claude Sonnet 4.5 via Anthropic (ANTHROPIC_API_KEY)
 
-Modelo único: claude-sonnet-4-5-20250929
-
-Uso:
-    from llm_providers import get_llm_response
-
-    response = get_llm_response(
-        prompt="Olá, como vai?",
-        temperature=0.7,
-        max_tokens=2000
-    )
-
-Autor: Sistema Jung Claude
-Data: 2025-01-22
-Versão: 2.0 (Unificado para Claude)
+Inclui AnthropicCompatWrapper — substituto drop-in para anthropic.Anthropic()
+que chama OpenRouter internamente, permitindo redirecionar todas as chamadas
+internas (extração de fatos, flush, consolidação) sem alterar os módulos
+consumidores.
 """
 
 import os
@@ -29,10 +19,64 @@ from abc import ABC, abstractmethod
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# CONFIGURAÇÃO - MODELO ÚNICO
+# CONFIGURAÇÃO
 # ============================================================
 
-DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
+DEFAULT_MODEL = os.getenv("INTERNAL_MODEL", "z-ai/glm-5")
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+
+# ============================================================
+# ANTHROPIC COMPAT WRAPPER
+# Imita a interface anthropic.Anthropic().messages.create()
+# mas chama OpenRouter internamente.
+# Usado para redirecionar fact_extractor, consolidação, flush,
+# identity extractor etc. sem alterar nenhum desses módulos.
+# ============================================================
+
+class _Content:
+    def __init__(self, text: str):
+        self.text = text
+
+
+class _AnthropicFakeResponse:
+    def __init__(self, text: str):
+        self.content = [_Content(text)]
+
+
+class _AnthropicFakeMessages:
+    def __init__(self, openrouter_client, model: str):
+        self._client = openrouter_client
+        self._model = model
+
+    def create(self, model=None, max_tokens=2000, temperature=0.7,
+               messages=None, system=None, **kwargs):
+        msgs = list(messages or [])
+        if system:
+            msgs = [{"role": "system", "content": system}] + msgs
+        resp = self._client.chat.completions.create(
+            model=self._model,          # sempre z-ai/glm-5 (ignora `model` passado)
+            max_tokens=max_tokens,
+            temperature=temperature,
+            messages=msgs,
+        )
+        return _AnthropicFakeResponse(resp.choices[0].message.content)
+
+
+class AnthropicCompatWrapper:
+    """
+    Substituto drop-in para anthropic.Anthropic() que usa OpenRouter internamente.
+
+    Suporta:
+        client.messages.create(model=..., max_tokens=..., temperature=...,
+                                messages=[...], system=...) → response.content[0].text
+
+    O parâmetro `model` é ignorado — sempre usa o modelo configurado em INTERNAL_MODEL.
+    """
+
+    def __init__(self, openrouter_client, model: str = DEFAULT_MODEL):
+        self.messages = _AnthropicFakeMessages(openrouter_client, model)
+        logger.info(f"✅ AnthropicCompatWrapper inicializado (modelo: {model} via OpenRouter)")
 
 
 # ============================================================
@@ -59,55 +103,67 @@ class LLMProvider(ABC):
 
 
 # ============================================================
-# CLAUDE PROVIDER (ÚNICO)
+# OPENROUTER PROVIDER (PRIMÁRIO)
 # ============================================================
 
-class ClaudeProvider(LLMProvider):
-    """
-    Provedor Claude (Anthropic) - Único provider suportado.
-
-    Modelo padrão: claude-sonnet-4-5-20250929
-    """
+class OpenRouterProvider(LLMProvider):
+    """Provedor via OpenRouter — primário para todos os LLM calls."""
 
     def __init__(self, model: str = DEFAULT_MODEL):
-        self.api_key = os.getenv("ANTHROPIC_API_KEY")
-
+        self.api_key = os.getenv("OPENROUTER_API_KEY")
         if not self.api_key:
-            raise ValueError("❌ ANTHROPIC_API_KEY não encontrado no .env")
-
+            raise ValueError("❌ OPENROUTER_API_KEY não encontrado no .env")
         self.model = model
-        logger.info(f"✅ ClaudeProvider inicializado (modelo: {self.model})")
+        logger.info(f"✅ OpenRouterProvider inicializado (modelo: {self.model})")
 
-    def get_response(
-        self,
-        prompt: str,
-        temperature: float = 0.7,
-        max_tokens: int = 2000
-    ) -> str:
-        """Gera resposta via Claude API"""
-
+    def get_response(self, prompt: str, temperature: float = 0.7,
+                     max_tokens: int = 2000) -> str:
+        from openai import OpenAI
+        client = OpenAI(base_url=OPENROUTER_BASE_URL, api_key=self.api_key)
         try:
-            import anthropic
-        except ImportError:
-            raise ImportError(
-                "❌ Biblioteca 'anthropic' não instalada!\n"
-                "   Execute: pip install anthropic"
-            )
-
-        try:
-            client = anthropic.Anthropic(api_key=self.api_key)
-
-            message = client.messages.create(
+            resp = client.chat.completions.create(
                 model=self.model,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
+                messages=[{"role": "user", "content": prompt}],
             )
+            return resp.choices[0].message.content
+        except Exception as e:
+            logger.error(f"❌ Erro ao chamar OpenRouter: {e}")
+            raise Exception(f"Erro ao chamar OpenRouter: {e}")
 
+    def get_model_name(self) -> str:
+        return f"OpenRouter ({self.model})"
+
+
+# ============================================================
+# CLAUDE PROVIDER (FALLBACK)
+# ============================================================
+
+class ClaudeProvider(LLMProvider):
+    """Provedor Claude via Anthropic — fallback quando OpenRouter não disponível."""
+
+    def __init__(self, model: str = "claude-sonnet-4-5-20250929"):
+        self.api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not self.api_key:
+            raise ValueError("❌ ANTHROPIC_API_KEY não encontrado no .env")
+        self.model = model
+        logger.info(f"✅ ClaudeProvider inicializado (modelo: {self.model})")
+
+    def get_response(self, prompt: str, temperature: float = 0.7,
+                     max_tokens: int = 2000) -> str:
+        try:
+            import anthropic
+        except ImportError:
+            raise ImportError("❌ Biblioteca 'anthropic' não instalada")
+        try:
+            client = anthropic.Anthropic(api_key=self.api_key)
+            message = client.messages.create(
+                model=self.model, max_tokens=max_tokens,
+                temperature=temperature,
+                messages=[{"role": "user", "content": prompt}]
+            )
             return message.content[0].text
-
         except Exception as e:
             logger.error(f"❌ Erro ao chamar Claude API: {e}")
             raise Exception(f"Erro ao chamar Claude API: {e}")
@@ -117,27 +173,14 @@ class ClaudeProvider(LLMProvider):
 
 
 # ============================================================
-# FACTORY (simplificada - sempre retorna Claude)
+# FACTORY — OpenRouter primário, Claude fallback
 # ============================================================
 
 def create_llm_provider(provider_name: Optional[str] = None) -> LLMProvider:
-    """
-    Factory para criar provedor LLM.
-
-    NOTA: Sempre retorna ClaudeProvider independente do parâmetro.
-    O parâmetro provider_name é mantido por compatibilidade mas ignorado.
-
-    Args:
-        provider_name: Ignorado (mantido por compatibilidade)
-
-    Returns:
-        Instância de ClaudeProvider
-    """
-    # Ignorar provider_name - sempre usar Claude
-    if provider_name and provider_name.lower() != "claude":
-        logger.warning(f"⚠️ Provider '{provider_name}' solicitado, mas usando Claude (único suportado)")
-
-    logger.info(f"🔧 Criando LLM Provider: Claude ({DEFAULT_MODEL})")
+    if os.getenv("OPENROUTER_API_KEY"):
+        logger.info(f"🔧 Criando LLM Provider: OpenRouter ({DEFAULT_MODEL})")
+        return OpenRouterProvider()
+    logger.info("🔧 Criando LLM Provider: Claude (fallback)")
     return ClaudeProvider()
 
 

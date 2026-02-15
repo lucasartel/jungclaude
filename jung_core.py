@@ -102,7 +102,7 @@ class Config:
 
     # Modelos
     CONVERSATION_MODEL = os.getenv("CONVERSATION_MODEL", "z-ai/glm-5")
-    INTERNAL_MODEL = os.getenv("INTERNAL_MODEL", "claude-sonnet-4-5-20250929")
+    INTERNAL_MODEL = os.getenv("INTERNAL_MODEL", "z-ai/glm-5")
     
     TELEGRAM_ADMIN_IDS = [
         int(id.strip()) 
@@ -331,21 +331,27 @@ class HybridDatabaseManager:
             timeout=30.0  # 30 segundos de timeout
         )
 
-        # ===== Anthropic Client (para Claude) - ÚNICO PROVIDER LLM =====
+        # ===== LLM Client (OpenRouter primário, Anthropic fallback) =====
         try:
-            import anthropic
-            if Config.ANTHROPIC_API_KEY:
-                self.anthropic_client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
-                logger.info("✅ Anthropic client inicializado")
+            from llm_providers import AnthropicCompatWrapper
+            if Config.OPENROUTER_API_KEY:
+                # Wrapper que imita Anthropic SDK mas chama OpenRouter com z-ai/glm-5
+                self.anthropic_client = AnthropicCompatWrapper(
+                    openrouter_client=self.openrouter_client,
+                    model=Config.INTERNAL_MODEL,
+                )
+                logger.info(f"✅ LLM interno: OpenRouter/{Config.INTERNAL_MODEL} (via AnthropicCompatWrapper)")
             else:
-                self.anthropic_client = None
-                logger.warning("⚠️ ANTHROPIC_API_KEY não configurada")
-        except ImportError as e:
-            self.anthropic_client = None
-            logger.warning(f"⚠️ Módulo anthropic não disponível: {e}")
+                import anthropic
+                if Config.ANTHROPIC_API_KEY:
+                    self.anthropic_client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+                    logger.info("✅ LLM interno: Anthropic Claude (fallback — OPENROUTER_API_KEY ausente)")
+                else:
+                    self.anthropic_client = None
+                    logger.warning("⚠️ Nenhuma chave de LLM interno disponível (Anthropic nem OpenRouter)")
         except Exception as e:
             self.anthropic_client = None
-            logger.error(f"❌ Erro ao inicializar Anthropic client: {e}")
+            logger.error(f"❌ Erro ao inicializar LLM interno: {e}")
 
         # ===== LLM Fact Extractor =====
         logger.info(f"🔍 [DEBUG] LLM_FACT_EXTRACTOR_AVAILABLE = {LLM_FACT_EXTRACTOR_AVAILABLE}")
@@ -353,16 +359,15 @@ class HybridDatabaseManager:
 
         if LLM_FACT_EXTRACTOR_AVAILABLE:
             try:
-                # Usar Claude como único provider
                 if self.anthropic_client:
-                    logger.info("🔧 Inicializando LLMFactExtractor com Claude...")
+                    logger.info(f"🔧 Inicializando LLMFactExtractor ({Config.INTERNAL_MODEL})...")
                     self.fact_extractor = LLMFactExtractor(
                         llm_client=self.anthropic_client,
-                        model="claude-sonnet-4-5-20250929"
+                        model=Config.INTERNAL_MODEL,
                     )
-                    logger.info("✅ LLM Fact Extractor inicializado (Claude Sonnet 4.5)")
+                    logger.info(f"✅ LLM Fact Extractor inicializado ({Config.INTERNAL_MODEL})")
                 else:
-                    logger.warning("⚠️ Anthropic client não disponível para fact extractor")
+                    logger.warning("⚠️ LLM client não disponível para fact extractor")
                     self.fact_extractor = None
             except Exception as e:
                 logger.error(f"❌ Erro ao inicializar LLM Fact Extractor: {e}")
