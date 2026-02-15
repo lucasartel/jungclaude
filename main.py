@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Importar o bot
-from telegram_bot import bot_state, start_command, help_command, stats_command, mbti_command, desenvolvimento_command, reset_command
+from telegram_bot import bot_state, start_command, help_command, stats_command, mbti_command, desenvolvimento_command, reset_command, meu_perfil_command
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 # Importar rotas do admin (serão criadas)
@@ -241,6 +241,7 @@ async def lifespan(app: FastAPI):
     telegram_app.add_handler(CommandHandler("mbti", mbti_command))
     telegram_app.add_handler(CommandHandler("desenvolvimento", desenvolvimento_command))
     telegram_app.add_handler(CommandHandler("reset", reset_command))
+    telegram_app.add_handler(CommandHandler("meu_perfil", meu_perfil_command))
 
     # Handler de mensagens (precisamos importar a função handle_message se ela existir,
     # ou definir aqui se estiver dentro do main no original.

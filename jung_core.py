@@ -1284,8 +1284,24 @@ Resposta: {ai_response}
         except Exception as e:
             logger.warning(f"⚠️ Erro no hook de ruminação: {e}")
 
+        # 8. HOOK: Log diário em arquivo .md (memória textual)
+        try:
+            from user_profile_writer import write_session_entry
+            write_session_entry(
+                user_id=user_id,
+                user_name=user_name,
+                user_input=user_input,
+                ai_response=ai_response,
+                metadata={
+                    "tension_level": tension_level,
+                    "affective_charge": affective_charge,
+                },
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ Erro no hook de log diário: {e}")
+
         return conversation_id
-    
+
     def get_user_conversations(
         self,
         user_id: str,
@@ -1792,6 +1808,32 @@ Resposta: {ai_response}
             logger.info(f"✅ Two-Stage concluído: {len(top_memories)} memórias finais (de {len(results)} broad)")
             for i, mem in enumerate(top_memories[:3], 1):
                 logger.info(f"   {i}. [final={mem['final_score']:.3f}] {mem['user_input'][:50]}...")
+
+            # STAGE 3: Merge com BM25 sobre arquivos de sessão
+            try:
+                from bm25_search import search as bm25_search
+                bm25_hits = bm25_search(user_id_str, query, k=max(3, k // 2))
+                if bm25_hits:
+                    existing_texts = {m['user_input'][:80] for m in top_memories}
+                    for hit in bm25_hits:
+                        # Evitar duplicatas já cobertas pelo vector search
+                        if hit['text'][:80] not in existing_texts:
+                            top_memories.append({
+                                'conversation_id': None,
+                                'user_input': hit['text'],
+                                'ai_response': '',
+                                'timestamp': hit['date'],
+                                'similarity_score': hit['bm25_score'] * 0.3,
+                                'final_score': hit['bm25_score'] * 0.3,
+                                'keywords': [],
+                                'metadata': {'type': 'bm25', 'date': hit['date']},
+                            })
+                    # Re-ordenar por final_score
+                    top_memories.sort(key=lambda m: m.get('final_score', 0), reverse=True)
+                    top_memories = top_memories[:k]
+                    logger.info(f"   BM25: {len(bm25_hits)} hits fundidos")
+            except Exception as bm25_err:
+                logger.debug(f"   BM25 indisponível: {bm25_err}")
 
             return top_memories
 
@@ -3698,6 +3740,24 @@ class JungianEngine:
 
         Agora usa apenas 1 chamada LLM.
         """
+
+        # Pre-compaction flush: persistir fragmentos antes de truncar contexto longo
+        if chat_history:
+            try:
+                from memory_flush import flush_if_needed
+                user_row = self.conn.execute(
+                    "SELECT user_name FROM users WHERE user_id = ?", (user_id,)
+                ).fetchone()
+                user_name_for_flush = user_row[0] if user_row else user_id
+                chat_history = flush_if_needed(
+                    db=self,
+                    anthropic_client=self.anthropic_client,
+                    user_id=user_id,
+                    user_name=user_name_for_flush,
+                    chat_history=chat_history,
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ Erro no pre-compaction flush: {e}")
 
         # Formatar histórico
         history_text = ""

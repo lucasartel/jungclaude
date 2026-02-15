@@ -400,11 +400,49 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /desenvolvimento
    Veja como o agente evoluiu com você
 
+/meu_perfil
+   Receba seu perfil psicológico consolidado
+
 ━━━━━━━━━━━━━━━━━━━
 💬 Basta falar naturalmente comigo!
 """
-    
+
     await update.message.reply_text(help_text)
+
+
+async def meu_perfil_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler para /meu_perfil — envia o profile.md do usuário"""
+    import os
+
+    user = update.effective_user
+    user_id = ensure_user_in_database(user)
+
+    profile_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "data", "users", user_id, "profile.md"
+    )
+
+    if not os.path.exists(profile_path):
+        await update.message.reply_text(
+            "📋 Ainda não tenho um perfil consolidado para você.\n\n"
+            "Continue conversando comigo — o perfil é gerado automaticamente "
+            "após a primeira consolidação de memória."
+        )
+        return
+
+    with open(profile_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    if len(content) <= 4096:
+        await update.message.reply_text(content, parse_mode="Markdown")
+    else:
+        # Arquivo grande: enviar como documento
+        await update.message.reply_document(
+            document=open(profile_path, "rb"),
+            filename="meu_perfil.md",
+            caption="Seu perfil psicológico consolidado."
+        )
+
 
 async def mbti_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler para /mbti - Análise de personalidade MBTI"""

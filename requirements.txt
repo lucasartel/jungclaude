@@ -34,3 +34,6 @@ reportlab>=4.0.0
 
 # Security (bcrypt para autenticação)
 bcrypt>=4.0.0
+
+# BM25 (busca híbrida sobre logs de sessão)
+rank-bm25==0.2.2

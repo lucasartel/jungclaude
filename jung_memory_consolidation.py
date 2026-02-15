@@ -74,6 +74,26 @@ class MemoryConsolidator:
                     lookback_days=lookback_days
                 )
 
+        # 4. Reconstruir profile.md com dados atualizados
+        try:
+            from user_profile_writer import rebuild_profile_md
+            facts = self.db._get_current_facts(user_id)
+            psychometrics = self.db.get_psychometrics(user_id)
+            patterns = self.db._get_relevant_patterns(user_id, "")
+            user_row = self.db.conn.execute(
+                "SELECT user_name FROM users WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            user_name = user_row[0] if user_row else user_id
+            rebuild_profile_md(
+                user_id=user_id,
+                user_name=user_name,
+                facts=facts,
+                psychometrics=psychometrics,
+                patterns=patterns,
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ Erro ao reconstruir profile.md para {user_id}: {e}")
+
     def _cluster_by_topic(self, memories: List[Dict]) -> Dict[str, List[Dict]]:
         """
         Agrupa memórias por tópico baseado em keywords
