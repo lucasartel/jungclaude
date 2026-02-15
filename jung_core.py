@@ -335,9 +335,15 @@ class HybridDatabaseManager:
         try:
             from llm_providers import AnthropicCompatWrapper
             if Config.OPENROUTER_API_KEY:
+                # Cria cliente OpenRouter dedicado para chamadas internas
+                _or_client_internal = OpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=Config.OPENROUTER_API_KEY,
+                    timeout=60.0,
+                )
                 # Wrapper que imita Anthropic SDK mas chama OpenRouter com z-ai/glm-5
                 self.anthropic_client = AnthropicCompatWrapper(
-                    openrouter_client=self.openrouter_client,
+                    openrouter_client=_or_client_internal,
                     model=Config.INTERNAL_MODEL,
                 )
                 logger.info(f"✅ LLM interno: OpenRouter/{Config.INTERNAL_MODEL} (via AnthropicCompatWrapper)")
@@ -2628,7 +2634,7 @@ Resposta: {ai_response}
         # Para cada tema, buscar conversas relacionadas
         for theme in list(all_keywords)[:20]:  # Limitar a 20 temas mais relevantes
             theme = theme.strip()
-            if not theme or len(theme) < 3:
+            if not theme or len(theme) < 6:
                 continue
 
             related = self.semantic_search(user_id, theme, k=10)

@@ -1061,9 +1061,10 @@ O que você decide?
             except Exception as tri_err:
                 logger.warning(f"⚠️ TRI: Erro na detecção (não crítico): {tri_err}")
 
-        # Detectar padrões periodicamente
+        # Detectar padrões periodicamente (em background para não bloquear)
         if bot_state.total_messages_processed % 10 == 0:
-            bot_state.db.detect_and_save_patterns(user_id)
+            loop = asyncio.get_event_loop()
+            loop.run_in_executor(None, bot_state.db.detect_and_save_patterns, user_id)
 
         bot_state.total_messages_processed += 1
 
