@@ -55,7 +55,9 @@ def write_session_entry(
         with open(session_path, "a", encoding="utf-8") as f:
             if is_new_file:
                 f.write(f"# Sessão {today} — {user_name}\n")
+                logger.info(f"📄 [SESSION LOG] Novo arquivo criado: sessions/{today}.md (user={user_id[:8]})")
             f.write(entry)
+        logger.debug(f"📄 [SESSION LOG] Entrada gravada em sessions/{today}.md (tag='{tag or '-'}')")
 
     except Exception as e:
         logger.warning(f"⚠️ user_profile_writer: erro ao gravar sessão de {user_id}: {e}")
