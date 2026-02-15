@@ -101,7 +101,7 @@ class Config:
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
     # Modelos
-    CONVERSATION_MODEL = os.getenv("CONVERSATION_MODEL", "mistralai/mistral-large")
+    CONVERSATION_MODEL = os.getenv("CONVERSATION_MODEL", "z-ai/glm-5")
     INTERNAL_MODEL = os.getenv("INTERNAL_MODEL", "claude-sonnet-4-5-20250929")
     
     TELEGRAM_ADMIN_IDS = [
