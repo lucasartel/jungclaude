@@ -13,7 +13,7 @@ from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "users")
+DATA_DIR = os.path.join(".", "data", "users")  # mesmo base que jung_core.py usa (./data → /data no Railway)
 
 
 def _user_dir(user_id: str) -> str:
