@@ -96,13 +96,28 @@ async def run_agent_identity_consolidation():
 
         logger.info(f"📨 Encontradas {len(conversations)} conversas para processar")
 
-        # Criar extrator
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            logger.error("❌ ANTHROPIC_API_KEY não encontrada")
+        # Criar cliente LLM — prioridade: OpenRouter/GLM-5 via AnthropicCompatWrapper
+        openrouter_key = os.getenv("OPENROUTER_API_KEY")
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+
+        llm_client = None
+        if openrouter_key:
+            try:
+                from openai import OpenAI as OpenAIClient
+                from llm_providers import AnthropicCompatWrapper
+                _or = OpenAIClient(base_url="https://openrouter.ai/api/v1", api_key=openrouter_key, timeout=60.0)
+                internal_model = os.getenv("INTERNAL_MODEL", "z-ai/glm-5")
+                llm_client = AnthropicCompatWrapper(openrouter_client=_or, model=internal_model)
+                logger.info(f"✅ [IDENTITY JOB] LLM via OpenRouter/{internal_model}")
+            except Exception as e:
+                logger.warning(f"⚠️ [IDENTITY JOB] AnthropicCompatWrapper falhou: {e}")
+        if llm_client is None and anthropic_key:
+            llm_client = Anthropic(api_key=anthropic_key)
+            logger.info("✅ [IDENTITY JOB] LLM via Anthropic (fallback)")
+        if llm_client is None:
+            logger.error("❌ [IDENTITY JOB] Nenhuma chave de LLM disponível (OPENROUTER_API_KEY nem ANTHROPIC_API_KEY)")
             return
 
-        llm_client = Anthropic(api_key=api_key)
         extractor = AgentIdentityExtractor(db, llm_client)
 
         # Processar conversas
@@ -184,6 +199,14 @@ async def run_agent_identity_consolidation():
         # Estatísticas de identidade
         if elements_total > 0:
             log_identity_stats(cursor)
+
+        # HOOK: Gerar/atualizar self_profile.md do agente após consolidação
+        try:
+            from user_profile_writer import rebuild_agent_profile_md
+            rebuild_agent_profile_md(db)
+            logger.info("✅ [IDENTITY JOB] self_profile.md atualizado após consolidação")
+        except Exception as profile_err:
+            logger.warning(f"⚠️ [IDENTITY JOB] Falha ao gerar self_profile.md: {profile_err}")
 
     except Exception as e:
         logger.error(f"❌ Erro geral na consolidação: {e}")

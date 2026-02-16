@@ -3785,9 +3785,31 @@ class JungianEngine:
                 role = "Usuário" if msg["role"] == "user" else "Jung"
                 history_text += f"{role}: {msg['content'][:150]}...\n"
 
+        # Construir identidade dinâmica: base estática + contexto de identidade do agente
+        agent_identity_text = Config.AGENT_IDENTITY
+        if self.identity_context_builder:
+            try:
+                identity_ctx = self.identity_context_builder.build_context_summary_for_llm(
+                    user_id=user_id, style="concise"
+                )
+                if identity_ctx and len(identity_ctx) > 100:
+                    agent_identity_text = Config.AGENT_IDENTITY + "\n\n" + identity_ctx
+                    logger.info(
+                        f"✅ [IDENTITY] Contexto de identidade injetado: {len(identity_ctx)} chars"
+                    )
+                else:
+                    logger.info(
+                        "⚠️ [IDENTITY] Contexto de identidade vazio — usando persona base "
+                        "(aguardando 1ª consolidação de identidade)"
+                    )
+            except Exception as e:
+                logger.warning(f"⚠️ [IDENTITY] Falha ao obter contexto de identidade: {e}")
+        else:
+            logger.debug("⚠️ [IDENTITY] identity_context_builder não disponível — usando persona base")
+
         # Construir prompt
         prompt = Config.RESPONSE_PROMPT.format(
-            agent_identity=Config.AGENT_IDENTITY,
+            agent_identity=agent_identity_text,
             semantic_context=semantic_context[:2000],
             chat_history=history_text,
             user_input=user_input

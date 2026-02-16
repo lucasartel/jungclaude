@@ -526,7 +526,13 @@ class RuminationEngine:
                 tension['last_evidence_at'] = datetime.now().isoformat()
 
             # 2. Calcular maturidade
+            old_maturity = tension.get('maturity_score', 0.0)
             maturity = self._calculate_maturity(tension)
+            logger.info(
+                f"📈 [RUMINATION] Maturidade tensão {tension_id}: "
+                f"{old_maturity:.3f} → {maturity:.3f} "
+                f"(evidências={tension['evidence_count']}, revisitas={tension.get('revisit_count', 0)})"
+            )
 
             # 3. Atualizar status baseado em maturidade
             days_since_detection = (datetime.now() - datetime.fromisoformat(tension['first_detected_at'])).days
@@ -537,12 +543,21 @@ class RuminationEngine:
             if maturity >= MIN_MATURITY_FOR_SYNTHESIS and days_since_detection >= MIN_DAYS_FOR_SYNTHESIS:
                 new_status = "ready_for_synthesis"
                 stats["ready_for_synthesis"] += 1
+                logger.info(
+                    f"🎯 [RUMINATION] Síntese desbloqueada para tensão {tension_id}: "
+                    f"maturity={maturity:.3f} >= {MIN_MATURITY_FOR_SYNTHESIS} | dias={days_since_detection}"
+                )
             elif maturity < 0.2 and days_since_evidence > DAYS_TO_ARCHIVE:
                 new_status = "archived"
                 stats["archived"] += 1
+                logger.info(f"🗃️ [RUMINATION] Tensão {tension_id} arquivada (maturity baixa, sem evidências recentes)")
             else:
                 new_status = "maturing"
                 stats["matured"] += 1
+                logger.info(
+                    f"⏳ [RUMINATION] Tensão {tension_id} amadurecendo: "
+                    f"maturity={maturity:.3f} (precisa {MIN_MATURITY_FOR_SYNTHESIS})"
+                )
 
             # 4. Atualizar tensão no banco
             cursor.execute("""
@@ -620,13 +635,67 @@ class RuminationEngine:
         return min(1.0, maturity)
 
     def _count_related_fragments(self, fragments: List, tension: Dict) -> int:
-        """Conta quantos fragmentos são relacionados a uma tensão"""
-        # Simplificado: conta fragmentos que são do tipo dos polos
-        pole_a_ids = json.loads(tension.get('pole_a_fragment_ids', '[]'))
-        pole_b_ids = json.loads(tension.get('pole_b_fragment_ids', '[]'))
+        """
+        Conta quantos fragmentos recentes são relacionados a uma tensão.
 
-        # Por enquanto retorna 0 (implementação futura: usar similaridade semântica)
-        return 0
+        Verifica os tipos de fragmento em relação aos polos da tensão
+        (pole_a_type / pole_b_type) usando os IDs dos fragmentos passados.
+        """
+        if not fragments:
+            logger.debug(f"🧠 [RUMINATION] Nenhum fragmento recente para tensão {tension.get('id', '?')}")
+            return 0
+
+        # Extrair IDs dos fragmentos recentes (sqlite3.Row ou tuple)
+        recent_ids = []
+        for row in fragments:
+            try:
+                recent_ids.append(row['id'])
+            except (TypeError, KeyError):
+                recent_ids.append(row[0])
+
+        if not recent_ids:
+            return 0
+
+        # Tipos dos polos desta tensão
+        relevant_types = set()
+        pole_a_type = tension.get('pole_a_type') or ''
+        pole_b_type = tension.get('pole_b_type') or ''
+        if pole_a_type:
+            relevant_types.add(pole_a_type)
+        if pole_b_type:
+            relevant_types.add(pole_b_type)
+
+        # Fallback: inferir tipos pelo tension_type quando poles não estão preenchidos
+        if not relevant_types:
+            t_type = tension.get('tension_type', '')
+            if t_type == 'valor_comportamento':
+                relevant_types = {'valor', 'comportamento', 'contradição', 'crença'}
+            elif t_type == 'desejo_medo':
+                relevant_types = {'desejo', 'medo', 'emoção', 'dúvida'}
+            else:
+                relevant_types = {'valor', 'desejo', 'medo', 'comportamento', 'contradição'}
+
+        # Contar fragmentos recentes cujos tipos são relevantes para esta tensão
+        id_placeholders = ','.join(['?' for _ in recent_ids])
+        type_placeholders = ','.join(['?' for _ in relevant_types])
+        cursor = self.db.conn.cursor()
+        cursor.execute(
+            f"""
+            SELECT COUNT(*) FROM rumination_fragments
+            WHERE id IN ({id_placeholders})
+              AND fragment_type IN ({type_placeholders})
+            """,
+            (*recent_ids, *relevant_types),
+        )
+        result = cursor.fetchone()
+        count = result[0] if result else 0
+
+        logger.info(
+            f"🧠 [RUMINATION] Fragment count tensão {tension.get('id', '?')}: "
+            f"{count} relevantes de {len(recent_ids)} recentes "
+            f"(tipos: {relevant_types})"
+        )
+        return count
 
     # ========================================
     # FASE 4: SÍNTESE
