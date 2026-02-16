@@ -75,14 +75,14 @@ async def run_agent_identity_consolidation():
         last_consolidation = datetime.now() - timedelta(hours=IDENTITY_CONSOLIDATION_INTERVAL_HOURS * 2)
 
         cursor.execute("""
-            SELECT c.id, c.timestamp, c.user_id, c.user_input, c.assistant_response
+            SELECT c.id, c.timestamp, c.user_id, c.user_input, c.ai_response
             FROM conversations c
             LEFT JOIN agent_identity_extractions aie ON c.id = aie.conversation_id
             WHERE c.user_id = ?
               AND c.timestamp > ?
               AND aie.id IS NULL
-              AND c.assistant_response IS NOT NULL
-              AND c.assistant_response != ''
+              AND c.ai_response IS NOT NULL
+              AND c.ai_response != ''
             ORDER BY c.timestamp ASC
             LIMIT ?
         """, (ADMIN_USER_ID, last_consolidation.isoformat(), MAX_CONVERSATIONS_PER_CONSOLIDATION))
