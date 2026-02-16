@@ -86,7 +86,7 @@ TIPOS DE CORREÇÃO:
 3. RETIFICAÇÃO: "Errei, sou designer, não programador" (profissão errada)
 4. DESATIVAÇÃO: "Parei de jogar futebol" (hobby abandonado)
 
-EXEMPLOS DE CORREÇÃO:
+EXEMPLOS DE CORREÇÃO (is_correction: true):
 - "Não, minha esposa se chama Marina" → esposa.nome = Marina
 - "Errei, trabalho na Google, não na Microsoft" → empresa.nome = Google
 - "Na verdade sou designer, não programador" → profissao.nome = designer
@@ -94,6 +94,13 @@ EXEMPLOS DE CORREÇÃO:
 - "Meu filho tem 10 anos, não 8" → filho.idade = 10
 - "Saí da empresa X, agora estou na Y" → empresa.nome = Y
 - "Mudei para São Paulo" → moradia.cidade = São Paulo
+
+EXEMPLOS QUE NÃO SÃO CORREÇÕES (is_correction: false):
+- "Acho que no fim é tudo fake" → reflexão filosófica, NÃO é correção
+- "não é assim que as coisas funcionam" → opinião/argumento, NÃO é correção
+- "não consigo ver legitimidade naquilo" → descrição emocional, NÃO é correção
+- "não é fake, mas não é real" → paradoxo filosófico, NÃO é correção
+- Qualquer frase longa, reflexiva ou filosófica contendo "não é" → NÃO é correção de fato
 
 FATOS ATUAIS DO USUÁRIO (para contexto):
 {existing_facts}
@@ -162,6 +169,17 @@ Responda APENAS o JSON, sem explicações."""
 
         if not has_correction_pattern:
             logger.debug(f"Nenhum padrão de correção detectado em: {user_input[:50]}...")
+            return []
+
+        # Padrões genéricos como negacao_verbo/negacao_mais disparam facilmente em
+        # frases filosóficas longas ("não é fake", "não consigo"). Correções reais
+        # costumam ser mensagens curtas e diretas.
+        BROAD_PATTERNS = {'negacao_verbo', 'negacao_mais', 'inversao'}
+        if pattern_name in BROAD_PATTERNS and len(user_input) > 100:
+            logger.debug(
+                f"Padrão '{pattern_name}' ignorado: mensagem longa ({len(user_input)} chars) "
+                f"provavelmente não é uma correção de fato"
+            )
             return []
 
         logger.info(f"🔍 Padrão de correção detectado: {pattern_name}")

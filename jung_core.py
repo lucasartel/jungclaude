@@ -2392,9 +2392,17 @@ Resposta: {ai_response}
         """
         from correction_detector import generate_correction_feedback
 
+        # Não aplicar correções de baixa confiança para evitar falsos positivos
+        if correction.confidence < 0.5:
+            logger.info(
+                f"⚠️ Correção ignorada (confiança muito baixa={correction.confidence:.2f}): "
+                f"{correction.fact_type}.{correction.attribute} → '{correction.new_value}'"
+            )
+            return
+
         logger.info(
             f"🔧 Aplicando correção: {correction.fact_type}.{correction.attribute} "
-            f"'{correction.old_value}' → '{correction.new_value}'"
+            f"'{correction.old_value}' → '{correction.new_value}' (confiança={correction.confidence:.2f})"
         )
 
         # 1. Buscar fato atual para anotar ChromaDB
