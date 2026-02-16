@@ -3630,11 +3630,22 @@ class JungianEngine:
             timeout=30.0  # 30 segundos de timeout
         )
 
-        # Cliente Anthropic (tarefas internas: extração de fatos, detecção de correções)
-        import anthropic
-        self.anthropic_client = anthropic.Anthropic(
-            api_key=Config.ANTHROPIC_API_KEY
-        )
+        # Cliente para tarefas internas (extração de fatos, flush, detecção de correções)
+        # Prioridade: AnthropicCompatWrapper via OpenRouter; fallback: anthropic direto
+        if Config.OPENROUTER_API_KEY:
+            from llm_providers import AnthropicCompatWrapper
+            _or_internal = OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=Config.OPENROUTER_API_KEY,
+                timeout=60.0,
+            )
+            self.anthropic_client = AnthropicCompatWrapper(
+                openrouter_client=_or_internal,
+                model=Config.INTERNAL_MODEL,
+            )
+        else:
+            import anthropic
+            self.anthropic_client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
 
         # Cliente OpenRouter/Mistral (conversação com o usuário)
         if Config.OPENROUTER_API_KEY:
