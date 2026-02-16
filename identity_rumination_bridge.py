@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from identity_config import AGENT_INSTANCE, MIN_CERTAINTY_FOR_NUCLEAR
+from identity_config import AGENT_INSTANCE, MIN_CERTAINTY_FOR_NUCLEAR, ADMIN_USER_ID
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -78,14 +78,13 @@ class IdentityRuminationBridge:
                 logger.warning("⚠️ Tabela rumination_tensions não existe - pulando sync")
                 return 0
 
-            # Buscar tensões maduras não exportadas
+            # Buscar tensões maduras (schema real: pole_a_content, pole_b_content)
             cursor.execute("""
-                SELECT id, pole_a, pole_b, tension_type, intensity,
-                       first_detected, conversation_id
+                SELECT id, pole_a_content, pole_b_content, tension_type, intensity,
+                       first_detected_at
                 FROM rumination_tensions
                 WHERE maturity_score > 0.6
-                  AND (exported_to_identity_id IS NULL OR exported_to_identity_id = 0)
-                  AND status != 'resolved'
+                  AND status = 'open'
             """)
 
             tensions = cursor.fetchall()
@@ -97,7 +96,15 @@ class IdentityRuminationBridge:
 
             synced_count = 0
             for row in tensions:
-                tension_id, pole_a, pole_b, tension_type, intensity, first_detected, conv_id = row
+                tension_id, pole_a, pole_b, tension_type, intensity, first_detected = row
+
+                # Verificar idempotência: contradição com mesmo polo já existe?
+                cursor.execute("""
+                    SELECT id FROM agent_identity_contradictions
+                    WHERE agent_instance = ? AND pole_a = ? AND pole_b = ?
+                """, (AGENT_INSTANCE, pole_a, pole_b))
+                if cursor.fetchone():
+                    continue
 
                 # Criar contradição identitária
                 cursor.execute("""
@@ -112,21 +119,11 @@ class IdentityRuminationBridge:
                     pole_b,
                     tension_type,
                     intensity,
-                    intensity,  # salience = intensity
+                    intensity,
                     first_detected,
-                    json.dumps([conv_id] if conv_id else []),
+                    json.dumps([]),
                     'unresolved'
                 ))
-
-                contradiction_id = cursor.lastrowid
-
-                # Marcar tensão como exportada
-                cursor.execute("""
-                    UPDATE rumination_tensions
-                    SET exported_to_identity_id = ?,
-                        exported_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                """, (contradiction_id, tension_id))
 
                 synced_count += 1
 
@@ -161,13 +158,12 @@ class IdentityRuminationBridge:
                 logger.warning("⚠️ Tabela rumination_insights não existe - pulando sync")
                 return 0
 
-            # Buscar insights maduros não exportados
+            # Buscar insights prontos (schema real: full_message, symbol_content)
             cursor.execute("""
-                SELECT id, insight_content, symbolic_interpretation,
-                       crystallized_at, conversation_id
+                SELECT id, full_message, symbol_content,
+                       crystallized_at, source_tension_id
                 FROM rumination_insights
-                WHERE synthesis_level = 'symbolic'
-                  AND (exported_to_identity_id IS NULL OR exported_to_identity_id = 0)
+                WHERE status = 'ready'
             """)
 
             insights = cursor.fetchall()
@@ -197,14 +193,7 @@ class IdentityRuminationBridge:
                 """, (AGENT_INSTANCE, nuclear_content))
 
                 if cursor.fetchone():
-                    # Já existe - apenas marcar insight como exportado
-                    cursor.execute("""
-                        UPDATE rumination_insights
-                        SET exported_to_identity_id = 0,
-                            exported_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (insight_id,))
-                    continue
+                    continue  # Já existe, pular
 
                 # Criar novo atributo nuclear
                 cursor.execute("""
@@ -223,15 +212,12 @@ class IdentityRuminationBridge:
                     'ruminação sobre interações'
                 ))
 
-                nuclear_id = cursor.lastrowid
-
-                # Marcar insight como exportado
+                # Marcar insight como entregue
                 cursor.execute("""
                     UPDATE rumination_insights
-                    SET exported_to_identity_id = ?,
-                        exported_at = CURRENT_TIMESTAMP
+                    SET status = 'delivered'
                     WHERE id = ?
-                """, (nuclear_id, insight_id))
+                """, (insight_id,))
 
                 synced_count += 1
 
@@ -266,16 +252,16 @@ class IdentityRuminationBridge:
                 logger.warning("⚠️ Tabela rumination_fragments não existe - pulando sync")
                 return 0
 
-            # Buscar fragmentos recorrentes
+            # Buscar fragmentos recorrentes (schema real: content, emotional_weight, created_at)
             cursor.execute("""
-                SELECT fragment_content, AVG(emotional_charge) as avg_charge,
-                       fragment_type, MIN(timestamp) as first_occurrence,
+                SELECT content, AVG(emotional_weight) as avg_charge,
+                       fragment_type, MIN(created_at) as first_occurrence,
                        COUNT(*) as occurrence_count
                 FROM rumination_fragments
-                WHERE exported_to_identity_id IS NULL OR exported_to_identity_id = 0
-                GROUP BY fragment_content
+                WHERE processed = 1
+                GROUP BY content
                 HAVING COUNT(*) >= 3
-                   AND AVG(emotional_charge) > 0.6
+                   AND AVG(emotional_weight) > 0.6
             """)
 
             fragments = cursor.fetchall()
@@ -301,14 +287,7 @@ class IdentityRuminationBridge:
                 """, (AGENT_INSTANCE, content))
 
                 if cursor.fetchone():
-                    # Já existe - marcar fragmentos como exportados
-                    cursor.execute("""
-                        UPDATE rumination_fragments
-                        SET exported_to_identity_id = 0,
-                            exported_at = CURRENT_TIMESTAMP
-                        WHERE fragment_content = ?
-                    """, (content,))
-                    continue
+                    continue  # Já existe, pular
 
                 # Criar novo self possível
                 vividness = min(0.9, 0.5 + (count * 0.1))  # Aumenta com recorrência
@@ -330,16 +309,6 @@ class IdentityRuminationBridge:
                     'negative',
                     'active'
                 ))
-
-                self_id = cursor.lastrowid
-
-                # Marcar fragmentos como exportados
-                cursor.execute("""
-                    UPDATE rumination_fragments
-                    SET exported_to_identity_id = ?,
-                        exported_at = CURRENT_TIMESTAMP
-                    WHERE fragment_content = ?
-                """, (self_id, content))
 
                 synced_count += 1
 
@@ -395,13 +364,21 @@ class IdentityRuminationBridge:
             for row in contradictions:
                 contradiction_id, pole_a, pole_b, contra_type, tension = row
 
-                # Criar nova tensão de ruminação
+                # Verificar idempotência: tensão equivalente já existe?
+                cursor.execute("""
+                    SELECT id FROM rumination_tensions
+                    WHERE pole_a_content = ? AND pole_b_content = ? AND status = 'open'
+                """, (pole_a, pole_b))
+                if cursor.fetchone():
+                    continue
+
+                # Criar nova tensão de ruminação (schema real: pole_a_content, user_id obrigatório)
                 cursor.execute("""
                     INSERT INTO rumination_tensions (
-                        pole_a, pole_b, tension_type, intensity,
-                        first_detected, status, maturity_score
-                    ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'active', 0.0)
-                """, (pole_a, pole_b, contra_type, tension))
+                        user_id, pole_a_content, pole_b_content, tension_type,
+                        intensity, status, maturity_score
+                    ) VALUES (?, ?, ?, ?, ?, 'open', 0.0)
+                """, (ADMIN_USER_ID, pole_a, pole_b, contra_type, tension))
 
                 # Marcar contradição como alimentada
                 cursor.execute("""
