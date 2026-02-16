@@ -3764,7 +3764,7 @@ class JungianEngine:
         if chat_history:
             try:
                 from memory_flush import flush_if_needed
-                user_row = self.conn.execute(
+                user_row = self.db.conn.execute(
                     "SELECT user_name FROM users WHERE user_id = ?", (user_id,)
                 ).fetchone()
                 user_name_for_flush = user_row[0] if user_row else user_id

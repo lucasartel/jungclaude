@@ -241,7 +241,7 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
     def _extract_with_llm(self, user_input: str) -> List[ExtractedFact]:
         """Extração usando LLM"""
 
-        prompt = self.EXTRACTION_PROMPT.format(user_input=user_input)
+        prompt = self.EXTRACTION_PROMPT.replace("{user_input}", user_input)
 
         try:
             # Chamar Claude (único provider)
