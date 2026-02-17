@@ -3728,6 +3728,30 @@ class JungianEngine:
                 user_id, message, k_memories=5, chat_history=chat_history
             )
 
+        # Injetar insights de ruminação entregues (apenas para admin)
+        try:
+            from rumination_config import ADMIN_USER_ID as _ADMIN_ID
+            if user_id == _ADMIN_ID:
+                _ri_cursor = self.db.conn.cursor()
+                _ri_cursor.execute("""
+                    SELECT full_message, symbol_content
+                    FROM rumination_insights
+                    WHERE user_id = ? AND status = 'delivered'
+                    ORDER BY delivered_at DESC
+                    LIMIT 3
+                """, (user_id,))
+                _ri_rows = _ri_cursor.fetchall()
+                if _ri_rows:
+                    _ri_lines = ["\n[Reflexões internas recentes do agente:]"]
+                    for _ri_row in _ri_rows:
+                        _ri_text = (_ri_row[0] or _ri_row[1] or "").strip()
+                        if _ri_text:
+                            _ri_lines.append(f"- {_ri_text[:300]}")
+                    semantic_context = semantic_context + "\n".join(_ri_lines)
+                    logger.info(f"✅ [RUMINATION] {len(_ri_rows)} insights injetados no contexto do admin")
+        except Exception as _ri_e:
+            logger.debug(f"[RUMINATION] Insights não injetados: {_ri_e}")
+
         # Determinar complexidade
         complexity = self._determine_complexity(message)
 

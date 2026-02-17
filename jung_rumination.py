@@ -638,8 +638,9 @@ class RuminationEngine:
         """
         Conta quantos fragmentos recentes são relacionados a uma tensão.
 
-        Verifica os tipos de fragmento em relação aos polos da tensão
-        (pole_a_type / pole_b_type) usando os IDs dos fragmentos passados.
+        Infere tipos relevantes a partir dos IDs dos fragmentos que formam os polos
+        da tensão (pole_a_fragment_ids / pole_b_fragment_ids), pois a tabela
+        rumination_tensions não possui colunas pole_a_type / pole_b_type.
         """
         if not fragments:
             logger.debug(f"🧠 [RUMINATION] Nenhum fragmento recente para tensão {tension.get('id', '?')}")
@@ -656,16 +657,23 @@ class RuminationEngine:
         if not recent_ids:
             return 0
 
-        # Tipos dos polos desta tensão
+        # Inferir tipos relevantes a partir dos fragmentos que compõem os polos da tensão
         relevant_types = set()
-        pole_a_type = tension.get('pole_a_type') or ''
-        pole_b_type = tension.get('pole_b_type') or ''
-        if pole_a_type:
-            relevant_types.add(pole_a_type)
-        if pole_b_type:
-            relevant_types.add(pole_b_type)
+        cursor = self.db.conn.cursor()
 
-        # Fallback: inferir tipos pelo tension_type quando poles não estão preenchidos
+        pole_a_ids = json.loads(tension.get('pole_a_fragment_ids') or '[]')
+        pole_b_ids = json.loads(tension.get('pole_b_fragment_ids') or '[]')
+        pole_fragment_ids = list(set(pole_a_ids + pole_b_ids))
+
+        if pole_fragment_ids:
+            id_ph = ','.join(['?' for _ in pole_fragment_ids])
+            cursor.execute(
+                f"SELECT DISTINCT fragment_type FROM rumination_fragments WHERE id IN ({id_ph})",
+                pole_fragment_ids,
+            )
+            relevant_types = {row[0] for row in cursor.fetchall() if row[0]}
+
+        # Fallback: inferir pelo tension_type se os polos não tiverem fragmentos registrados
         if not relevant_types:
             t_type = tension.get('tension_type', '')
             if t_type == 'valor_comportamento':
@@ -678,7 +686,6 @@ class RuminationEngine:
         # Contar fragmentos recentes cujos tipos são relevantes para esta tensão
         id_placeholders = ','.join(['?' for _ in recent_ids])
         type_placeholders = ','.join(['?' for _ in relevant_types])
-        cursor = self.db.conn.cursor()
         cursor.execute(
             f"""
             SELECT COUNT(*) FROM rumination_fragments

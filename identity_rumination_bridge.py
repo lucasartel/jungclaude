@@ -493,9 +493,9 @@ async def identity_rumination_sync_scheduler():
         try:
             await run_identity_rumination_sync()
 
-            # Aguardar próximo ciclo (6 horas)
-            logger.info("⏰ Próxima sincronização Identidade↔Ruminação em 6h")
-            await asyncio.sleep(6 * 3600)
+            # Aguardar próximo ciclo (1 hora)
+            logger.info("⏰ Próxima sincronização Identidade↔Ruminação em 1h")
+            await asyncio.sleep(1 * 3600)
 
         except Exception as e:
             logger.error(f"❌ Erro no scheduler de sincronização: {e}")
