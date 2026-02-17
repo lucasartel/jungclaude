@@ -30,6 +30,25 @@ from typing import Optional, List, Dict
 logger = logging.getLogger(__name__)
 
 
+def _ensure_pgvector(database_url: str) -> None:
+    """
+    Cria a extensão pgvector no PostgreSQL se ainda não existir.
+    Roda automaticamente antes de inicializar o mem0 — elimina a necessidade
+    de executar o comando manualmente no Railway.
+    """
+    try:
+        import psycopg2
+        conn = psycopg2.connect(database_url)
+        conn.autocommit = True
+        cur = conn.cursor()
+        cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+        cur.close()
+        conn.close()
+        logger.info("✅ [MEM0] Extensão pgvector garantida no PostgreSQL")
+    except Exception as e:
+        logger.warning(f"⚠️ [MEM0] Não foi possível criar extensão vector: {e} (pode já existir ou requerer permissão de superuser)")
+
+
 def _build_mem0_config() -> dict:
     """
     Constrói configuração do mem0 a partir de variáveis de ambiente.
@@ -93,6 +112,8 @@ class Mem0MemoryAdapter:
 
     def __init__(self):
         from mem0 import Memory
+        database_url = os.getenv("DATABASE_URL")
+        _ensure_pgvector(database_url)  # garante extensão antes de inicializar
         config = _build_mem0_config()
         self.mem = Memory.from_config(config)
         logger.info("✅ [MEM0] Adaptador inicializado (PostgreSQL + pgvector)")
