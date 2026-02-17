@@ -3,11 +3,10 @@ mem0_memory_adapter.py - Adaptador de Memória via mem0
 
 Substitui:
 - build_rich_context()       → get_context()
-- _search_relevant_facts()   → get_context()
 - flush_if_needed()          → não necessário (sem limite de janela)
 - llm_fact_extractor.py      → mem0 extrai fatos automaticamente
 - correction_detector.py     → mem0 deduplica automaticamente
-- ChromaDB + BM25             → mem0.search() via pgvector
+- ChromaDB + BM25             → mem0.search() via Qdrant Cloud
 
 O que permanece inalterado:
 - jung_rumination.py
@@ -16,73 +15,54 @@ O que permanece inalterado:
 - SQLite (fonte de verdade para jobs internos)
 
 Configuração via variáveis de ambiente:
-    DATABASE_URL         → PostgreSQL Railway (obrigatório)
-    MEM0_LLM_PROVIDER    → "openai" (default)
-    MEM0_LLM_MODEL       → "openai/gpt-4o-mini" (default)
-    MEM0_LLM_BASE_URL    → "https://openrouter.ai/api/v1" (default)
-    OPENROUTER_API_KEY   → chave do OpenRouter (já existe no projeto)
+    QDRANT_URL         → URL do cluster Qdrant Cloud (ex: https://xyz.qdrant.io)
+    QDRANT_API_KEY     → Chave do Qdrant Cloud
+    OPENAI_API_KEY     → Para embeddings (já existe no projeto, usado pelo ChromaDB)
+    OPENROUTER_API_KEY → Para extração de fatos via LLM (já existe)
+    MEM0_LLM_MODEL     → Modelo para extração (default: openai/gpt-4o-mini)
 """
 
 import os
 import logging
-from typing import Optional, List, Dict
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
-def _ensure_pgvector(database_url: str) -> None:
-    """
-    Cria a extensão pgvector no PostgreSQL se ainda não existir.
-    Roda automaticamente antes de inicializar o mem0 — elimina a necessidade
-    de executar o comando manualmente no Railway.
-    """
-    try:
-        import psycopg2
-        conn = psycopg2.connect(database_url)
-        conn.autocommit = True
-        cur = conn.cursor()
-        cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-        cur.close()
-        conn.close()
-        logger.info("✅ [MEM0] Extensão pgvector garantida no PostgreSQL")
-    except Exception as e:
-        logger.warning(f"⚠️ [MEM0] Não foi possível criar extensão vector: {e} (pode já existir ou requerer permissão de superuser)")
-
-
 def _build_mem0_config() -> dict:
     """
-    Constrói configuração do mem0 a partir de variáveis de ambiente.
+    Constrói configuração do mem0 usando Qdrant Cloud como vector store.
 
-    Usa PostgreSQL/pgvector como vector store (persistente no Railway).
-    Usa OpenRouter como LLM para extração de fatos.
+    - Vector store: Qdrant Cloud (persistente, gratuito)
+    - Embeddings: OpenAI text-embedding-3-small (via OPENAI_API_KEY existente)
+    - LLM extração: openai/gpt-4o-mini via OpenRouter
     """
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise ValueError("DATABASE_URL não configurado — necessário para mem0 + pgvector")
+    qdrant_url = os.getenv("QDRANT_URL")
+    qdrant_api_key = os.getenv("QDRANT_API_KEY")
+    if not qdrant_url or not qdrant_api_key:
+        raise ValueError("QDRANT_URL e QDRANT_API_KEY são obrigatórios para mem0")
 
-    # Parsear DATABASE_URL: postgresql://user:pass@host:port/dbname
-    # Formato Railway: postgresql://postgres:pass@host.railway.internal:5432/railway
-    import urllib.parse
-    parsed = urllib.parse.urlparse(database_url)
+    # Embeddings via OpenAI direto (já usado pelo ChromaDB — sem custo adicional)
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if not openai_key:
+        raise ValueError("OPENAI_API_KEY necessário para embeddings do mem0")
 
-    llm_provider = os.getenv("MEM0_LLM_PROVIDER", "openai")
+    # LLM para extração de fatos via OpenRouter
+    llm_api_key = os.getenv("OPENROUTER_API_KEY") or openai_key
     llm_model = os.getenv("MEM0_LLM_MODEL", "openai/gpt-4o-mini")
     llm_base_url = os.getenv("MEM0_LLM_BASE_URL", "https://openrouter.ai/api/v1")
-    llm_api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
 
-    config = {
+    return {
         "vector_store": {
-            "provider": "pgvector",
+            "provider": "qdrant",
             "config": {
-                "dbname": parsed.path.lstrip("/"),
-                "user": parsed.username,
-                "password": parsed.password,
-                "host": parsed.hostname,
-                "port": parsed.port or 5432,
+                "collection_name": "jung_memories",
+                "url": qdrant_url,
+                "api_key": qdrant_api_key,
             },
         },
         "llm": {
-            "provider": llm_provider,
+            "provider": "openai",
             "config": {
                 "model": llm_model,
                 "api_key": llm_api_key,
@@ -90,50 +70,33 @@ def _build_mem0_config() -> dict:
             },
         },
         "embedder": {
-            "provider": llm_provider,
+            "provider": "openai",
             "config": {
                 "model": "text-embedding-3-small",
-                "api_key": llm_api_key,
-                "openai_base_url": llm_base_url,
+                "api_key": openai_key,
+                # OpenAI direto para embeddings (OpenRouter não oferece embedding)
             },
         },
     }
 
-    return config
-
 
 class Mem0MemoryAdapter:
     """
-    Interface unificada entre jung_core.py e mem0.
+    Interface unificada entre jung_core.py e mem0 + Qdrant Cloud.
 
-    Substitui: build_rich_context(), _search_relevant_facts(),
-               flush_if_needed(), _save_fact_v2(), LLMFactExtractor.
+    Substitui: build_rich_context(), flush_if_needed(), LLMFactExtractor.
     """
 
     def __init__(self):
         from mem0 import Memory
-        database_url = os.getenv("DATABASE_URL")
-        _ensure_pgvector(database_url)  # garante extensão antes de inicializar
         config = _build_mem0_config()
         self.mem = Memory.from_config(config)
-        logger.info("✅ [MEM0] Adaptador inicializado (PostgreSQL + pgvector)")
-
-    # ------------------------------------------------------------------
-    # Recuperação de contexto (substitui build_rich_context)
-    # ------------------------------------------------------------------
+        logger.info("✅ [MEM0] Adaptador inicializado (Qdrant Cloud)")
 
     def get_context(self, user_id: str, query: str, limit: int = 5) -> str:
         """
         Retorna contexto formatado para injeção no system prompt.
         Substitui build_rich_context().
-
-        Args:
-            user_id: ID do usuário
-            query: Input atual do usuário (usado para busca semântica)
-            limit: Número máximo de memórias a recuperar
-
-        Returns:
-            str: Bloco de texto formatado com memórias relevantes
         """
         try:
             results = self.mem.search(query=query, user_id=user_id, limit=limit)
@@ -156,19 +119,10 @@ class Mem0MemoryAdapter:
             logger.warning(f"⚠️ [MEM0] Erro ao recuperar contexto: {e}")
             return ""
 
-    # ------------------------------------------------------------------
-    # Persistência de troca (substitui save_conversation + fact_extractor)
-    # ------------------------------------------------------------------
-
     def add_exchange(self, user_id: str, user_input: str, ai_response: str) -> None:
         """
         Persiste um par (usuário, assistente) no mem0.
-        mem0 extrai fatos automaticamente via LLM interno.
-
-        Args:
-            user_id: ID do usuário
-            user_input: Mensagem do usuário
-            ai_response: Resposta do agente
+        mem0 extrai fatos automaticamente via LLM.
         """
         try:
             messages = [
@@ -177,7 +131,6 @@ class Mem0MemoryAdapter:
             ]
             result = self.mem.add(messages=messages, user_id=user_id)
 
-            # Contar fatos extraídos para log
             n_added = 0
             if isinstance(result, dict):
                 added = result.get("results", [])
@@ -188,18 +141,8 @@ class Mem0MemoryAdapter:
         except Exception as e:
             logger.warning(f"⚠️ [MEM0] Erro ao persistir troca: {e}")
 
-    # ------------------------------------------------------------------
-    # Fatos do usuário (para context builder e consolidação de identidade)
-    # ------------------------------------------------------------------
-
     def get_all_facts(self, user_id: str) -> str:
-        """
-        Retorna todos os fatos persistentes do usuário como texto.
-        Útil para context builders e consolidação de identidade.
-
-        Returns:
-            str: Lista de fatos formatados, ou string vazia
-        """
+        """Retorna todos os fatos do usuário como texto."""
         try:
             all_memories = self.mem.get_all(user_id=user_id)
             memories = all_memories.get("results", []) if isinstance(all_memories, dict) else all_memories
@@ -214,10 +157,6 @@ class Mem0MemoryAdapter:
             logger.warning(f"⚠️ [MEM0] Erro ao recuperar todos os fatos: {e}")
             return ""
 
-    # ------------------------------------------------------------------
-    # Saúde / diagnóstico
-    # ------------------------------------------------------------------
-
     def health_check(self) -> bool:
         """Verifica se mem0 está operacional."""
         try:
@@ -229,18 +168,18 @@ class Mem0MemoryAdapter:
 
 def create_mem0_adapter() -> Optional[Mem0MemoryAdapter]:
     """
-    Factory: cria Mem0MemoryAdapter se DATABASE_URL estiver configurado.
-    Retorna None em caso de falha (fallback SQLite ativo).
+    Factory: cria Mem0MemoryAdapter se QDRANT_URL estiver configurado.
+    Retorna None em caso de falha (fallback SQLite/ChromaDB ativo).
     """
-    if not os.getenv("DATABASE_URL"):
-        logger.info("ℹ️ [MEM0] DATABASE_URL ausente — usando sistema SQLite existente")
+    if not os.getenv("QDRANT_URL"):
+        logger.info("ℹ️ [MEM0] QDRANT_URL ausente — usando sistema ChromaDB/SQLite existente")
         return None
 
     try:
         return Mem0MemoryAdapter()
     except ImportError:
-        logger.warning("⚠️ [MEM0] mem0ai não instalado (pip install mem0ai) — usando SQLite")
+        logger.warning("⚠️ [MEM0] mem0ai não instalado — usando ChromaDB/SQLite")
         return None
     except Exception as e:
-        logger.warning(f"⚠️ [MEM0] Falha ao inicializar: {e} — fallback SQLite ativo")
+        logger.warning(f"⚠️ [MEM0] Falha ao inicializar: {e} — fallback ativo")
         return None

@@ -40,4 +40,4 @@ rank-bm25==0.2.2
 
 # mem0 (backend de memória persistente — substituição de ChromaDB + user_facts_v2)
 mem0ai>=0.1.0
-psycopg2-binary>=2.9.0
+qdrant-client>=1.7.0
