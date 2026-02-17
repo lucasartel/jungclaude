@@ -129,7 +129,7 @@ async def run_agent_identity_consolidation():
             conv_id, timestamp, user_id, user_input, agent_response = conv
 
             try:
-                logger.info(f"   [{i}/{len(conversations)}] Processando conversa {conv_id[:12]}...")
+                logger.info(f"   [{i}/{len(conversations)}] Processando conversa {str(conv_id)[:12]}...")
 
                 # Extrair identidade
                 extraction_start = datetime.now()
@@ -172,7 +172,7 @@ async def run_agent_identity_consolidation():
                 await asyncio.sleep(0.5)
 
             except Exception as e:
-                logger.error(f"   ❌ Erro ao processar conversa {conv_id[:12]}: {e}")
+                logger.error(f"   ❌ Erro ao processar conversa {str(conv_id)[:12]}: {e}")
                 # Marcar como processado com erro (elementos_count = 0)
                 try:
                     cursor.execute("""
