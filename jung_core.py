@@ -103,7 +103,13 @@ class Config:
     # Modelos
     CONVERSATION_MODEL = os.getenv("CONVERSATION_MODEL", "z-ai/glm-5")
     INTERNAL_MODEL = os.getenv("INTERNAL_MODEL", "z-ai/glm-5")
-    
+
+    # mem0 (backend de memória persistente — substituição de ChromaDB + user_facts_v2)
+    DATABASE_URL = os.getenv("DATABASE_URL")  # PostgreSQL Railway (obrigatório para mem0)
+    MEM0_LLM_PROVIDER = os.getenv("MEM0_LLM_PROVIDER", "openai")
+    MEM0_LLM_MODEL = os.getenv("MEM0_LLM_MODEL", "openai/gpt-4o-mini")
+    MEM0_LLM_BASE_URL = os.getenv("MEM0_LLM_BASE_URL", "https://openrouter.ai/api/v1")
+
     TELEGRAM_ADMIN_IDS = [
         int(id.strip()) 
         for id in os.getenv("TELEGRAM_ADMIN_IDS", "").split(",") 
@@ -383,6 +389,14 @@ class HybridDatabaseManager:
         else:
             self.fact_extractor = None
             logger.warning("⚠️ LLM Fact Extractor module não disponível (import falhou)")
+
+        # ===== mem0 (substitui ChromaDB + BM25 + user_facts_v2) =====
+        try:
+            from mem0_memory_adapter import create_mem0_adapter
+            self.mem0 = create_mem0_adapter()
+        except Exception as e:
+            self.mem0 = None
+            logger.warning(f"⚠️ [MEM0] Erro ao inicializar: {e}")
 
         logger.info("✅ Banco híbrido inicializado com sucesso")
 
@@ -1310,6 +1324,13 @@ Resposta: {ai_response}
             )
         except Exception as e:
             logger.warning(f"⚠️ Erro no hook de log diário: {e}")
+
+        # 9. Sincronizar com mem0 (extração automática de fatos)
+        if self.mem0:
+            try:
+                self.mem0.add_exchange(user_id, user_input, ai_response)
+            except Exception as e:
+                logger.warning(f"⚠️ [MEM0] Erro ao sincronizar conversa: {e}")
 
         return conversation_id
 
@@ -3698,11 +3719,14 @@ class JungianEngine:
         user_name = user['user_name'] if user else "Usuário"
         platform = user['platform'] if user else "telegram"
 
-        # Construir contexto semântico
+        # Construir contexto semântico (mem0 prioritário, fallback SQLite)
         logger.info("🔍 Construindo contexto semântico...")
-        semantic_context = self.db.build_rich_context(
-            user_id, message, k_memories=5, chat_history=chat_history
-        )
+        if self.db.mem0:
+            semantic_context = self.db.mem0.get_context(user_id, message)
+        else:
+            semantic_context = self.db.build_rich_context(
+                user_id, message, k_memories=5, chat_history=chat_history
+            )
 
         # Determinar complexidade
         complexity = self._determine_complexity(message)
@@ -3771,8 +3795,8 @@ class JungianEngine:
         Agora usa apenas 1 chamada LLM.
         """
 
-        # Pre-compaction flush: persistir fragmentos antes de truncar contexto longo
-        if chat_history:
+        # Pre-compaction flush: apenas se mem0 não estiver ativo (mem0 não tem limite de janela)
+        if chat_history and not getattr(self.db, 'mem0', None):
             try:
                 from memory_flush import flush_if_needed
                 user_row = self.db.conn.execute(
