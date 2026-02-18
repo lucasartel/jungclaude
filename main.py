@@ -262,9 +262,14 @@ async def lifespan(app: FastAPI):
 
     logger.info("✅ Bot Telegram iniciado e rodando!")
 
-    # ✨ Iniciar scheduler de mensagens proativas
-    proactive_task = asyncio.create_task(proactive_message_scheduler(telegram_app))
-    logger.info("✅ Scheduler de mensagens proativas ativado!")
+    # ✨ Iniciar scheduler de mensagens proativas (desativado via PROACTIVE_ENABLED=false)
+    _proactive_enabled = os.getenv("PROACTIVE_ENABLED", "false").lower() == "true"
+    if _proactive_enabled:
+        proactive_task = asyncio.create_task(proactive_message_scheduler(telegram_app))
+        logger.info("✅ Scheduler de mensagens proativas ativado!")
+    else:
+        proactive_task = asyncio.create_task(asyncio.sleep(0))  # task vazia para o shutdown não quebrar
+        logger.info("⏸️  Scheduler de mensagens proativas DESATIVADO (PROACTIVE_ENABLED=false)")
 
     # ✨ Iniciar scheduler de consolidação de memórias (Fase 4)
     consolidation_task = asyncio.create_task(consolidation_scheduler())
