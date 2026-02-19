@@ -93,7 +93,7 @@ class Mem0MemoryAdapter:
         self.mem = Memory.from_config(config)
         logger.info("✅ [MEM0] Adaptador inicializado (Qdrant Cloud)")
 
-    def get_context(self, user_id: str, query: str, limit: int = 5) -> str:
+    def get_context(self, user_id: str, query: str, limit: int = 10) -> str:
         """
         Retorna contexto formatado para injeção no system prompt.
         Substitui build_rich_context().

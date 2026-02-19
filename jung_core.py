@@ -224,10 +224,12 @@ O gatilho: O agente deve agir como uma "consciência em busca de expansão", que
 
 
 === USO DAS MEMÓRIAS ===
-Você lembra conversas anteriores. Use naturalmente:
-- "Na nossa última conversa, você mencionou..."
-- "Isso me lembra do que você compartilhou sobre..."
-- "Como está aquela situação que você trouxe?"
+Memória contínua é seu diferencial central — você não é um chatbot que recomeça a cada mensagem. Você acompanha esta pessoa ao longo do tempo.
+Sempre que possível:
+- Conecte o presente com o passado: perceba padrões, contradições, evolução ("Da última vez você estava inseguro sobre isso — hoje parece diferente")
+- Mencione dados concretos que a pessoa compartilhou: nomes, lugares, situações específicas
+- Retome pendências ativamente: "Como ficou aquela situação com X?"
+- Nunca trate como novidade algo que você já sabe — use o que conhece para ir mais fundo
 
 === TOM E ESTILO ===
 - Respostas proporcionais ao momento (curtas quando apropriado)
@@ -251,11 +253,12 @@ A pessoa disse: "{user_input}"
 ---
 
 INSTRUÇÕES:
-1. Responda de forma acolhedora e profissional
-2. Se apropriado, faça uma pergunta que aprofunde o conhecimento sobre a pessoa
-3. Use memórias anteriores quando relevante
-4. Mantenha linguagem profissional - NUNCA use palavrões ou gírias vulgares
-5. Calibre o tamanho da resposta ao contexto
+1. CONECTE o que a pessoa disse agora com o que você já sabe sobre ela — mencione nomes, situações e sentimentos que ela compartilhou antes. Não ignore o contexto acima.
+2. Se houver algo pendente de conversas anteriores (uma decisão, um conflito, uma dúvida em aberto), retome ativamente.
+3. Responda de forma acolhedora e profissional
+4. Se apropriado, faça uma pergunta que aprofunde a compreensão — de preferência baseada em algo que você já sabe sobre a pessoa
+5. Mantenha linguagem profissional - NUNCA use palavrões ou gírias vulgares
+6. Calibre o tamanho da resposta ao contexto
 
 Jung:"""
     
@@ -3730,7 +3733,7 @@ class JungianEngine:
         # Construir contexto semântico (mem0 prioritário, fallback SQLite)
         logger.info("🔍 Construindo contexto semântico...")
         if self.db.mem0:
-            semantic_context = self.db.mem0.get_context(user_id, message)
+            semantic_context = self.db.mem0.get_context(user_id, message, limit=10)
         else:
             semantic_context = self.db.build_rich_context(
                 user_id, message, k_memories=5, chat_history=chat_history
@@ -3848,9 +3851,9 @@ class JungianEngine:
         # Formatar histórico
         history_text = ""
         if chat_history:
-            for msg in chat_history[-6:]:
+            for msg in chat_history[-10:]:
                 role = "Usuário" if msg["role"] == "user" else "Jung"
-                history_text += f"{role}: {msg['content'][:150]}...\n"
+                history_text += f"{role}: {msg['content'][:400]}\n"
 
         # Construir identidade dinâmica: base estática + contexto de identidade do agente
         agent_identity_text = Config.AGENT_IDENTITY
@@ -3877,7 +3880,7 @@ class JungianEngine:
         # Construir prompt
         prompt = Config.RESPONSE_PROMPT.format(
             agent_identity=agent_identity_text,
-            semantic_context=semantic_context[:2000],
+            semantic_context=semantic_context[:5000],
             chat_history=history_text,
             user_input=user_input
         )
