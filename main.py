@@ -232,7 +232,15 @@ async def lifespan(app: FastAPI):
         return
 
     logger.info("🤖 Inicializando Bot Telegram...")
-    telegram_app = Application.builder().token(telegram_token).build()
+    telegram_app = (
+        Application.builder()
+        .token(telegram_token)
+        .connect_timeout(30.0)
+        .read_timeout(30.0)
+        .write_timeout(30.0)
+        .pool_timeout(30.0)
+        .build()
+    )
 
     # Registrar handlers (apenas comandos essenciais)
     telegram_app.add_handler(CommandHandler("start", start_command))
