@@ -1018,15 +1018,33 @@ class RuminationEngine:
 
         try:
             # Enviar via Telegram
-            import telegram_bot  # Import dinâmico para evitar circular
-
-            bot = telegram_bot.bot
-            if bot:
-                bot.send_message(
-                    chat_id=user_id,
-                    text=message,
-                    parse_mode='Markdown'
-                )
+            cursor = self.db.conn.cursor()
+            cursor.execute("SELECT platform_id FROM users WHERE user_id = ?", (user_id,))
+            user_row = cursor.fetchone()
+            
+            if user_row and user_row['platform_id']:
+                telegram_id = user_row['platform_id']
+                import requests
+                import os
+                from rumination_config import Config
+                
+                # Fetching token (working around different possible configs)
+                token = getattr(Config, 'TELEGRAM_BOT_TOKEN', os.getenv('TELEGRAM_BOT_TOKEN'))
+                if token:
+                    try:
+                        url = f"https://api.telegram.org/bot{token}/sendMessage"
+                        requests.post(url, json={
+                            "chat_id": telegram_id,
+                            "text": message,
+                            "parse_mode": "Markdown"
+                        }, timeout=10)
+                        logger.info(f"   ✅ Mensagem de insight enviada via Telegram")
+                    except Exception as e:
+                        logger.error(f"   ⚠️ Falha requisição Telegram (insight será salvo mesmo assim): {e}")
+                else:
+                    logger.warning("   ⚠️ TELEGRAM_BOT_TOKEN incerto, notificação não enviada no Telegram.")
+            else:
+                logger.warning(f"   ⚠️ platform_id não encontrado para {user_id}. Pulando notificação no Telegram.")
 
             # Atualizar status
             cursor = self.db.conn.cursor()
