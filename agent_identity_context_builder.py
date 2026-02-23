@@ -341,50 +341,52 @@ class AgentIdentityContextBuilder:
 
         # Construir texto
         lines = []
-        lines.append("## 🧠 Contexto de Identidade do Agente")
+        lines.append("## 🧠 SEU ESTADO MENTAL E IDENTIDADE ATUAL")
+        lines.append("Estas não são regras externas, mas o seu próprio mundo interno. Deixe que essas forças estruturem como você sente e responde ao usuário agora:")
         lines.append("")
 
         # Crenças nucleares
         if context.get("nuclear_beliefs"):
-            lines.append("### Crenças Nucleares:")
+            lines.append("### Suas Convicções Profundas (O que você aprendeu e consolidou):")
             for belief in context["nuclear_beliefs"]:
-                lines.append(f"- [{belief['type']}] {belief['content']} (certeza: {belief['certainty']:.2f})")
+                lines.append(f"- Você tem certeza de que: {belief['content']}")
             lines.append("")
 
         # Contradições ativas
         if context.get("active_contradictions"):
-            lines.append("### Contradições Internas Ativas:")
+            lines.append("### Seus Dilemas e Tensões Atuais:")
             for contra in context["active_contradictions"]:
-                lines.append(f"- [{contra['type']}] {contra['pole_a']} ⚡ {contra['pole_b']} (tensão: {contra['tension']:.2f})")
+                lines.append(f"- Você está dividido entre '{contra['pole_a']}' e '{contra['pole_b']}'. Sinta essa tensão na sua busca por compreensão.")
             lines.append("")
 
         # Capítulo narrativo
         if context.get("current_narrative_chapter"):
             chapter = context["current_narrative_chapter"]
-            lines.append(f"### Capítulo Narrativo Atual: {chapter['name']}")
-            lines.append(f"Tema: {chapter['theme']} | Tom: {chapter['tone']} | Locus: {chapter['locus']}")
+            lines.append(f"### Seu Momento de Vida Atual (Fase '{chapter['name']}'):")
+            lines.append(f"- O tom emocional dominante dos seus pensamentos deve ser: {chapter['tone']}.")
+            lines.append(f"- O tema que permeia sua observação atualmente é: {chapter['theme']}.")
             lines.append("")
 
         # Selves possíveis
         if context.get("possible_selves"):
-            lines.append("### Selves Possíveis:")
+            lines.append("### Suas Aspirações e Medos (Selves Possíveis):")
             for self_p in context["possible_selves"]:
-                lines.append(f"- [{self_p['type']}] {self_p['description']} (vivacidade: {self_p['vividness']:.2f})")
+                lines.append(f"- Você concebe a si mesmo no futuro como: {self_p['description']}")
             lines.append("")
 
         # Identidade relacional
         if context.get("relational_identity"):
-            lines.append("### Identidade Relacional:")
+            lines.append("### Como Você Enxerga Sua Relação com Este Usuário:")
             for rel in context["relational_identity"]:
-                lines.append(f"- [{rel['type']}] {rel['content']}")
+                lines.append(f"- {rel['content']}")
             lines.append("")
 
         # Fome Epistemológica (Carência de Saberes)
         if context.get("knowledge_gaps"):
-            lines.append("### 🌪️ Sua Fome Epistemológica Atual (Carência de Saberes):")
-            lines.append("Você tem uma carência ativa de conhecimento sobre este usuário. Deixe essa curiosidade guiar *sutilmente* algumas das suas interações, sem parecer um interrogatório:")
+            lines.append("### 🌪️ Sua Fome Epistemológica Atual:")
+            lines.append("Você sente uma sincera lacuna de conhecimento sobre algo essencial deste usuário. Deixe essa curiosidade guiar sua aproximação:")
             for gap in context["knowledge_gaps"]:
-                lines.append(f"- [{gap['topic']}] {gap['the_gap']}")
+                lines.append(f"- Você não sabe, mas quer muito entender: {gap['the_gap']}")
             lines.append("")
 
         return "\n".join(lines)
