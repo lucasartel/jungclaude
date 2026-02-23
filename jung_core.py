@@ -1438,7 +1438,7 @@ Resposta: {ai_response}
 
     def add_knowledge_gap(self, user_id: str, topic: str, the_gap: str, importance: float = 0.5) -> Optional[int]:
         """Adiciona uma nova lacuna de conhecimento (gap) para o usuário"""
-        with self._transaction():
+        with self._lock:
             cursor = self.conn.cursor()
             
             # Evitar duplicatas exatas
@@ -1451,6 +1451,7 @@ Resposta: {ai_response}
                 VALUES (?, ?, ?, ?, 'open')
             """, (user_id, topic, the_gap, importance))
             
+            self.conn.commit()
             return cursor.lastrowid
 
     def get_active_knowledge_gaps(self, user_id: str, limit: int = 3) -> List[Dict]:
@@ -1468,7 +1469,7 @@ Resposta: {ai_response}
 
     def resolve_knowledge_gap(self, gap_id: int) -> bool:
         """Marca uma lacuna como resolvida"""
-        with self._transaction():
+        with self._lock:
             try:
                 cursor = self.conn.cursor()
                 cursor.execute("""
@@ -1476,6 +1477,7 @@ Resposta: {ai_response}
                     SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                 """, (gap_id,))
+                self.conn.commit()
                 return cursor.rowcount > 0
             except Exception as e:
                 logger.error(f"❌ Erro ao resolver knowledge gap {gap_id}: {e}")
@@ -1483,7 +1485,7 @@ Resposta: {ai_response}
 
     def reject_knowledge_gap(self, gap_id: int) -> bool:
         """Marca uma lacuna como rejeitada (irrelevante/inválida)"""
-        with self._transaction():
+        with self._lock:
             try:
                 cursor = self.conn.cursor()
                 cursor.execute("""
@@ -1491,6 +1493,7 @@ Resposta: {ai_response}
                     SET status = 'rejected', resolved_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                 """, (gap_id,))
+                self.conn.commit()
                 return cursor.rowcount > 0
             except Exception as e:
                 logger.error(f"❌ Erro ao rejeitar knowledge gap {gap_id}: {e}")
