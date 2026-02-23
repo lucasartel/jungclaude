@@ -4,9 +4,11 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
-import logging
 import os
 import sys
+import sqlite3
+import logging
+from dotenv import load_dotenv
 
 # Desabilitar telemetria do ChromaDB
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
