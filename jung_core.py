@@ -750,6 +750,25 @@ class HybridDatabaseManager:
             )
         """)
 
+        # ========== LACUNAS DE CONHECIMENTO (CARÊNCIA DE SABERES) ==========
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS knowledge_gaps (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                
+                topic TEXT NOT NULL,
+                the_gap TEXT NOT NULL,
+                importance_score REAL DEFAULT 0.5,
+                
+                status TEXT DEFAULT 'open',
+                
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                resolved_at DATETIME,
+                
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+
         # ========== ÍNDICES DE PERFORMANCE ==========
         # Conversas
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_user ON conversations(user_id)")
@@ -786,6 +805,9 @@ class HybridDatabaseManager:
         # Psicometria
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_psychometrics_user ON user_psychometrics(user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_psychometrics_version ON user_psychometrics(user_id, version DESC)")
+
+        # Lacunas
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_gaps_user ON knowledge_gaps(user_id, status)")
 
         self.conn.commit()
         logger.info("✅ Schema SQLite criado/verificado com índices de performance")
@@ -1409,6 +1431,70 @@ Resposta: {ai_response}
                 })
 
         return history
+
+    # ========================================
+    # SQLite: KNOWLEDGE GAPS (CARÊNCIA DE SABERES)
+    # ========================================
+
+    def add_knowledge_gap(self, user_id: str, topic: str, the_gap: str, importance: float = 0.5) -> Optional[int]:
+        """Adiciona uma nova lacuna de conhecimento (gap) para o usuário"""
+        with self._transaction():
+            cursor = self.conn.cursor()
+            
+            # Evitar duplicatas exatas
+            cursor.execute("SELECT id FROM knowledge_gaps WHERE user_id = ? AND the_gap = ?", (user_id, the_gap))
+            if cursor.fetchone():
+                return None
+                
+            cursor.execute("""
+                INSERT INTO knowledge_gaps (user_id, topic, the_gap, importance_score, status)
+                VALUES (?, ?, ?, ?, 'open')
+            """, (user_id, topic, the_gap, importance))
+            
+            return cursor.lastrowid
+
+    def get_active_knowledge_gaps(self, user_id: str, limit: int = 3) -> List[Dict]:
+        """Busca as lacunas ativas mais importantes para o usuário"""
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT * FROM knowledge_gaps
+                WHERE user_id = ? AND status = 'open'
+                ORDER BY importance_score DESC, created_at DESC
+                LIMIT ?
+            """, (user_id, limit))
+            
+            return [dict(row) for row in cursor.fetchall()]
+
+    def resolve_knowledge_gap(self, gap_id: int) -> bool:
+        """Marca uma lacuna como resolvida"""
+        with self._transaction():
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute("""
+                    UPDATE knowledge_gaps 
+                    SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (gap_id,))
+                return cursor.rowcount > 0
+            except Exception as e:
+                logger.error(f"❌ Erro ao resolver knowledge gap {gap_id}: {e}")
+                return False
+
+    def reject_knowledge_gap(self, gap_id: int) -> bool:
+        """Marca uma lacuna como rejeitada (irrelevante/inválida)"""
+        with self._transaction():
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute("""
+                    UPDATE knowledge_gaps 
+                    SET status = 'rejected', resolved_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (gap_id,))
+                return cursor.rowcount > 0
+            except Exception as e:
+                logger.error(f"❌ Erro ao rejeitar knowledge gap {gap_id}: {e}")
+                return False
 
     # ========================================
     # QUERY ENRICHMENT - FASE 2
@@ -2300,11 +2386,18 @@ Resposta: {ai_response}
             existing_facts = self._get_current_facts(user_id)
             logger.info(f"📋 {len(existing_facts)} fatos existentes carregados para contexto")
 
-            # ETAPA 2: Extrair fatos e detectar correções (nova assinatura)
-            logger.info("🤖 Analisando mensagem (fatos + correções)...")
-            facts, corrections = self.fact_extractor.extract_facts(
+            # ETAPA 2: Extrair fatos, detectar correções e lacunas de conhecimento
+            logger.info("🤖 Analisando mensagem (fatos + correções + gaps)...")
+            facts, corrections, gaps = self.fact_extractor.extract_facts(
                 user_input, user_id, existing_facts
             )
+
+            # ETAPA 2.5: Salvar Knowledge Gaps
+            if gaps:
+                logger.info(f"   🤯 LLM encontrou {len(gaps)} Knowledge Gaps")
+                for gap in gaps:
+                    self.add_knowledge_gap(user_id, gap.topic, gap.the_gap, gap.importance)
+
 
             # ETAPA 3: Processar correções detectadas
             for correction in corrections:

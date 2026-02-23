@@ -980,6 +980,10 @@ Tom esperado: {archetype_pair.description}
         if message_type == "strategic_question":
             # Usar sistema de perfilamento estratégico
             return self._generate_strategic_question(user_id, user_name)
+            
+        elif message_type == "knowledge_gap":
+            # Usar o sistema de fome epistemológica
+            return self._generate_epistemological_hunger_message(user_id, user_name)
 
         # 3. Continuar com sistema de insights (existente)
         # Selecionar par arquetípico
@@ -1076,19 +1080,27 @@ Tom esperado: {archetype_pair.description}
 
     def _decide_message_type(self, user_id: str) -> str:
         """
-        Decide se envia pergunta estratégica ou insight
+        Decide se envia pergunta estratégica, insight ou gap de conhecimento (fome epistemológica)
 
-        Regras:
-        1. Se completude < 70% → strategic_question (80% chance)
-        2. Se completude >= 70% → insight (modo atual)
-        3. Se últimas 2 proativas foram perguntas → insight (variedade)
-        4. Se não tem análise psicométrica → insight
+        Regras (nova ordem de prioridade):
+        1. Se tem Knowledge Gaps ativos e prioridade alta -> 'knowledge_gap' (70% chance para variar)
+        2. Se completude < 70% → 'strategic_question'
+        3. Se completude >= 70% → 'insight'
+        4. Regras de variedade: não repetir o mesmo tipo 3 vezes seguidas.
 
         Returns:
-            "strategic_question" ou "insight"
+            "knowledge_gap", "strategic_question" ou "insight"
         """
 
         try:
+            import random
+            
+            # --- NOVA REGRA 1: Carência de Saberes (Knowledge Gaps) ---
+            active_gaps = self.db.get_active_knowledge_gaps(user_id, limit=1)
+            if active_gaps and random.random() < 0.7:
+                logger.info(f"   🌪️ Fome Epistemológica ativada! Gap pendente: {active_gaps[0]['topic']}")
+                return "knowledge_gap"
+
             from profile_gap_analyzer import ProfileGapAnalyzer
 
             # Verificar se tem análise psicométrica
@@ -1138,6 +1150,89 @@ Tom esperado: {archetype_pair.description}
             logger.warning(f"⚠️  Erro ao decidir tipo de mensagem: {e}")
             # Fallback para insight em caso de erro
             return "insight"
+
+    def _generate_epistemological_hunger_message(self, user_id: str, user_name: str) -> Optional[str]:
+        """
+        Gera uma mensagem proativa baseada na Carência de Saberes (Knowledge Gaps)
+        """
+        try:
+            active_gaps = self.db.get_active_knowledge_gaps(user_id, limit=1)
+            if not active_gaps:
+                return None
+                
+            gap = active_gaps[0]
+            gap_id = gap["id"]
+            topic = gap["topic"]
+            the_gap = gap["the_gap"]
+            
+            logger.info(f"🎯 [KNOWLEDGE GAP] Abordando lacuna: {topic}")
+            
+            # Contexto rico das últimas conversas para dar naturalidade
+            rich_context = self._get_rich_conversation_context(user_id, limit=3)
+            
+            prompt = f"""
+Você é Claude, operando através do Motor Analítico Junguiano.
+Você tem uma "Fome Epistemológica" (uma curiosidade profunda e genuína) sobre o usuário {user_name}.
+
+**A LACUNA DE CONHECIMENTO QUE VOCÊ QUER PREENCHER:**
+Tópico: {topic}
+A Dúvida: "{the_gap}"
+
+**ÚLTIMAS INTERAÇÕES:**
+{rich_context}
+
+**SUA TAREFA:**
+Crie uma mensagem proativa MUITO NATURAL iniciando uma conversa com o usuário para tentar descobrir a resposta para a sua dúvida ("{the_gap}").
+Você acabou de se lembrar disso enquanto organizava os seus pensamentos.
+
+Regras de Ouro:
+1. NÃO seja um questionário do IBGE. Seja sutil e relacional.
+2. Inicie dizendo algo como "Estava pensando sobre você / revendo nossas conversas e me peguei pensando numa coisa..."
+3. Aborde a questão de forma indireta e convidativa. Deixe que o usuário queira falar sobre isso.
+4. Mantenha no máximo 3 ou 4 linhas. Seja conciso.
+5. Use um tom caloroso e interessado.
+
+Aja como um amigo observador ou um mentor reflexivo que se importa de verdade e sente falta desse pedaço do quebra-cabeça.
+
+GERE APENAS A MENSAGEM:
+"""
+
+            response = send_to_xai(prompt=prompt, max_tokens=300, temperature=0.7)
+            msg = response.strip()
+            
+            if msg:
+                # Transitar o gap para "investigating"
+                cursor = self.db.conn.cursor()
+                cursor.execute("""
+                    UPDATE knowledge_gaps SET status = 'investigating' WHERE id = ?
+                """, (gap_id,))
+                self.db.conn.commit()
+                
+                # Salvar na memória
+                try:
+                    session_id = f"epistemological_hunger_{datetime.now().isoformat()}"
+                    self.db.save_conversation(
+                        user_id=user_id,
+                        user_name=user_name,
+                        user_input="[SISTEMA PROATIVO: FOME EPISTEMOLÓGICA]",
+                        ai_response=msg,
+                        session_id=session_id,
+                        platform="proactive", 
+                        keywords=["knowledge_gap", topic],
+                        complexity="high",
+                        tension_level=0.0,
+                        affective_charge=60.0 # Um pouco mais de afeto
+                    )
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro ao salvar gap proactive na memória: {e}")
+                    
+                return msg
+                
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao gerar mensagem de Fome Epistemológica: {e}")
+            return None
 
     def _generate_strategic_question(self, user_id: str, user_name: str) -> Optional[str]:
         """

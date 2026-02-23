@@ -54,8 +54,9 @@ class AgentIdentityContextBuilder:
         Constrói contexto completo de identidade do agente
 
         Args:
-            user_id: ID do usuário (para identidade relacional específica)
+            user_id: ID do usuário (para identidade relacional específica e gaps)
             include_*: Flags para incluir cada categoria
+            include_knowledge_gaps: Se True, busca as lacunas de conhecimento (Carência de Saberes)
             max_items_per_category: Limite de itens por categoria
 
         Returns:
@@ -93,6 +94,11 @@ class AgentIdentityContextBuilder:
             # 6. Meta-conhecimento (opcional)
             if include_meta_knowledge:
                 context["meta_knowledge"] = self._get_meta_knowledge(cursor, max_items_per_category)
+
+            # 7. Knowledge Gaps (Carência de Saberes / Fome Epistemológica)
+            if user_id:
+                # We can call the db manager method directly since we have the instance
+                context["knowledge_gaps"] = self.db.get_active_knowledge_gaps(user_id, limit=2)
 
             return context
 
@@ -371,6 +377,14 @@ class AgentIdentityContextBuilder:
             lines.append("### Identidade Relacional:")
             for rel in context["relational_identity"]:
                 lines.append(f"- [{rel['type']}] {rel['content']}")
+            lines.append("")
+
+        # Fome Epistemológica (Carência de Saberes)
+        if context.get("knowledge_gaps"):
+            lines.append("### 🌪️ Sua Fome Epistemológica Atual (Carência de Saberes):")
+            lines.append("Você tem uma carência ativa de conhecimento sobre este usuário. Deixe essa curiosidade guiar *sutilmente* algumas das suas interações, sem parecer um interrogatório:")
+            for gap in context["knowledge_gaps"]:
+                lines.append(f"- [{gap['topic']}] {gap['the_gap']}")
             lines.append("")
 
         return "\n".join(lines)

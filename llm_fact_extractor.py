@@ -39,6 +39,13 @@ class ExtractedFact:
     confidence: float   # 0.0 a 1.0
     context: str        # Trecho da conversa que gerou o fato
 
+@dataclass
+class KnowledgeGap:
+    """Representa uma lacuna de conhecimento identificada pelo LLM"""
+    topic: str
+    the_gap: str
+    importance: float
+
 
 class LLMFactExtractor:
     """
@@ -105,6 +112,7 @@ INSTRUÇÕES CRÍTICAS:
 4. Seja ESPECÍFICO - capture nomes próprios, datas, números
 5. Extraia TODOS os detalhes mencionados
 6. Use confidence: 1.0 para fatos explícitos, 0.8 para inferidos claros, 0.6 para ambíguos
+7. CARÊNCIA DE SABERES (knowledge_gaps): Além dos fatos, identifique 1 lacuna de conhecimento fascinante que a mensagem deixou em aberto. O que o usuário *não* disse que seria crucial para compreendê-lo profundamente?
 
 EXEMPLOS DE EXTRAÇÃO:
 
@@ -115,6 +123,9 @@ Saída:
     {"category": "RELACIONAMENTO", "fact_type": "esposa", "attribute": "nome", "value": "Jucinei", "confidence": 1.0, "context": "Minha esposa Jucinei"},
     {"category": "RELACIONAMENTO", "fact_type": "esposa", "attribute": "aniversario", "value": "15/03", "confidence": 1.0, "context": "faz aniversário dia 15 de março"},
     {"category": "RELACIONAMENTO", "fact_type": "esposa", "attribute": "profissao", "value": "professora", "confidence": 1.0, "context": "ela é professora"}
+  ],
+  "knowledge_gaps": [
+    {"topic": "Dinâmica Conjugal", "the_gap": "Como a profissão de professora de Jucinei impacta a rotina e a dinâmica de tempo do casal?", "importance": 0.6}
   ]
 }
 
@@ -125,6 +136,9 @@ Saída:
     {"category": "RELACIONAMENTO", "fact_type": "saude_mental_insonia", "attribute": "inicio", "value": "há 3 meses", "confidence": 1.0, "context": "há 3 meses"},
     {"category": "RELACIONAMENTO", "fact_type": "saude_mental_insonia", "attribute": "gatilho", "value": "estresse no trabalho", "confidence": 0.8, "context": "por causa do estresse no trabalho"},
     {"category": "RELACIONAMENTO", "fact_type": "saude_mental_insonia", "attribute": "tentativa_solucao", "value": "meditação", "confidence": 1.0, "context": "já tentei meditação"}
+  ],
+  "knowledge_gaps": [
+    {"topic": "Natureza do Estresse", "the_gap": "O que exatamente no trabalho está gerando esse nível de estresse há 3 meses? Qual o medo ou pressão por trás disso?", "importance": 0.9}
   ]
 }
 
@@ -199,10 +213,10 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
             logger.warning("⚠️ CorrectionDetector não disponível")
 
     def extract_facts(self, user_input: str, user_id: str = None,
-                      existing_facts: List[Dict] = None) -> Tuple[List[ExtractedFact], List["CorrectionIntent"]]:
+                      existing_facts: List[Dict] = None) -> Tuple[List[ExtractedFact], List["CorrectionIntent"], List[KnowledgeGap]]:
         """
         Extrai fatos da mensagem do usuário usando LLM.
-        Detecta correções ANTES de extrair fatos novos.
+        Detecta correções ANTES de extrair fatos novos. E também extrai KnowledgeGaps.
 
         Args:
             user_input: Mensagem do usuário
@@ -210,7 +224,7 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
             existing_facts: Fatos atuais do usuário (melhora detecção de correções)
 
         Returns:
-            Tupla (fatos_novos, correções_detectadas)
+            Tupla (fatos_novos, correções_detectadas, knowledge_gaps)
         """
         logger.info(f"🤖 [LLM EXTRACTOR] Analisando: {user_input[:100]}...")
 
@@ -221,24 +235,24 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
             if corrections:
                 logger.info(f"   🔧 {len(corrections)} correção(ões) detectada(s) - pulando extração normal")
                 # Não extrai como fato novo para evitar duplicidade
-                return [], corrections
+                return [], corrections, []
 
-        # ETAPA 2: Extração normal de fatos novos
+        # ETAPA 2: Extração normal de fatos novos e Gaps
         try:
-            facts = self._extract_with_llm(user_input)
+            facts, gaps = self._extract_with_llm(user_input)
 
-            if facts:
-                logger.info(f"   ✅ LLM extraiu {len(facts)} fatos")
-                return facts, []
+            if facts or gaps:
+                logger.info(f"   ✅ LLM extraiu {len(facts)} fatos e {len(gaps)} gaps")
+                return facts, [], gaps
             else:
                 logger.warning(f"   ⚠️ LLM não extraiu fatos, tentando fallback...")
-                return self._extract_with_regex(user_input), []
+                return self._extract_with_regex(user_input), [], []
 
         except Exception as e:
             logger.error(f"   ❌ Erro no LLM: {e}, usando fallback regex")
-            return self._extract_with_regex(user_input), []
+            return self._extract_with_regex(user_input), [], []
 
-    def _extract_with_llm(self, user_input: str) -> List[ExtractedFact]:
+    def _extract_with_llm(self, user_input: str) -> Tuple[List[ExtractedFact], List[KnowledgeGap]]:
         """Extração usando LLM"""
 
         prompt = self.EXTRACTION_PROMPT.replace("{user_input}", user_input)
@@ -303,7 +317,24 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
                     logger.warning(f"      ⚠️ Fato inválido ignorado: {fact_dict} - {e}")
                     continue
 
-            return facts
+            # Converter para KnowledgeGap
+            gaps = []
+            for gap_dict in data.get("knowledge_gaps", []):
+                try:
+                    gap = KnowledgeGap(
+                        topic=gap_dict.get("topic", ""),
+                        the_gap=gap_dict.get("the_gap", ""),
+                        importance=float(gap_dict.get("importance", 0.5))
+                    )
+                    
+                    if gap.topic and gap.the_gap:
+                        gaps.append(gap)
+                        logger.debug(f"      Gap: [{gap.topic}] {gap.the_gap} (importância: {gap.importance})")
+                except (ValueError, KeyError) as e:
+                    logger.warning(f"      ⚠️ Gap inválido ignorado: {gap_dict} - {e}")
+                    continue
+
+            return facts, gaps
 
         except json.JSONDecodeError as e:
             logger.error(f"      ❌ Erro ao parsear JSON do LLM: {e}")
@@ -311,13 +342,13 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
             logger.error(f"      {response_text}")
             logger.error(f"      Cleaned text tentado:")
             logger.error(f"      {cleaned_text[:500]}")
-            return []
+            return [], []
         except KeyError as e:
             # Caso o JSON seja válido mas não tenha a chave "fatos"
             logger.warning(f"      ⚠️ JSON válido mas sem chave 'fatos': {e}")
             if 'response_text' in locals():
                 logger.info(f"      Resposta do Claude: {response_text[:500]}")
-            return []
+            return [], []
         except Exception as e:
             logger.error(f"      ❌ Erro inesperado no LLM: {type(e).__name__} - {e}")
             if 'response_text' in locals():
@@ -325,7 +356,7 @@ Retorne APENAS o JSON no formato especificado, sem texto adicional."""
             # Log do traceback completo para debug
             import traceback
             logger.error(f"      Traceback: {traceback.format_exc()}")
-            return []
+            return [], []
 
     def _extract_with_regex(self, user_input: str) -> List[ExtractedFact]:
         """
@@ -751,7 +782,7 @@ def test_extractor():
 
     for i, message in enumerate(test_messages, 1):
         print(f"\n{i}. Input: {message}")
-        facts = extractor.extract_facts(message)
+        facts, _, gaps = extractor.extract_facts(message)
 
         if facts:
             print(f"   Fatos extraídos: {len(facts)}")
@@ -759,7 +790,11 @@ def test_extractor():
                 print(f"   - {fact.category}.{fact.fact_type}.{fact.attribute}: {fact.value} (conf: {fact.confidence:.2f})")
         else:
             print("   Nenhum fato extraído")
-
+            
+        if gaps:
+            print(f"   [!] Gaps de Conhecimento: {len(gaps)}")
+            for gap in gaps:
+                print(f"   - ? [{gap.topic}] {gap.the_gap} (importância: {gap.importance:.2f})")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

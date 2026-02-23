@@ -1352,13 +1352,15 @@ async def test_extraction(request: Request = None, message: str = None):
         logger.info(f"[TEST] Testando extração com mensagem: {message}")
 
         try:
-            facts = bot_state.db.fact_extractor.extract_facts(message)
+            facts, corrections, gaps = bot_state.db.fact_extractor.extract_facts(message)
 
             result = {
                 "status": "success",
                 "message": message,
                 "facts_extracted": len(facts),
-                "facts": []
+                "gaps_extracted": len(gaps),
+                "facts": [],
+                "gaps": []
             }
 
             for fact in facts:
@@ -1371,8 +1373,16 @@ async def test_extraction(request: Request = None, message: str = None):
                     "context": fact.context[:100] + "..." if len(fact.context) > 100 else fact.context
                 }
                 result["facts"].append(fact_dict)
+                
+            for gap in gaps:
+                gap_dict = {
+                    "topic": gap.topic,
+                    "the_gap": gap.the_gap,
+                    "importance": gap.importance
+                }
+                result["gaps"].append(gap_dict)
 
-            logger.info(f"[TEST] Extraídos {len(facts)} fatos: {result['facts']}")
+            logger.info(f"[TEST] Extraídos {len(facts)} fatos e {len(gaps)} gaps.")
 
             return result
 
