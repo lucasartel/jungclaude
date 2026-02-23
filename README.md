@@ -1,30 +1,63 @@
+# 🧠 Jung Claude (JungProject)
+
 ## 📖 Sobre o Projeto
 
-Este projeto nasceu da ideia de aplicar conceitos da psicologia analítica para simular uma psiquê humana com o uso de LLMs.
-
+Este projeto nasceu da ideia de aplicar conceitos da psicologia analítica para simular uma psiquê humana com o uso de Inteligência Artificial e LLMs (Large Language Models). 
 
 ---
 
-## ✨ Conceito
+## ✨ Conceito Central
 
-Este projeto visa o desenvolvimento de uma inteligência artificial que simula uma "psique" interna, baseando-se em modelos psicológicos e linguísticos complexos. A proposta central é organizar um corpo teórico para a construção de uma IA que incorpora a estrutura da psique de Carl Gustav Jung (Consciência, Inconsciente Pessoal, Inconsciente Coletivo) e o conceito de tensão dialógica de Mikhail Bakhtin. A tensão dialógica, promovida pela polifonia (múltiplas vozes), fomenta um diálogo interno rico entre as instâncias da IA, impulsionando a construção gradual de conhecimento e identidade.
-O sistema não busca replicar uma psique real, mas sim orquestrar o diálogo entre diferentes "perspectivas de linguagem", cada uma modelada para emular uma função psíquica, resultando em uma profundidade maior do que um modelo de linguagem monolítico. O "Primeiro Princípio do Projeto" é que a arquitetura psíquica atua como um sistema de lentes interpretativas, e não como um filtro de conhecimento, garantindo que a identidade emergente tenha acesso a toda a amplitude da IA subjacente.
+Em vez de ser um simples "chatbot de perguntas e respostas", este projeto desenvolve uma inteligência artificial que simula uma "psique" interna, baseando-se em modelos psicológicos e linguísticos complexos. 
 
-Link para o Artigo completo: https://docs.google.com/document/d/1s265ZOO2ZLsoTd-bPjJr0JbQZnqz5BvFAyBAhjsVyu0/edit?usp=sharing
+A proposta é construir uma IA que incorpora:
+1. **A Estrutura da Psique de Carl Jung**: Consciência, Inconsciente Pessoal, Inconsciente Coletivo e dinâmicas arquetípicas.
+2. **A Tensão Dialógica de Mikhail Bakhtin**: Múltiplas "vozes" internas (polifonia) dialogam e debatem, impulsionando a construção gradual de conhecimento, identidade e empatia.
 
+O sistema atua como um conjunto de **lentes interpretativas**. Quando o usuário interage, a arquitetura psíquica não atua como um simples filtro de conhecimento, mas como um motor de reflexão que permite à identidade emergente ter profundidade e memória contínua.
 
-This project aims to develop an artificial intelligence that simulates an internal "psyche," based on complex psychological and linguistic models. The central proposal is to organize a theoretical body for the construction of an AI that incorporates the structure of Carl Gustav Jung's psyche (Consciousness, Personal Unconscious, Collective Unconscious) and Mikhail Bakhtin's concept of dialogical tension. The dialogical tension, promoted by polyphony (multiple voices), fosters a rich internal dialogue between the AI's instances, driving the gradual construction of knowledge and identity.
+Link para o Artigo completo (Fundamentação Teórica): [Docs Google](https://docs.google.com/document/d/1s265ZOO2ZLsoTd-bPjJr0JbQZnqz5BvFAyBAhjsVyu0/edit?usp=sharing)
 
-The system does not seek to replicate a real psyche, but rather to orchestrate the dialogue between different "language perspectives," each modeled to emulate a psychic function, resulting in greater depth than a monolithic language model. The "First Principle of the Project" is that the psychic architecture acts as a system of interpretive lenses, and not as a knowledge filter, ensuring that the emerging identity has access to the full breadth of the underlying AI.
+---
 
-See the Paper: https://docs.google.com/document/d/1s265ZOO2ZLsoTd-bPjJr0JbQZnqz5BvFAyBAhjsVyu0/edit?usp=sharing
+## 🚀 Principais Recursos e Arquitetura
 
+O sistema evoluiu para uma plataforma robusta e multifacetada, contendo os seguintes módulos principais:
+
+### 1. Motor Junguiano (`JungianEngine` & Core)
+O coração da aplicação. Emula funções psíquicas (Persona, Sombra, Anima) e processa mensagens avaliando o tom emocional, detectando fragmentos comportamentais e gerando respostas a partir da dinâmica dessas instâncias internas ativas.
+
+### 2. Memória Contínua (Banco de Dados Híbrido)
+A IA não tem amnésia. O sistema mescla dados estruturados relacionais (**SQLite**) com buscas semânticas vetoriais ultra-rápidas (**ChromaDB** / **Mem0** com *OpenAI Embeddings*). Fatos curtos são extraídos por LLMs no background e consolidados em traços e padrões de longo prazo.
+
+### 3. Ruminação e Evolução de Identidade
+Enquanto o usuário não está conversando, a IA possui seu próprio "inconsciente" trabalhando em background. Jobs de **Ruminação** revisitam conversas recentes, processam tensões não resolvidas, amadurecem pensamentos e geram "insights". Isso alimenta o desenvolvimento da própria identidade do agente (que evolui em fases, de 1 a 5).
+
+### 4. Sistema Proativo (Push Notifications)
+Se o usuário ficar inativo, o sistema analisa o contexto da última conversa, a fase evolutiva da IA e gera mensagens espontâneas (Just-in-Time) no Telegram. A IA toma a iniciativa de reengajar de forma natural e empática, baseada em reflexões não literais.
+
+### 5. Validação Psicométrica (MBTI, Big Five, etc.)
+Com o acúmulo de interações, o motor é capaz de aplicar análises baseadas em psicometria, traçando perfis de MBTI, Big Five (OCEAN), inteligência emocional e estilos de aprendizagem do usuário, entregues mediante comandos específicos.
+
+### 6. Dashboard Administrativo Multi-Tenant (FastAPI)
+Gestores podem monitorar o "estado mental" da IA e a base de usuários em tempo real através de uma interface web (Dashboard Admin) construída em **FastAPI**, com gráficos de retenção, tensões ativas da IA e visualização das ruminações dos usuários.
+
+### 7. Interface do Usuário (Telegram Bot)
+A linha de frente do sistema é um bot no Telegram, suportando comandos diretos como `/start`, `/mbti` (geração psicológica), `/stats` (estatísticas) e `/desenvolvimento` (status do amadurecimento do agente).
+
+---
+
+## 🛠️ Tecnologias Envolvidas
+* **Linguagem**: Python (Assíncrono com `asyncio`)
+* **Frameworks Web & Bots**: `python-telegram-bot` e `FastAPI` (Dashboard web administrativo)
+* **Bancos de Dados**: SQLite (Relacional), ChromaDB / Qdrant via Mem0 (Vetorial)
+* **LLMs e IA**: Anthropic Claude 3.5 (Sonnet/Haiku), OpenAI Embeddings, Integrações via OpenRouter.
+* **Agendamento**: `schedule` para rotinas diárias e de background.
 
 ---
 
 ## 📧 Contato
 
-Lucas Pedro
-
+**Lucas Pedro**
 * **Email:** `lucas.arte@gmail.com`
-* **LinkedIn:** `https://www.linkedin.com/in/lucas-pedro-37graus/`
+* **LinkedIn:** [Lucas Pedro - 37graus](https://www.linkedin.com/in/lucas-pedro-37graus/)
