@@ -7,8 +7,9 @@ from contextlib import asynccontextmanager
 import logging
 import os
 import sys
-import sqlite3
-from dotenv import load_dotenv
+
+# Desabilitar telemetria do ChromaDB
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
 # Adicionar diretório atual ao PYTHONPATH para garantir que admin_web seja encontrado
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
