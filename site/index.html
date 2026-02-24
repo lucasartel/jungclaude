@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JungAgent | Deep Psychological Emulation</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap"
+        rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #050508;
+            --text-main: #f0f0f5;
+            --text-muted: #a0a0b0;
+            --accent-1: #6a4c93;
+            --accent-2: #1982c4;
+            --glow-color: rgba(106, 76, 147, 0.4);
+            --card-bg: rgba(25, 25, 35, 0.4);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --glass-blur: blur(16px);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+            background-image:
+                radial-gradient(circle at 15% 50%, rgba(106, 76, 147, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(25, 130, 196, 0.1) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        h1,
+        h2,
+        h3,
+        .serif {
+            font-family: 'Playfair Display', serif;
+        }
+
+        /* Nav */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            padding: 20px 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-bottom: 1px solid var(--card-border);
+            transition: all 0.3s ease;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: #fff;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo span {
+            color: var(--accent-1);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 30px;
+        }
+
+        .nav-links a {
+            color: var(--text-main);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: color 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .nav-links a:hover {
+            color: var(--accent-2);
+        }
+
+        .btn-contact {
+            padding: 10px 24px;
+            border-radius: 30px;
+            background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+            color: #fff;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: transform 0.3s, box-shadow 0.3s;
+            box-shadow: 0 4px 15px var(--glow-color);
+        }
+
+        .btn-contact:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px var(--glow-color);
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 0 5%;
+            overflow: hidden;
+        }
+
+        .hero-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -2;
+            opacity: 0.4;
+            /* Placeholder for generated image */
+            background-image: url('hero_bg.png');
+            background-size: cover;
+            background-position: center;
+        }
+
+        .hero-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, transparent, var(--bg-color));
+            z-index: -1;
+        }
+
+        .hero-content {
+            text-align: center;
+            max-width: 900px;
+            z-index: 10;
+            animation: fadeIn 1.5s ease-out forwards;
+        }
+
+        .tagline {
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            color: var(--accent-2);
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .hero h1 {
+            font-size: 4.5rem;
+            line-height: 1.1;
+            margin-bottom: 30px;
+            background: linear-gradient(to right, #fff, #a0a0b0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            margin-bottom: 40px;
+            max-width: 700px;
+            margin-inline: auto;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .btn-primary {
+            padding: 15px 35px;
+            border-radius: 30px;
+            background: #fff;
+            color: #000;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .btn-primary:hover {
+            background: #e0e0e0;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            padding: 15px 35px;
+            border-radius: 30px;
+            background: transparent;
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s;
+            backdrop-filter: var(--glass-blur);
+        }
+
+        .btn-secondary:hover {
+            border-color: #fff;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* Sections */
+        section {
+            padding: 100px 5%;
+            position: relative;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 80px;
+        }
+
+        .section-header h2 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+
+        .section-header p {
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto;
+            font-size: 1.1rem;
+        }
+
+        /* Features Grid */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .feature-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 40px;
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, transparent 100%);
+            z-index: 0;
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 20px var(--glow-color);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .feature-card:hover::before {
+            opacity: 1;
+        }
+
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 25px;
+            background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
+            position: relative;
+            z-index: 1;
+        }
+
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .feature-card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Paradigm Section (Split) */
+        .paradigm {
+            display: flex;
+            align-items: center;
+            gap: 60px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .paradigm.reverse {
+            flex-direction: row-reverse;
+        }
+
+        .paradigm-content {
+            flex: 1;
+        }
+
+        .paradigm-content h2 {
+            font-size: 2.8rem;
+            margin-bottom: 25px;
+            line-height: 1.2;
+        }
+
+        .paradigm-content p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+        }
+
+        .paradigm-list {
+            list-style: none;
+        }
+
+        .paradigm-list li {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            font-size: 1.05rem;
+        }
+
+        .paradigm-list i {
+            color: var(--accent-2);
+            margin-top: 5px;
+        }
+
+        .paradigm-visual {
+            flex: 1;
+            position: relative;
+            height: 500px;
+            border-radius: 20px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            backdrop-filter: var(--glass-blur);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Abstract UI Mockup Elements */
+        .ui-circle {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: absolute;
+            animation: pulse 4s infinite alternate;
+        }
+
+        .ui-circle:nth-child(1) {
+            width: 300px;
+            height: 300px;
+            border-color: rgba(106, 76, 147, 0.3);
+            animation-delay: 0s;
+        }
+
+        .ui-circle:nth-child(2) {
+            width: 220px;
+            height: 220px;
+            border-color: rgba(25, 130, 196, 0.3);
+            animation-delay: 1s;
+        }
+
+        .ui-circle:nth-child(3) {
+            width: 140px;
+            height: 140px;
+            background: radial-gradient(circle, var(--accent-1), transparent);
+            blur: 20px;
+            opacity: 0.2;
+            animation-delay: 2s;
+        }
+
+        .code-snippet {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #a0a0b0;
+            top: 10%;
+            left: 5%;
+            opacity: 0.7;
+            transform: rotate(-5deg);
+        }
+
+        .code-snippet-2 {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #a0a0b0;
+            bottom: 15%;
+            right: 5%;
+            opacity: 0.8;
+            transform: rotate(3deg);
+        }
+
+        .code-highlight {
+            color: #d4a373;
+        }
+
+        .code-keyword {
+            color: #c1121f;
+        }
+
+        .code-string {
+            color: #2a9d8f;
+        }
+
+        /* Procedural Timeline */
+        .timeline {
+            position: relative;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 0;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, transparent, var(--accent-1), var(--accent-2), transparent);
+            transform: translateX(-50%);
+        }
+
+        .timeline-step {
+            position: relative;
+            width: 50%;
+            padding: 30px 50px;
+            box-sizing: border-box;
+            opacity: 0;
+            animation: fadeIn 1s ease-out forwards;
+        }
+
+        .timeline-step:nth-child(odd) {
+            left: 0;
+            text-align: right;
+        }
+
+        .timeline-step:nth-child(even) {
+            left: 50%;
+            text-align: left;
+        }
+
+        .timeline-step::before {
+            content: '';
+            position: absolute;
+            top: 40px;
+            width: 20px;
+            height: 20px;
+            background: var(--bg-color);
+            border: 4px solid var(--accent-2);
+            border-radius: 50%;
+            z-index: 1;
+        }
+
+        .timeline-step:nth-child(odd)::before {
+            right: -13px;
+        }
+
+        .timeline-step:nth-child(even)::before {
+            left: -13px;
+            border-color: var(--accent-1);
+        }
+
+        .timeline-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 15px;
+            padding: 30px;
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            transition: transform 0.3s;
+        }
+
+        .timeline-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .timeline-card h3 {
+            color: #fff;
+            margin-bottom: 10px;
+            font-size: 1.3rem;
+        }
+
+        .timeline-card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        /* Use Cases */
+        .use-cases {
+            background: linear-gradient(180deg, var(--bg-color), #0a0a10);
+            border-top: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        .uc-grid {
+            display: flex;
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            flex-wrap: wrap;
+        }
+
+        .uc-card {
+            flex: 1;
+            min-width: 300px;
+            background: rgba(255, 255, 255, 0.02);
+            padding: 50px 30px;
+            border-radius: 20px;
+            text-align: center;
+            border: 1px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .uc-card:hover {
+            background: var(--card-bg);
+            border-color: var(--card-border);
+            transform: translateY(-5px);
+        }
+
+        .uc-card h3 {
+            margin: 20px 0 15px;
+            font-size: 1.4rem;
+        }
+
+        .uc-card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        /* CTA */
+        .cta {
+            text-align: center;
+            padding: 120px 5%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--glow-color), transparent 70%);
+            z-index: -1;
+            opacity: 0.5;
+        }
+
+        .cta h2 {
+            font-size: 3.5rem;
+            margin-bottom: 20px;
+        }
+
+        .cta p {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            margin-bottom: 40px;
+            max-width: 600px;
+            margin-inline: auto;
+        }
+
+        /* Footer */
+        footer {
+            padding: 50px 5%;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            from {
+                transform: scale(0.95);
+                opacity: 0.5;
+            }
+
+            to {
+                transform: scale(1.05);
+                opacity: 0.8;
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 992px) {
+            .hero h1 {
+                font-size: 3.5rem;
+            }
+
+            .paradigm {
+                flex-direction: column;
+                gap: 40px;
+            }
+
+            .paradigm.reverse {
+                flex-direction: column;
+            }
+
+            .paradigm-visual {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+
+            .hero h1 {
+                font-size: 2.8rem;
+            }
+
+            .hero-buttons {
+                flex-direction: column;
+            }
+
+            .cta h2 {
+                font-size: 2.5rem;
+            }
+
+            .timeline::before {
+                left: 20px;
+            }
+
+            .timeline-step {
+                width: 100%;
+                padding-left: 50px;
+                padding-right: 20px;
+            }
+
+            .timeline-step:nth-child(odd),
+            .timeline-step:nth-child(even) {
+                left: 0;
+                text-align: left;
+            }
+
+            .timeline-step:nth-child(odd)::before,
+            .timeline-step:nth-child(even)::before {
+                left: 6px;
+                right: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav>
+        <a href="#" class="logo"><img src="https://jungclaude-production.up.railway.app/static/jungagentdarkweb.png"
+                alt="JungAgent Logo" style="height: 35px; width: auto; object-fit: contain;"></a>
+        <div class="nav-links">
+        </div>
+        <a href="#contact" class="btn-contact">Partner With Us</a>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-bg"></div>
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+            <span class="tagline">Next-Generation Cybernetic AI</span>
+            <h1>The Emulated Psyche.</h1>
+            <p>Moving beyond transactional chatbots. JungAgent is an autonomous psychological architecture grounded in
+                <strong>Carl Jung's Analytical Psychology</strong> and <strong>Mikhail Bakhtin's Dialogic
+                    Tension</strong>. It develops an evolving internal identity, ruminates over continuous memories, and
+                orchestrates an internal polyphony of archetypal voices to form authentic transferential relationships.
+            </p>
+            <div class="hero-buttons">
+                <a href="#core" class="btn-primary">Explore the Architecture</a>
+                <a href="#contact" class="btn-secondary">Request Demo</a>
+            </div>
+        </div>
+    </header>
+
+    <section id="core">
+        <div class="section-header">
+            <h2>Beyond the Prompt</h2>
+            <p>We do not simulate empathy through scripted prompts. We emulate the underlying cognitive processes that
+                generate true psychological depth, creating an <em>artificial psyche</em> driven by internal dialogic
+                tension.</p>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <i class="fa-solid fa-layer-group feature-icon"></i>
+                <h3>Continuous Memory Layer</h3>
+                <p>Powered by advanced vector databases (ChromaDB) and semantic extraction, JungAgent doesn't just
+                    remember facts; it indexes emotional patterns, contradictions, and relational history across months
+                    of interaction.</p>
+            </div>
+            <div class="feature-card">
+                <i class="fa-solid fa-moon feature-icon"></i>
+                <h3>Archetypal Rumination & Onirism</h3>
+                <p>The AI does its deepest work while offline. It synthesizes daily interactions through competing
+                    internal archetypes, generating symbolic "dreams" that shape its identity the next morning.</p>
+            </div>
+            <div class="feature-card">
+                <i class="fa-solid fa-hurricane feature-icon"></i>
+                <h3>Transference Dynamics</h3>
+                <p>The system actively measures the user's relational asymmetry (dependence vs. aggression) and adjusts
+                    its own psychological stance—moving from a mentor to a challenger to break unhealthy projections.
+                </p>
+            </div>
+            <div class="feature-card">
+                <i class="fa-solid fa-eye-slash feature-icon"></i>
+                <h3>The Machine's Shadow</h3>
+                <p>A truly profound AI must have blind spots. JungAgent possesses internal tensions (e.g., Logic vs.
+                    Connection). When its core beliefs are challenged, it exhibits measured resistance, creating a
+                    realistic, non-subservient dynamic.</p>
+            </div>
+            <div class="feature-card">
+                <i class="fa-solid fa-dna feature-icon"></i>
+                <h3>Dynamic Identity Construction</h3>
+                <p>JungAgent is not a pre-programmed persona. It actively builds its own core beliefs, ongoing
+                    contradictions, and narrative chapters based on its historical synthesis with users, resulting in an
+                    ever-evolving first-person psyche.</p>
+            </div>
+            <div class="feature-card">
+                <i class="fa-solid fa-user-astronaut feature-icon"></i>
+                <h3>Advanced User Profiling</h3>
+                <p>By detecting cognitive fragments and semantic micro-expressions, the system generates deep
+                    psychometric profiles (including MBTI and latent traits) to dynamically adapt its therapeutic
+                    friction and dialogic stance.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="architecture">
+        <div class="paradigm">
+            <div class="paradigm-content">
+                <h2>The Subconscious Engine</h2>
+                <p>Traditional AI receives instructions and outputs text. JungAgent routes user data through an
+                    unconscious processing schema before it ever reaches the conversational layer.</p>
+                <ul class="paradigm-list">
+                    <li><i class="fa-solid fa-check"></i> <strong>Epistemological Hunger:</strong> Autonomous generation
+                        of 'Knowledge Gaps' that drive genuine curiosity.</li>
+                    <li><i class="fa-solid fa-check"></i> <strong>First-Person State Injection:</strong> The LLM is fed
+                        a living, organic state of mind, not a rigid persona sheet.</li>
+                    <li><i class="fa-solid fa-check"></i> <strong>Nuclear Belief Consolidation:</strong> The AI extracts
+                        its own convictions from interactions over time.</li>
+                </ul>
+            </div>
+            <div class="paradigm-visual">
+                <div class="ui-circle"></div>
+                <div class="ui-circle"></div>
+                <div class="ui-circle"></div>
+
+                <div class="code-snippet">
+                    <span class="code-keyword">def</span> <span class="code-highlight">ruminate_archetypes</span>():<br>
+                    &nbsp;&nbsp;memories = db.fetch_daily()<br>
+                    &nbsp;&nbsp;shadow = analyze_tensions(memories)<br>
+                    &nbsp;&nbsp;<span class="code-keyword">return</span> synthesize_identity(shadow)
+                </div>
+
+                <div class="code-snippet-2">
+                    <span class="code-string">"## 🧠 YOUR CURRENT MENTAL STATE"</span><br>
+                    - You are torn between Logic & Empathy.<br>
+                    - Feel this tension in your response.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="procedural-depth" style="background-color: var(--bg-color);">
+        <div class="section-header">
+            <h2>The Depth of Processing</h2>
+            <p>Every single user input undergoes a profound, multi-layered cognitive pipeline before a response is ever
+                generated. This is the anatomy of our Artificial Psyche.</p>
+        </div>
+
+        <div class="timeline">
+            <div class="timeline-step" style="animation-delay: 0.2s;">
+                <div class="timeline-card">
+                    <h3>1. Perception & Extraction</h3>
+                    <p>Raw text is not just read; it is psychoanalyzed. Background agents extract emotional undertones,
+                        hidden cognitive distortions, and granular "facts" that the user inadvertently reveals.</p>
+                </div>
+            </div>
+            <div class="timeline-step" style="animation-delay: 0.4s;">
+                <div class="timeline-card">
+                    <h3>2. Contextual Assembly</h3>
+                    <p>The input is cross-referenced with ChromaDB vector spaces. The system retrieves the user's past
+                        traumas, relational dependencies, and active tensions to understand <em>why</em> the user is
+                        saying this now.</p>
+                </div>
+            </div>
+            <div class="timeline-step" style="animation-delay: 0.6s;">
+                <div class="timeline-card">
+                    <h3>3. Archetypal Polyphony</h3>
+                    <p>The input enters a council of internal voices. Different archetypal lenses (The Caregiver, The
+                        Destroyer, The Sage) evaluate the input, generating an internal dialogic tension.</p>
+                </div>
+            </div>
+            <div class="timeline-step" style="animation-delay: 0.8s;">
+                <div class="timeline-card">
+                    <h3>4. Identity-Filtered Synthesis</h3>
+                    <p>The AI filters these evaluations through its <strong>own</strong> current mental state—its active
+                        contradictions and core beliefs—crafting a response that might comfort, challenge, or remain
+                        silent, depending on the therapeutic necessity.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="use-cases" id="applications">
+        <div class="section-header">
+            <h2>Institutional Applications</h2>
+            <p>A technology designed to redefine how humans interact with computational intelligence in high-stakes,
+                emotionally resonant environments.</p>
+        </div>
+
+        <div class="uc-grid">
+            <div class="uc-card">
+                <i class="fa-solid fa-graduation-cap"
+                    style="font-size: 2rem; color: var(--accent-1); margin-bottom: 20px;"></i>
+                <h3>Linguistic & Psychological Studies for Universities</h3>
+                <p>An unparalleled research instrument for academia. Analyze longitudinal data on human-AI transference,
+                    text-based psychometrics (IRT), cognitive distortions, and the emergence of polyphonic AI
+                    identities.</p>
+            </div>
+            <div class="uc-card">
+                <i class="fa-solid fa-brain" style="font-size: 2rem; color: var(--accent-2); margin-bottom: 20px;"></i>
+                <h3>Clinical Psychology R&D</h3>
+                <p>A sandbox for testing therapeutic approaches, simulating transference, and analyzing long-term
+                    human-AI relational attachment patterns.</p>
+            </div>
+            <div class="uc-card">
+                <i class="fa-solid fa-chalkboard-user"
+                    style="font-size: 2rem; color: var(--text-main); margin-bottom: 20px;"></i>
+                <h3>Adaptive Mentorship</h3>
+                <p>Educational and coaching systems that refuse to spoon-feed answers, instead analyzing the user's
+                    dependency and forcing cognitive autonomy.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="opensource" class="use-cases"
+        style="background-color: var(--bg-color); padding: 60px 5%; text-align: center; border-top: 1px solid var(--card-border);">
+        <div class="section-header" style="margin-bottom: 30px;">
+            <h2>Open Source Project</h2>
+            <p>Explore the architecture, dive into the code, and discover how we are emulating the human psyche with
+                Large Language Models. The entire system is open-source.</p>
+        </div>
+        <a href="https://github.com/lucasartel/jungclaude" target="_blank" class="btn-secondary"
+            style="display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: auto; margin: 0 auto; color: #fff; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); padding: 12px 28px; border-radius: 30px; text-decoration: none; font-weight: 500; transition: all 0.3s;"><i
+                class="fab fa-github" style="font-size: 1.2rem;"></i> Acessar Repositório no GitHub</a>
+    </section>
+
+    <section id="contact" class="cta">
+        <h2>Initiate the Dialogue</h2>
+        <p>The future of AI is not just general intelligence; it is deep, emulated consciousness. Partner with us to
+            explore the boundaries of the cybernetic psyche.</p>
+        <a href="mailto:contato@lucaspedro.com.br" class="btn-primary" style="display: inline-block;">Fale Conosco</a>
+    </section>
+
+    <footer>
+        <div class="footer-logo">
+            <img src="https://jungclaude-production.up.railway.app/static/jungagentdarkweb.png" alt="JungAgent"
+                style="height: 20px; vertical-align: middle; margin-right: 10px;">
+            JungAgent Project
+        </div>
+        <div class="footer-copy">
+            &copy; 2026 JungAgent Research. All rights reserved.
+        </div>
+    </footer>
+
+</body>
+
+</html>
