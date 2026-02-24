@@ -331,8 +331,8 @@ async def lifespan(app: FastAPI):
             rumination_scheduler_process = subprocess.Popen(
                 [python_exe, "rumination_scheduler.py"],
                 start_new_session=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
+                stdout=sys.stdout,
+                stderr=sys.stderr
             )
 
             # Salvar PID
