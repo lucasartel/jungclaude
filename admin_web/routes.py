@@ -1660,6 +1660,36 @@ async def memory_metrics_dashboard(
 
 
 # ============================================================
+# SONHOS DO AGENTE (Admin Dashboard)
+# ============================================================
+
+@router.get("/dreams", response_class=HTMLResponse)
+async def dreams_dashboard(
+    request: Request,
+    admin: Dict = Depends(require_master)
+):
+    """Dashboard dos Sonhos do Agente (Admin only)"""
+    db = get_db()
+    cursor = db.conn.cursor()
+    
+    # Buscar todos os sonhos do banco
+    cursor.execute("""
+        SELECT id, user_id, dream_content, symbolic_theme, 
+               extracted_insight, status, 
+               datetime(created_at, 'localtime') as created_at,
+               datetime(delivered_at, 'localtime') as delivered_at
+        FROM agent_dreams
+        ORDER BY created_at DESC
+        LIMIT 100
+    """)
+    dreams = [dict(row) for row in cursor.fetchall()]
+    
+    return templates.TemplateResponse("dashboards/dreams.html", {
+        "request": request,
+        "dreams": dreams
+    })
+
+# ============================================================
 # JUNG LAB - SISTEMA DE RUMINAÇÃO (Admin Dashboard)
 # ============================================================
 
