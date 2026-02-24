@@ -685,6 +685,25 @@ class HybridDatabaseManager:
             )
         """)
 
+        # ========== SONHOS DO AGENTE (MOTOR ONÍRICO) ==========
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS agent_dreams (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                
+                dream_content TEXT NOT NULL,
+                symbolic_theme TEXT,
+                extracted_insight TEXT,
+                
+                status TEXT DEFAULT 'pending', -- 'pending', 'faded', 'delivered'
+                
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                delivered_at DATETIME,
+                
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+
         # ========== ANÁLISES PSICOMÉTRICAS (RH) ==========
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_psychometrics (
@@ -1432,6 +1451,106 @@ Resposta: {ai_response}
                 })
 
         return history
+
+    # ========================================
+    # SQLite: AGENT DREAMS (MOTOR ONÍRICO)
+    # ========================================
+
+    def save_dream(self, user_id: str, dream_content: str, symbolic_theme: str) -> Optional[int]:
+        """Salva um novo sonho gerado pelo Motor Onírico"""
+        with self._lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute("""
+                    INSERT INTO agent_dreams (user_id, dream_content, symbolic_theme, status)
+                    VALUES (?, ?, ?, 'pending')
+                """, (user_id, dream_content, symbolic_theme))
+                self.conn.commit()
+                return cursor.lastrowid
+            except Exception as e:
+                logger.error(f"❌ Erro ao salvar sonho: {e}")
+                return None
+
+    def update_dream_with_insight(self, dream_id: int, extracted_insight: str) -> bool:
+        """Atualiza o sonho com o insight extraído pela ruminação"""
+        with self._lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute("""
+                    UPDATE agent_dreams 
+                    SET extracted_insight = ?
+                    WHERE id = ?
+                """, (extracted_insight, dream_id))
+                self.conn.commit()
+                return cursor.rowcount > 0
+            except Exception as e:
+                logger.error(f"❌ Erro ao atualizar sonho com insight: {e}")
+                return False
+
+    def get_pending_dream_insight(self, user_id: str) -> Optional[Dict]:
+        """Busca um insight onírico pendente e válido (< 48h)"""
+        with self._lock:
+            cursor = self.conn.cursor()
+            
+            # Fading de sonhos antigos (> 48h)
+            try:
+                cursor.execute("""
+                    UPDATE agent_dreams
+                    SET status = 'faded'
+                    WHERE user_id = ? AND status = 'pending'
+                    AND datetime(created_at, '+48 hours') < CURRENT_TIMESTAMP
+                """, (user_id,))
+                if cursor.rowcount > 0:
+                    self.conn.commit()
+                    logger.info(f"⚠️ {cursor.rowcount} sonhos de user '{user_id}' expiraram (faded)")
+            except Exception as e:
+                logger.error(f"Erro ao fadar sonhos: {e}")
+                
+            cursor.execute("""
+                SELECT id, dream_content, extracted_insight, symbolic_theme 
+                FROM agent_dreams
+                WHERE user_id = ? AND status = 'pending' AND extracted_insight IS NOT NULL
+                ORDER BY created_at ASC
+                LIMIT 1
+            """, (user_id,))
+            
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+
+    def get_pending_unprocessed_dreams(self, user_id: str = None) -> List[Dict]:
+        """Busca sonhos que ainda não passaram pela ruminação"""
+        with self._lock:
+            cursor = self.conn.cursor()
+            query = """
+                SELECT id, user_id, dream_content, symbolic_theme 
+                FROM agent_dreams
+                WHERE status = 'pending' AND extracted_insight IS NULL
+            """
+            params = ()
+            if user_id:
+                query += " AND user_id = ?"
+                params = (user_id,)
+                
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def mark_dream_delivered(self, dream_id: int) -> bool:
+        """Sinaliza que o insight onírico foi usado na conversa"""
+        with self._lock:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute("""
+                    UPDATE agent_dreams 
+                    SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (dream_id,))
+                self.conn.commit()
+                return cursor.rowcount > 0
+            except Exception as e:
+                logger.error(f"❌ Erro marcar sonho como delivered: {e}")
+                return False
 
     # ========================================
     # SQLite: KNOWLEDGE GAPS (CARÊNCIA DE SABERES)
@@ -3940,9 +4059,16 @@ class JungianEngine:
         else:
             logger.debug("⚠️ [IDENTITY] identity_context_builder não disponível — usando persona base")
 
+        # Verificar se há insight onírico pendente
+        pending_dream = self.db.get_pending_dream_insight(user_id)
+        dream_instruction = ""
+        if pending_dream:
+            dream_instruction = f"\n\n⚠️ INSIGHT ONÍRICO: Ao refletir em background sobre nossas conversas, produzi esta visão simbólica: {pending_dream['dream_content']}. Minha análise autônoma disso sugere que: {pending_dream['extracted_insight']}. Considere usar isso para conectar-se ao usuário agora."
+            logger.info(f"🌙 [DREAM ENGINE] Injetando insight onírico pendente #{pending_dream['id']} no prompt")
+
         # Construir prompt
         prompt = Config.RESPONSE_PROMPT.format(
-            agent_identity=agent_identity_text,
+            agent_identity=agent_identity_text + dream_instruction,
             semantic_context=semantic_context[:5000],
             chat_history=history_text,
             user_input=user_input
@@ -3964,7 +4090,7 @@ class JungianEngine:
                     temperature=0.7,
                     messages=[{"role": "user", "content": prompt}]
                 )
-                return response.choices[0].message.content
+                final_response = response.choices[0].message.content
             else:
                 # Fallback: Claude (quando OPENROUTER_API_KEY não está configurada)
                 logger.info("🤖 Fallback para Claude (OPENROUTER_API_KEY não configurada)")
@@ -3974,7 +4100,14 @@ class JungianEngine:
                     temperature=0.7,
                     messages=[{"role": "user", "content": prompt}]
                 )
-                return message.content[0].text
+                final_response = message.content[0].text
+
+            # Marcar sonho como entregue se foi usado
+            if pending_dream:
+                self.db.mark_dream_delivered(pending_dream['id'])
+                logger.info(f"✅ [DREAM ENGINE] Sonho pendente #{pending_dream['id']} marcado como entregue")
+
+            return final_response
 
         except (TimeoutError, ConnectionError) as e:
             logger.error(f"❌ Erro de conexão/timeout ao gerar resposta: {e}")

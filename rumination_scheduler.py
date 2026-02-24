@@ -36,6 +36,15 @@ def run_rumination_job():
 
         logger.info(f"👤 Processando usuário: {user_id}")
 
+        # FASE 0: SONO REM (Motor Onírico)
+        try:
+            from dream_engine import DreamEngine
+            dream = DreamEngine(db)
+            logger.info("\n🌙 FASE 0: SONO REM (Gerando insight onírico)")
+            dream.generate_dream(user_id)
+        except Exception as e:
+            logger.error(f"⚠️ Erro no Motor Onírico: {e}")
+
         # FASE 3: DIGESTÃO
         logger.info("\n📍 FASE 3: DIGESTÃO (Revisita de tensões)")
         digest_stats = rumination.digest(user_id)

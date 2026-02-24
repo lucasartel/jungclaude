@@ -27,9 +27,18 @@
       "Bash(if [ -f Dockerfile ])",
       "Bash(then cat Dockerfile)",
       "Bash(else echo \"Dockerfile não existe\")",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(Select-String -Pattern \"def main|app\\\\.\" \"c:\\\\Users\\\\conta\\\\OneDrive\\\\jungproject\\\\telegram_bot.py\")",
+      "Bash(Select-Object -Last 30)",
+      "Bash(gh auth:*)",
+      "Bash(where:*)",
+      "Bash(winget list:*)",
+      "Bash(powershell -Command \"cmdkey /list | Select-String ''github''\")"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "C:\\Users\\conta\\OneDrive\\mcehub\\backend\\app\\models"
+    ]
   }
 }
