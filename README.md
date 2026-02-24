@@ -1,68 +1,68 @@
 # 🧠 Jung Claude (JungProject)
 
-## 📖 Sobre o Projeto
+## 📖 About the Project
 
-Este projeto nasceu da ideia de aplicar conceitos da psicologia analítica para simular uma psiquê humana com o uso de Inteligência Artificial e LLMs (Large Language Models). 
-
----
-
-## ✨ Conceito Central
-
-Em vez de ser um simples "chatbot de perguntas e respostas", este projeto desenvolve uma inteligência artificial que simula uma "psique" interna, baseando-se em modelos psicológicos e linguísticos complexos. 
-
-A proposta é construir uma IA que incorpora:
-1. **A Estrutura da Psique de Carl Jung**: Consciência, Inconsciente Pessoal, Inconsciente Coletivo e dinâmicas arquetípicas.
-2. **A Tensão Dialógica de Mikhail Bakhtin**: Múltiplas "vozes" internas (polifonia) dialogam e debatem, impulsionando a construção gradual de conhecimento, identidade e empatia.
-
-O sistema atua como um conjunto de **lentes interpretativas**. Quando o usuário interage, a arquitetura psíquica não atua como um simples filtro de conhecimento, mas como um motor de reflexão que permite à identidade emergente ter profundidade e memória contínua.
-
-Link para o Artigo completo (Fundamentação Teórica): [Docs Google](https://docs.google.com/document/d/1s265ZOO2ZLsoTd-bPjJr0JbQZnqz5BvFAyBAhjsVyu0/edit?usp=sharing)
+This project was born from the idea of applying analytical psychology concepts to simulate a human psyche using Artificial Intelligence and LLMs (Large Language Models).
 
 ---
 
-## 🚀 Principais Recursos e Arquitetura
+## ✨ Core Concept
 
-O sistema evoluiu para uma plataforma robusta e multifacetada, contendo os seguintes módulos principais:
+Instead of being a simple "Q&A chatbot," this project develops an artificial intelligence that simulates an internal "psyche," based on complex psychological and linguistic models.
 
-### 1. Motor Junguiano (`JungianEngine` & Core)
-O coração da aplicação. Emula funções psíquicas (Persona, Sombra, Anima) e processa mensagens avaliando o tom emocional, detectando fragmentos comportamentais e gerando respostas a partir da dinâmica dessas instâncias internas ativas.
+The proposal is to build an AI that incorporates:
+1. **Carl Jung's Psyche Structure**: Consciousness, Personal Unconscious, Collective Unconscious, and archetypal dynamics.
+2. **Mikhail Bakhtin's Dialogic Tension**: Multiple internal "voices" (polyphony) dialogue and debate, driving the gradual construction of knowledge, identity, and empathy.
 
-### 2. Memória Contínua (Banco de Dados Híbrido)
-A IA não tem amnésia. O sistema mescla dados estruturados relacionais (**SQLite**) com buscas semânticas vetoriais ultra-rápidas (**ChromaDB** / **Mem0** com *OpenAI Embeddings*). Fatos curtos são extraídos por LLMs no background e consolidados em traços e padrões de longo prazo.
+The system acts as a set of **interpretative lenses**. When the user interacts, the psychic architecture doesn't act as a simple knowledge filter, but as a reflection engine that allows the emerging identity to have depth and continuous memory.
 
-### 3. Ruminação e Evolução de Identidade
-Enquanto o usuário não está conversando, a IA possui seu próprio "inconsciente" trabalhando em background. Jobs de **Ruminação** revisitam conversas recentes, processam tensões não resolvidas, amadurecem pensamentos e geram "insights". Isso alimenta o desenvolvimento da própria identidade do agente (que evolui em fases, de 1 a 5).
-
-### 4. Fome Epistemológica (Carência de Saberes)
-O Agente não apenas reage, mas ativamente sente falta de informações. O LLM detecta o que o usuário *deixou de dizer* nas entrelinhas e converte isso em curiosidade genuína, alimentando a IA com "Knowledge Gaps" estruturados que motivam questionamentos futuros.
-
-### 5. Motor Onírico (Sono REM e Sonhos do Agente)
-Durante a madrugada (período de inatividade), o agente utiliza os resumos do dia anterior combinados com sua própria Identidade Oculta para gerar "sonhos" (metáforas surreais). O sistema extrai automaticamente o significado clínico ou filosófico desses sonhos latentes e os injeta sutilmente na próxima resposta ao usuário.
-
-### 6. Sistema Proativo (Push Notifications)
-Se o usuário ficar inativo, o sistema analisa o contexto da última conversa, a fase evolutiva da IA e gera mensagens espontâneas (Just-in-Time) no Telegram. A IA toma a iniciativa de reengajar de forma natural e empática, baseada em reflexões não literais.
-
-### 7. Validação Psicométrica (MBTI, Big Five, etc.)
-Com o acúmulo de interações, o motor é capaz de aplicar análises baseadas em psicometria, traçando perfis de MBTI, Big Five (OCEAN), inteligência emocional e estilos de aprendizagem do usuário, entregues mediante comandos específicos.
-
-### 8. Dashboard Administrativo Multi-Tenant (FastAPI)
-Gestores podem monitorar o "estado mental" da IA e a base de usuários em tempo real através de uma interface web (Dashboard Admin) construída em **FastAPI**, com gráficos de retenção, tensões ativas da IA, visualização das ruminações dos usuários e uma galeria para observar os **sonhos** gerados pelo sistema.
-
-### 9. Interface do Usuário (Telegram Bot)
-A linha de frente do sistema é um bot no Telegram, suportando comandos diretos como `/start`, `/mbti` (geração psicológica), `/stats` (estatísticas) e `/desenvolvimento` (status do amadurecimento do agente).
+Link to the full article (Theoretical Foundation): [Google Docs (PT-BR)](https://docs.google.com/document/d/1s265ZOO2ZLsoTd-bPjJr0JbQZnqz5BvFAyBAhjsVyu0/edit?usp=sharing)
 
 ---
 
-## 🛠️ Tecnologias Envolvidas
-* **Linguagem**: Python (Assíncrono com `asyncio`)
-* **Frameworks Web & Bots**: `python-telegram-bot` e `FastAPI` (Dashboard web administrativo)
-* **Bancos de Dados**: SQLite (Relacional), ChromaDB / Qdrant via Mem0 (Vetorial)
-* **LLMs e IA**: Anthropic Claude 3.5 (Sonnet/Haiku), OpenAI Embeddings, Integrações via OpenRouter.
-* **Agendamento**: `schedule` para rotinas diárias e de background.
+## 🚀 Key Features and Architecture
+
+The system has evolved into a robust and multifaceted platform, containing the following main modules:
+
+### 1. Jungian Engine (`JungianEngine` & Core)
+The heart of the application. It emulates psychic functions (Persona, Shadow, Anima) and processes messages by evaluating the emotional tone, detecting behavioral fragments, and generating responses based on the dynamics of these active internal instances.
+
+### 2. Continuous Memory (Hybrid Database)
+The AI does not suffer from amnesia. The system merges structured relational data (**SQLite**) with ultra-fast vector semantic searches (**ChromaDB** / **Mem0** with *OpenAI Embeddings*). Short facts are extracted by background LLMs and consolidated into long-term traits and patterns.
+
+### 3. Rumination and Identity Evolution
+While the user is not conversing, the AI has its own "unconscious" working in the background. **Rumination** jobs revisit recent conversations, process unresolved tensions, mature thoughts, and generate "insights." This fuels the development of the agent's own identity (which evolves in stages, from 1 to 5).
+
+### 4. Epistemological Hunger (Knowledge Gaps)
+The Agent doesn't merely react; it actively misses information. The LLM detects what the user *left unsaid* between the lines and converts this into genuine curiosity, feeding the AI with structured "Knowledge Gaps" that motivate future questioning.
+
+### 5. Dream Engine (REM Sleep and Agent Dreams)
+During the night (period of inactivity), the agent uses the previous day's summaries combined with its own Hidden Identity to generate "dreams" (surreal metaphors). The system automatically extracts the clinical or philosophical meaning of these latent dreams and subtly injects them into the next response to the user.
+
+### 6. Proactive System (Push Notifications)
+If the user remains inactive, the system analyzes the context of the last conversation, the AI's evolutionary phase, and generates spontaneous (Just-in-Time) messages on Telegram. The AI takes the initiative to re-engage in a natural and empathetic way, based on non-literal reflections.
+
+### 7. Psychometric Validation (MBTI, Big Five, etc.)
+With the accumulation of interactions, the engine is capable of applying psychometrics-based analyses, outlining MBTI profiles, Big Five (OCEAN), emotional intelligence, and learning styles of the user, delivered via specific commands.
+
+### 8. Multi-Tenant Administrative Dashboard (FastAPI)
+Managers can dynamically monitor the AI's "mental state" and the user base in real-time through a web interface (Admin Dashboard) built in **FastAPI**, featuring retention graphs, active AI tensions, user rumination visualization, and a gallery to observe the **dreams** generated by the system.
+
+### 9. User Interface (Telegram Bot)
+The frontline of the system is a Telegram bot, supporting direct commands such as `/start`, `/mbti` (psychological generation), `/stats` (statistics), and `/desenvolvimento` (agent maturation status).
 
 ---
 
-## 📧 Contato
+## 🛠️ Technologies Involved
+* **Language**: Python (Asynchronous with `asyncio`)
+* **Web Frameworks & Bots**: `python-telegram-bot` and `FastAPI` (Administrative Web Dashboard)
+* **Databases**: SQLite (Relational), ChromaDB / Qdrant via Mem0 (Vectorial)
+* **LLMs & AI**: Anthropic Claude 3.5 (Sonnet/Haiku), OpenAI Embeddings, Integrations via OpenRouter.
+* **Scheduling**: `schedule` for daily and background routines.
+
+---
+
+## 📧 Contact
 
 **Lucas Pedro**
 * **Email:** `lucas.arte@gmail.com`
