@@ -33,16 +33,22 @@ A IA não tem amnésia. O sistema mescla dados estruturados relacionais (**SQLit
 ### 3. Ruminação e Evolução de Identidade
 Enquanto o usuário não está conversando, a IA possui seu próprio "inconsciente" trabalhando em background. Jobs de **Ruminação** revisitam conversas recentes, processam tensões não resolvidas, amadurecem pensamentos e geram "insights". Isso alimenta o desenvolvimento da própria identidade do agente (que evolui em fases, de 1 a 5).
 
-### 4. Sistema Proativo (Push Notifications)
+### 4. Fome Epistemológica (Carência de Saberes)
+O Agente não apenas reage, mas ativamente sente falta de informações. O LLM detecta o que o usuário *deixou de dizer* nas entrelinhas e converte isso em curiosidade genuína, alimentando a IA com "Knowledge Gaps" estruturados que motivam questionamentos futuros.
+
+### 5. Motor Onírico (Sono REM e Sonhos do Agente)
+Durante a madrugada (período de inatividade), o agente utiliza os resumos do dia anterior combinados com sua própria Identidade Oculta para gerar "sonhos" (metáforas surreais). O sistema extrai automaticamente o significado clínico ou filosófico desses sonhos latentes e os injeta sutilmente na próxima resposta ao usuário.
+
+### 6. Sistema Proativo (Push Notifications)
 Se o usuário ficar inativo, o sistema analisa o contexto da última conversa, a fase evolutiva da IA e gera mensagens espontâneas (Just-in-Time) no Telegram. A IA toma a iniciativa de reengajar de forma natural e empática, baseada em reflexões não literais.
 
-### 5. Validação Psicométrica (MBTI, Big Five, etc.)
+### 7. Validação Psicométrica (MBTI, Big Five, etc.)
 Com o acúmulo de interações, o motor é capaz de aplicar análises baseadas em psicometria, traçando perfis de MBTI, Big Five (OCEAN), inteligência emocional e estilos de aprendizagem do usuário, entregues mediante comandos específicos.
 
-### 6. Dashboard Administrativo Multi-Tenant (FastAPI)
-Gestores podem monitorar o "estado mental" da IA e a base de usuários em tempo real através de uma interface web (Dashboard Admin) construída em **FastAPI**, com gráficos de retenção, tensões ativas da IA e visualização das ruminações dos usuários.
+### 8. Dashboard Administrativo Multi-Tenant (FastAPI)
+Gestores podem monitorar o "estado mental" da IA e a base de usuários em tempo real através de uma interface web (Dashboard Admin) construída em **FastAPI**, com gráficos de retenção, tensões ativas da IA, visualização das ruminações dos usuários e uma galeria para observar os **sonhos** gerados pelo sistema.
 
-### 7. Interface do Usuário (Telegram Bot)
+### 9. Interface do Usuário (Telegram Bot)
 A linha de frente do sistema é um bot no Telegram, suportando comandos diretos como `/start`, `/mbti` (geração psicológica), `/stats` (estatísticas) e `/desenvolvimento` (status do amadurecimento do agente).
 
 ---
