@@ -33,160 +33,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ============================================================================
-# MEMORY CONSOLIDATION SCHEDULER
-# ============================================================================
-
-async def consolidation_scheduler():
-    """
-    Background task que roda consolidação todo dia 1º às 03:00 UTC
-
-    Usa asyncio.sleep() para calcular próxima execução, sem dependências externas
-    """
-    from jung_memory_consolidation import run_consolidation_job_async
-    from datetime import datetime, timedelta
-    import calendar
-
-    logger.info("📦 Consolidation scheduler iniciado")
-
-    # Aguardar 1 minuto para garantir inicialização completa
-    await asyncio.sleep(60)
-
-    while True:
-        try:
-            now = datetime.utcnow()
-
-            # Calcular próximo dia 1º às 03:00 UTC
-            if now.day == 1 and now.hour < 3:
-                # Hoje é dia 1 e ainda não passou das 03:00
-                next_run = now.replace(hour=3, minute=0, second=0, microsecond=0)
-            else:
-                # Próximo mês
-                if now.month == 12:
-                    next_month = 1
-                    next_year = now.year + 1
-                else:
-                    next_month = now.month + 1
-                    next_year = now.year
-
-                next_run = datetime(next_year, next_month, 1, 3, 0, 0)
-
-            # Calcular tempo de espera
-            wait_seconds = (next_run - now).total_seconds()
-
-            logger.info(f"📅 Próxima consolidação: {next_run.strftime('%Y-%m-%d %H:%M')} UTC (em {wait_seconds/3600:.1f}h)")
-
-            # Esperar até o momento
-            await asyncio.sleep(wait_seconds)
-
-            # Executar consolidação
-            logger.info("🔄 Iniciando consolidação automática mensal...")
-            try:
-                await run_consolidation_job_async(bot_state.db)
-                logger.info("✅ Consolidação automática concluída")
-            except Exception as e:
-                logger.error(f"❌ Erro na consolidação automática: {e}")
-                import traceback
-                logger.error(traceback.format_exc())
-
-        except Exception as e:
-            logger.error(f"❌ Erro crítico no consolidation scheduler: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            # Em caso de erro, aguardar 1 hora e tentar novamente
-            await asyncio.sleep(3600)
-
-
-# ============================================================================
-# PROACTIVE MESSAGE SCHEDULER
-# ============================================================================
-
-async def proactive_message_scheduler(telegram_app):
-    """
-    Loop contínuo que verifica e envia mensagens proativas a cada 30 minutos.
-
-    Funcionalidades:
-    - Verifica todos os usuários cadastrados
-    - Identifica usuários inativos (>3h sem enviar mensagem)
-    - Gera mensagens proativas personalizadas usando Jung Proactive Advanced
-    - Envia via Telegram
-    - Respeita cooldown de 6h entre mensagens proativas
-    """
-
-    logger.info("🔄 Scheduler de mensagens proativas iniciado!")
-
-    # Aguardar 1 minuto para garantir que o bot está completamente inicializado
-    await asyncio.sleep(60)
-
-    while True:
-        try:
-            logger.info("🔍 [PROATIVO] Verificando usuários elegíveis para mensagens proativas...")
-
-            # Buscar todos os usuários
-            try:
-                users = bot_state.db.get_all_users()
-                logger.info(f"   📊 Total de usuários cadastrados: {len(users)}")
-            except Exception as e:
-                logger.error(f"   ❌ Erro ao buscar usuários: {e}")
-                await asyncio.sleep(30 * 60)  # Aguardar 30 min e tentar novamente
-                continue
-
-            proactive_sent_count = 0
-
-            for user in users:
-                try:
-                    user_id = user.get('user_id')
-                    user_name = user.get('user_name', 'Usuário')
-                    platform_id = user.get('platform_id')  # ✅ CRÍTICO: Telegram ID real
-
-                    if not user_id or not platform_id:
-                        logger.warning(f"   ⚠️  [PROATIVO] Usuário sem user_id ou platform_id: {user_name}")
-                        continue
-
-                    # Verificar e gerar mensagem proativa (sistema já faz todas as validações internas)
-                    message = bot_state.proactive.check_and_generate_advanced_message(
-                        user_id=user_id,
-                        user_name=user_name
-                    )
-
-                    if message:
-                        # ✅ FIX: Usar platform_id (telegram_id) como chat_id, não user_id (hash)
-                        try:
-                            telegram_id = int(platform_id)  # Converter para inteiro
-
-                            await telegram_app.bot.send_message(
-                                chat_id=telegram_id,  # ✅ CORRIGIDO: usa telegram_id real
-                                text=message,
-                                parse_mode='Markdown'
-                            )
-                            logger.info(f"   ✅ [PROATIVO] Mensagem enviada para {user_name} (telegram_id={telegram_id})")
-                            proactive_sent_count += 1
-
-                            # Pequeno delay entre envios para evitar rate limit
-                            await asyncio.sleep(2)
-
-                        except ValueError as e:
-                            logger.error(f"   ❌ [PROATIVO] platform_id inválido para {user_name}: {platform_id} - {e}")
-                        except Exception as e:
-                            logger.error(f"   ❌ [PROATIVO] Erro ao enviar para {user_name} (telegram_id={platform_id}): {e}")
-
-                except Exception as e:
-                    logger.error(f"   ❌ [PROATIVO] Erro ao processar usuário: {e}")
-                    continue
-
-            logger.info(f"✅ [PROATIVO] Ciclo completo. Mensagens enviadas: {proactive_sent_count}")
-            logger.info(f"⏰ [PROATIVO] Próxima verificação em 30 minutos...")
-
-            # Aguardar 30 minutos antes de próxima verificação
-            await asyncio.sleep(30 * 60)
-
-        except Exception as e:
-            logger.error(f"❌ [PROATIVO] Erro crítico no scheduler: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            # Em caso de erro, aguardar 5 minutos e tentar novamente
-            await asyncio.sleep(5 * 60)
-
-# ============================================================================
+# LIFECYCLE MANAGER# ============================================================================
 # LIFECYCLE MANAGER
 # ============================================================================
 
@@ -273,114 +120,15 @@ async def lifespan(app: FastAPI):
 
     logger.info("✅ Bot Telegram iniciado e rodando!")
 
-    # ✨ Iniciar scheduler de mensagens proativas (desativado via PROACTIVE_ENABLED=false)
-    _proactive_enabled = os.getenv("PROACTIVE_ENABLED", "false").lower() == "true"
-    if _proactive_enabled:
-        proactive_task = asyncio.create_task(proactive_message_scheduler(telegram_app))
-        logger.info("✅ Scheduler de mensagens proativas ativado!")
-    else:
-        proactive_task = asyncio.create_task(asyncio.sleep(0))  # task vazia para o shutdown não quebrar
-        logger.info("⏸️  Scheduler de mensagens proativas DESATIVADO (PROACTIVE_ENABLED=false)")
-
-    # ✨ Iniciar scheduler de consolidação de memórias (Fase 4)
-    consolidation_task = asyncio.create_task(consolidation_scheduler())
-    logger.info("✅ Scheduler de consolidação de memórias ativado (mensal: dia 1 às 03:00 UTC)")
-
-    # ✨ Iniciar scheduler de identidade do agente (Fase 2)
-    try:
-        from agent_identity_consolidation_job import identity_consolidation_scheduler
-        from identity_config import IDENTITY_CONSOLIDATION_INTERVAL_HOURS
-        identity_task = asyncio.create_task(identity_consolidation_scheduler())
-        logger.info(f"✅ Scheduler de identidade do agente ativado (a cada {IDENTITY_CONSOLIDATION_INTERVAL_HOURS}h)")
-    except Exception as e:
-        logger.error(f"❌ Erro ao iniciar scheduler de identidade: {e}")
-
-    # ✨ Iniciar scheduler de bridge identidade-ruminação (Fase 3)
-    try:
-        from identity_rumination_bridge import identity_rumination_sync_scheduler
-        bridge_task = asyncio.create_task(identity_rumination_sync_scheduler())
-        logger.info("✅ Scheduler de bridge identidade-ruminação ativado (a cada 6h)")
-    except Exception as e:
-        logger.error(f"❌ Erro ao iniciar scheduler de bridge: {e}")
-
-    # ✨ Iniciar scheduler de ruminação (Jung Lab)
-    rumination_scheduler_process = None
-    try:
-        import subprocess
-        import sys
-        pid_file = "rumination_scheduler.pid"
-
-        # Remover PID file antigo se existir (de sessões anteriores)
-        if os.path.exists(pid_file):
-            try:
-                with open(pid_file, "r") as f:
-                    old_pid = int(f.read().strip())
-                try:
-                    os.kill(old_pid, 0)  # Verifica se processo ainda existe
-                    logger.info(f"⚠️  Scheduler de ruminação já rodando (PID: {old_pid})")
-                except OSError:
-                    # Processo não existe, remover PID file obsoleto
-                    os.remove(pid_file)
-                    logger.info("🗑️  PID file obsoleto removido")
-            except:
-                os.remove(pid_file)
-
-        # Iniciar novo processo de scheduler
-        if not os.path.exists(pid_file):
-            python_exe = sys.executable
-            rumination_scheduler_process = subprocess.Popen(
-                [python_exe, "rumination_scheduler.py"],
-                start_new_session=True,
-                stdout=sys.stdout,
-                stderr=sys.stderr
-            )
-
-            # Salvar PID
-            with open(pid_file, "w") as f:
-                f.write(str(rumination_scheduler_process.pid))
-
-            logger.info(f"✅ Scheduler de ruminação iniciado (PID: {rumination_scheduler_process.pid})")
-    except Exception as e:
-        logger.error(f"❌ Erro ao iniciar scheduler de ruminação: {e}")
-        logger.warning("⚠️  Jung Lab rodará apenas com digestão manual")
+    # AVISO: Schedulers de background migrados para a rota /cron/
+    app.state.telegram_app = telegram_app
 
     yield
 
     # Shutdown
     logger.info("🛑 Parando aplicação...")
 
-    # Parar scheduler proativo
-    proactive_task.cancel()
-    try:
-        await proactive_task
-    except asyncio.CancelledError:
-        logger.info("✅ Scheduler proativo cancelado")
 
-    # Parar scheduler de consolidação
-    consolidation_task.cancel()
-    try:
-        await consolidation_task
-    except asyncio.CancelledError:
-        logger.info("✅ Scheduler de consolidação cancelado")
-
-    # Parar scheduler de ruminação
-    if rumination_scheduler_process:
-        try:
-            import signal
-            rumination_scheduler_process.send_signal(signal.SIGTERM)
-            rumination_scheduler_process.wait(timeout=5)
-            logger.info("✅ Scheduler de ruminação parado")
-        except Exception as e:
-            logger.warning(f"⚠️  Erro ao parar scheduler de ruminação: {e}")
-            try:
-                rumination_scheduler_process.kill()
-            except:
-                pass
-
-        # Remover PID file
-        pid_file = "rumination_scheduler.pid"
-        if os.path.exists(pid_file):
-            os.remove(pid_file)
 
     # Parar bot Telegram
     logger.info("🛑 Parando Bot Telegram...")
@@ -1417,6 +1165,17 @@ if os.path.exists(static_dir) and os.path.isdir(static_dir):
     logger.info(f"✅ Diretório static montado: {static_dir}")
 else:
     logger.warning(f"⚠️  Diretório static não encontrado: {static_dir} - Continuando sem arquivos estáticos")
+
+
+# Rotas de Cron Jobs (Serviços de Background)
+try:
+    from admin_web.routes.cron_routes import router as cron_router
+    app.include_router(cron_router)
+    logger.info("✅ Rotas de Cron Jobs carregadas")
+except Exception as e:
+    import traceback
+    logger.error(f"❌ Erro ao carregar cron routes: {e}")
+    logger.error(traceback.format_exc())
 
 # Rotas de análise Jung (protegidas com session-based auth - apenas Master Admin)
 # MIGRADO: Agora usa require_master ao invés de HTTP Basic Auth
