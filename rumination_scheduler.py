@@ -3,7 +3,6 @@ Scheduler do Sistema de Ruminação
 Executa jobs periódicos de digestão e entrega a cada 12 horas
 """
 
-import schedule
 import time
 import logging
 from datetime import datetime
@@ -78,24 +77,6 @@ def run_rumination_job():
         logger.error(f"❌ Erro no job de ruminação: {e}", exc_info=True)
 
 
-# Agendar job
-schedule.every(DIGEST_INTERVAL_HOURS).hours.do(run_rumination_job)
-
-# Executar imediatamente na primeira vez
-run_rumination_job()
-
-logger.info(f"\n🕐 Scheduler configurado: job a cada {DIGEST_INTERVAL_HOURS}h")
-logger.info("   Próxima execução agendada")
-logger.info("   Pressione Ctrl+C para parar\n")
-
-
 if __name__ == "__main__":
-    """Loop principal do scheduler"""
-    try:
-        while True:
-            schedule.run_pending()
-            time.sleep(60)  # Verificar a cada minuto
-    except KeyboardInterrupt:
-        logger.info("\n🛑 Scheduler interrompido pelo usuário")
-    except Exception as e:
-        logger.error(f"❌ Erro fatal no scheduler: {e}", exc_info=True)
+    """Execução manual da ruminação pelo terminal (se necessário)"""
+    run_rumination_job()
