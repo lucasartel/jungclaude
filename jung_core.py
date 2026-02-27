@@ -4034,8 +4034,13 @@ class JungianEngine:
                 history_text += f"{role}: {msg['content'][:400]}\n"
 
         # Identificar se é o Admin (Criador) ou Usuário Padrão
-        admin_id = os.getenv("ADMIN_USER_ID", "1228514589")
-        is_admin = (str(user_id) == admin_id)
+        try:
+            from rumination_config import ADMIN_USER_ID as _ADMIN_ID
+            admin_id = _ADMIN_ID
+        except ImportError:
+            admin_id = os.getenv("ADMIN_USER_ID", "1228514589")
+            
+        is_admin = (str(user_id) == str(admin_id))
         
         # Construir identidade dinâmica condicional
         if is_admin:
@@ -4064,6 +4069,7 @@ class JungianEngine:
 
         # Verificar se há insight onírico pendente (APENAS PARA ADMIN)
         dream_instruction = ""
+        pending_dream = None
         if is_admin:
             pending_dream = self.db.get_pending_dream_insight(user_id)
             if pending_dream:
