@@ -25,6 +25,8 @@ def run_rumination_job():
     logger.info("="*60)
     logger.info(f"🔄 Iniciando job de ruminação - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("="*60)
+    
+    status_msg = "Ruminação concluída."
 
     try:
         # Inicializar DB e engine
@@ -40,9 +42,14 @@ def run_rumination_job():
             from dream_engine import DreamEngine
             dream = DreamEngine(db)
             logger.info("\n🌙 FASE 0: SONO REM (Gerando insight onírico)")
-            dream.generate_dream(user_id)
+            dream_success = dream.generate_dream(user_id)
+            if dream_success:
+                status_msg += " Sonho gerado."
+            else:
+                status_msg += " Sem material novo para sonho."
         except Exception as e:
             logger.error(f"⚠️ Erro no Motor Onírico: {e}")
+            status_msg += " Erro no Motor Onírico."
 
         # FASE 3: DIGESTÃO
         logger.info("\n📍 FASE 3: DIGESTÃO (Revisita de tensões)")
@@ -72,9 +79,11 @@ def run_rumination_job():
 
         logger.info("\n✅ Job de ruminação concluído com sucesso")
         logger.info("="*60)
+        return status_msg
 
     except Exception as e:
         logger.error(f"❌ Erro no job de ruminação: {e}", exc_info=True)
+        return f"Erro na ruminação: {str(e)}"
 
 
 if __name__ == "__main__":

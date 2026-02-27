@@ -19,8 +19,8 @@ async def trigger_rumination(admin: Dict = Depends(require_master)):
     logger.info("⚙️ GATILHO: Acionando Job de Ruminação e Motor Onírico")
     try:
         from rumination_scheduler import run_rumination_job
-        await asyncio.to_thread(run_rumination_job)
-        return {"status": "success", "message": "Rumination and Dreams job completed"}
+        result_message = await asyncio.to_thread(run_rumination_job)
+        return {"status": "success", "message": result_message}
     except Exception as e:
         logger.error(f"❌ Trigger Rumination error: {e}")
         import traceback
