@@ -536,7 +536,13 @@ class RuminationEngine:
 
             # 3. Atualizar status baseado em maturidade
             days_since_detection = (datetime.now() - datetime.fromisoformat(tension['first_detected_at'])).days
-            days_since_evidence = (datetime.now() - datetime.fromisoformat(tension.get('last_evidence_at', tension['first_detected_at']))).days
+            
+            # SAFE FALLBACK: If last_evidence_at is None or empty string, fallback to first_detected_at
+            _last_evidence = tension.get('last_evidence_at')
+            if not _last_evidence:
+                _last_evidence = tension.get('first_detected_at')
+                
+            days_since_evidence = (datetime.now() - datetime.fromisoformat(_last_evidence)).days
 
             new_status = tension['status']
 

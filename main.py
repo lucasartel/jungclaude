@@ -1169,12 +1169,12 @@ else:
 
 # Rotas de Cron Jobs (Serviços de Background)
 try:
-    from admin_web.routes.cron_routes import router as cron_router
-    app.include_router(cron_router)
-    logger.info("✅ Rotas de Cron Jobs carregadas")
+    from admin_web.routes.trigger_routes import router as trigger_router
+    app.include_router(trigger_router)
+    logger.info("✅ Rotas de Gatilhos Manuais carregadas")
 except Exception as e:
     import traceback
-    logger.error(f"❌ Erro ao carregar cron routes: {e}")
+    logger.error(f"❌ Erro ao carregar trigger routes: {e}")
     logger.error(traceback.format_exc())
 
 # Rotas de análise Jung (protegidas com session-based auth - apenas Master Admin)
