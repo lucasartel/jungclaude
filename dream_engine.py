@@ -158,14 +158,14 @@ Responda APENAS com um resumo do insight extraído (máx 3 frases).
         """Dispara o sonho de volta pro módulo de ruminação para povoar as tabelas."""
         try:
             # Emulamos uma interação para o motor ingerir o sonho como material contínuo
-            mock_interaction = {{
+            mock_interaction = {
                 "user_id": user_id,
                 "user_input": f"[MATERIAL ONÍRICO GERADO] Uma imagem veio à minha mente: {dream_content}",
                 "ai_response": "",
                 "conversation_id": -999, # Flag para conversas sintéticas
                 "tension_level": 1.0, 
                 "affective_charge": 1.0
-            }}
+            }
             
             ruminator = RuminationEngine(self.db)
             logger.info("   🔄 Retornando sonho orgânico para a Roda da Ruminação...")
