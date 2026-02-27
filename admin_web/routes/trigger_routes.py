@@ -6,7 +6,7 @@ import logging
 import os
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Request
-from admin_web.auth.permissions import require_master
+from admin_web.auth.middleware import require_master
 from typing import Dict
 
 logger = logging.getLogger(__name__)
