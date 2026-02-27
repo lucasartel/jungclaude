@@ -4117,6 +4117,12 @@ class JungianEngine:
                 self.db.mark_dream_delivered(pending_dream['id'])
                 logger.info(f"✅ [DREAM ENGINE] Sonho pendente #{pending_dream['id']} marcado como entregue")
 
+            # Para o ADMIN: Anexar o prompt completo (Matéria-Prima) no final da mensagem
+            if is_admin:
+                separator = "\n\n" + "-"*40 + "\n"
+                thought_block = f"🧠 **[SISTEMA: AMOSTRAGEM DE PENSAMENTO LLM]**\n\n```text\n{prompt}\n```"
+                final_response = final_response + separator + thought_block
+
             return final_response
 
         except (TimeoutError, ConnectionError) as e:
