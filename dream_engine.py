@@ -36,10 +36,23 @@ class DreamEngine:
             """, (user_id,))
             
             fragments = cursor.fetchall()
+            
+            # FALLBACK: Se não houver fragmentos nas últimas 24h, pega os 5 mais recentes
             if not fragments:
-                return "Nenhum fragmento recente significativo na última noite."
+                logger.info("   ℹ️ Sem fragmentos nas últimas 24h. Buscando material antigo...")
+                cursor.execute("""
+                    SELECT content, tension_level, emotional_weight 
+                    FROM rumination_fragments 
+                    WHERE user_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT 5
+                """, (user_id,))
+                fragments = cursor.fetchall()
                 
-            text = "=== FRAGMENTOS HUMANOS RECENTES ===\n"
+            if not fragments:
+                return "Nenhum fragmento encontrado."
+                
+            text = "=== FRAGMENTOS HUMANOS ===\n"
             for fr in fragments:
                 text += f"- {fr['content']} (Tensão: {fr['tension_level']}, Peso: {fr['emotional_weight']})\n"
             return text
