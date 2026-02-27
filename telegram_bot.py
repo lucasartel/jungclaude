@@ -1039,8 +1039,11 @@ O que você decide?
 
         response = result['response']
 
-        # Enviar resposta
-        await update.message.reply_text(response)
+        # Enviar resposta em partes se for muito longa (limite do Telegram: 4096 chars)
+        max_length = 4000
+        for i in range(0, len(response), max_length):
+            chunk = response[i:i+max_length]
+            await update.message.reply_text(chunk)
 
         # ✅ TRI: Detectar fragmentos comportamentais Big Five
         tri_enabled = getattr(bot_state.proactive, 'tri_enabled', False) if bot_state.proactive else False
