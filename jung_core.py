@@ -35,7 +35,7 @@ from openai import OpenAI
 
 # ChromaDB + LangChain
 try:
-    from langchain_openai import OpenAIEmbeddings
+    from langchain_community.embeddings import HuggingFaceEmbeddings
     from langchain_chroma import Chroma
     from langchain.schema import Document
     CHROMADB_AVAILABLE = True
@@ -272,14 +272,13 @@ class HybridDatabaseManager:
         self.conn.row_factory = sqlite3.Row
         self._init_sqlite_schema()
         
-        # ===== ChromaDB + OpenAI Embeddings =====
-        self.chroma_enabled = CHROMADB_AVAILABLE and Config.OPENAI_API_KEY
+        # ===== ChromaDB + Local Embeddings =====
+        self.chroma_enabled = CHROMADB_AVAILABLE
         
         if self.chroma_enabled:
             try:
-                self.embeddings = OpenAIEmbeddings(
-                    model=Config.EMBEDDING_MODEL,
-                    openai_api_key=Config.OPENAI_API_KEY
+                self.embeddings = HuggingFaceEmbeddings(
+                    model_name="all-MiniLM-L6-v2"
                 )
                 
                 self.vectorstore = Chroma(
@@ -288,18 +287,14 @@ class HybridDatabaseManager:
                     persist_directory=Config.CHROMA_PATH
                 )
                 
-                logger.info("✅ ChromaDB + OpenAI Embeddings inicializados")
+                logger.info("✅ ChromaDB + HuggingFace Embeddings (all-MiniLM-L6-v2) inicializados")
             except Exception as e:
-                logger.error(f"❌ Erro ao inicializar ChromaDB: {e}")
+                logger.error(f"❌ Erro ao inicializar ChromaDB local: {e}")
                 self.chroma_enabled = False
         else:
             logger.warning("⚠️  ChromaDB desabilitado. Usando apenas SQLite.")
-        
-        # ===== OpenAI Client (para embeddings e análises) =====
-        self.openai_client = OpenAI(
-            api_key=Config.OPENAI_API_KEY,
-            timeout=30.0  # 30 segundos de timeout
-        )
+            
+        self.openai_client = None # Removido dependência direta da OpenAI
 
         # ===== LLM Client (OpenRouter primário, Anthropic fallback) =====
         try:

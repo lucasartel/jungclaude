@@ -6,9 +6,9 @@ import logging
 from typing import Dict, List, Optional
 import json
 import os
+import urllib.parse
 from datetime import datetime
 
-from openai import OpenAI
 from jung_core import Config, HybridDatabaseManager
 from agent_identity_context_builder import AgentIdentityContextBuilder
 from jung_rumination import RuminationEngine
@@ -173,25 +173,16 @@ Responda APENAS com um resumo do insight extraído (máx 3 frases).
             logger.error(f"Erro ao extrair insight onírico: {e}")
 
     def _generate_dream_image(self, dream_id: int, dream_content: str, symbolic_theme: str):
-        """Usa DALL-E 3 para pintar a manifestação visual do sonho surreal"""
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if not openai_key:
-            logger.warning("⚠️ OPENAI_API_KEY não encontrada. Pulando geração de imagem do sonho.")
-            return
-
+        """Usa Pollinations.ai (gratuita) para pintar a manifestação visual do sonho surreal"""
         image_prompt = f"A surrealist, deeply symbolic and highly artistic painting representing the Jungian theme of '{symbolic_theme}'. The image should depict: {dream_content}. Style: Oil painting, dark, mysterious, ethereal, psychologically heavy, masterpiece."
         
         try:
-            logger.info(f"🎨 Enviando sonho para DALL-E 3 (Tema: {symbolic_theme})...")
-            client = OpenAI(api_key=openai_key)
-            response = client.images.generate(
-                model="dall-e-3",
-                prompt=image_prompt[:1000], # DALL-E 3 max length
-                size="1024x1024",
-                quality="standard",
-                n=1,
-            )
-            image_url = response.data[0].url
+            logger.info(f"🎨 Gerando link da pintura via Pollinations.ai (Tema: {symbolic_theme})...")
+            
+            # Pollinations gera a imagem sob demanda pela URL fornecida
+            encoded_prompt = urllib.parse.quote(image_prompt[:800])
+            # Usando seed baseado no ID para que a URL sempre retorne a mesma imagem
+            image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed={dream_id*42}"
             
             # Atualizar banco de dados local diretamente
             cursor = self.db.conn.cursor()
@@ -202,10 +193,10 @@ Responda APENAS com um resumo do insight extraído (máx 3 frases).
             """, (image_url, image_prompt, dream_id))
             self.db.conn.commit()
             
-            logger.info(f"🖼️ Imagem do sonho #{dream_id} gerada com sucesso e salva no banco!")
+            logger.info(f"🖼️ URL da imagem do sonho #{dream_id} atualizada com sucesso no banco!")
             
         except Exception as e:
-            logger.error(f"❌ Falha ao pintar o sonho via OpenAI: {e}")
+            logger.error(f"❌ Falha ao vincular imagem via Pollinations: {e}")
 
     def _feed_dream_to_rumination(self, user_id: str, dream_content: str):
         """Dispara o sonho de volta pro módulo de ruminação para povoar as tabelas."""

@@ -34,7 +34,7 @@ def _build_mem0_config() -> dict:
     Constrói configuração do mem0 usando Qdrant Cloud como vector store.
 
     - Vector store: Qdrant Cloud (persistente, gratuito)
-    - Embeddings: OpenAI text-embedding-3-small (via OPENAI_API_KEY existente)
+    - Embeddings: HuggingFace (Open Source, local - all-MiniLM-L6-v2)
     - LLM extração: openai/gpt-4o-mini via OpenRouter
     """
     qdrant_url = os.getenv("QDRANT_URL")
@@ -42,13 +42,11 @@ def _build_mem0_config() -> dict:
     if not qdrant_url or not qdrant_api_key:
         raise ValueError("QDRANT_URL e QDRANT_API_KEY são obrigatórios para mem0")
 
-    # Embeddings via OpenAI direto (já usado pelo ChromaDB — sem custo adicional)
-    openai_key = os.getenv("OPENAI_API_KEY")
-    if not openai_key:
-        raise ValueError("OPENAI_API_KEY necessário para embeddings do mem0")
-
     # LLM para extração de fatos via OpenRouter
-    llm_api_key = os.getenv("OPENROUTER_API_KEY") or openai_key
+    llm_api_key = os.getenv("OPENROUTER_API_KEY")
+    if not llm_api_key:
+        raise ValueError("OPENROUTER_API_KEY necessário para LLM do mem0")
+        
     llm_model = os.getenv("MEM0_LLM_MODEL", "openai/gpt-4o-mini")
     llm_base_url = os.getenv("MEM0_LLM_BASE_URL", "https://openrouter.ai/api/v1")
 
@@ -70,11 +68,9 @@ def _build_mem0_config() -> dict:
             },
         },
         "embedder": {
-            "provider": "openai",
+            "provider": "huggingface",
             "config": {
-                "model": "text-embedding-3-small",
-                "api_key": openai_key,
-                # OpenAI direto para embeddings (OpenRouter não oferece embedding)
+                "model": "all-MiniLM-L6-v2"
             },
         },
     }
