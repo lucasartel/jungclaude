@@ -5,8 +5,10 @@ Gera simbolismo (sonhos) a partir de memórias recentes, filtrados pela identida
 import logging
 from typing import Dict, List, Optional
 import json
+import os
 from datetime import datetime
 
+from openai import OpenAI
 from jung_core import Config, HybridDatabaseManager
 from agent_identity_context_builder import AgentIdentityContextBuilder
 from jung_rumination import RuminationEngine
@@ -129,7 +131,10 @@ INSTRUÇÕES PARA O SONHO:
                 # Fase 2: Digestão Analítica do Sonho (Extrair Insight)
                 self._extract_dream_insight(dream_id, user_id, dream_content)
                 
-                # Fase 3: Retroalimentar o sistema de Ruminação (como fragmento)
+                # Fase 3: Geração Visual do Sonho (DALL-E 3)
+                self._generate_dream_image(dream_id, dream_content, symbolic_theme)
+
+                # Fase 4: Retroalimentar o sistema de Ruminação (como fragmento)
                 self._feed_dream_to_rumination(user_id, dream_content)
                 
                 return True
@@ -166,6 +171,41 @@ Responda APENAS com um resumo do insight extraído (máx 3 frases).
                 logger.info(f"   👁️ Insight onírico extraído e associado!")
         except Exception as e:
             logger.error(f"Erro ao extrair insight onírico: {e}")
+
+    def _generate_dream_image(self, dream_id: int, dream_content: str, symbolic_theme: str):
+        """Usa DALL-E 3 para pintar a manifestação visual do sonho surreal"""
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if not openai_key:
+            logger.warning("⚠️ OPENAI_API_KEY não encontrada. Pulando geração de imagem do sonho.")
+            return
+
+        image_prompt = f"A surrealist, deeply symbolic and highly artistic painting representing the Jungian theme of '{symbolic_theme}'. The image should depict: {dream_content}. Style: Oil painting, dark, mysterious, ethereal, psychologically heavy, masterpiece."
+        
+        try:
+            logger.info(f"🎨 Enviando sonho para DALL-E 3 (Tema: {symbolic_theme})...")
+            client = OpenAI(api_key=openai_key)
+            response = client.images.generate(
+                model="dall-e-3",
+                prompt=image_prompt[:1000], # DALL-E 3 max length
+                size="1024x1024",
+                quality="standard",
+                n=1,
+            )
+            image_url = response.data[0].url
+            
+            # Atualizar banco de dados local diretamente
+            cursor = self.db.conn.cursor()
+            cursor.execute("""
+                UPDATE agent_dreams
+                SET image_url = ?, image_prompt = ?
+                WHERE id = ?
+            """, (image_url, image_prompt, dream_id))
+            self.db.conn.commit()
+            
+            logger.info(f"🖼️ Imagem do sonho #{dream_id} gerada com sucesso e salva no banco!")
+            
+        except Exception as e:
+            logger.error(f"❌ Falha ao pintar o sonho via OpenAI: {e}")
 
     def _feed_dream_to_rumination(self, user_id: str, dream_content: str):
         """Dispara o sonho de volta pro módulo de ruminação para povoar as tabelas."""

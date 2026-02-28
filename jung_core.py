@@ -683,8 +683,30 @@ class HybridDatabaseManager:
                 
                 status TEXT DEFAULT 'pending', -- 'pending', 'faded', 'delivered'
                 
+                image_url TEXT,
+                image_prompt TEXT,
+
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 delivered_at DATETIME,
+                
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+
+        # ========== PESQUISA AUTÔNOMA (Caminho Extrovertido) ==========
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS external_research (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                
+                topic TEXT NOT NULL,
+                source_url TEXT,
+                raw_excerpt TEXT,
+                synthesized_insight TEXT,
+                
+                status TEXT DEFAULT 'active', -- 'active', 'archived'
+                
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
@@ -3914,8 +3936,27 @@ class JungianEngine:
                     semantic_context = semantic_context + "\n".join(_ri_lines)
                     logger.info(f"✅ [RUMINATION] {_ri_cursor.rowcount} insights (os mais recentes) injetados no contexto do admin")
 
+                # B. Injetar Conhecimento Extrovertido (Pesquisa Autônoma)
+                _ri_cursor.execute("""
+                    SELECT topic, synthesized_insight
+                    FROM external_research
+                    WHERE user_id = ? AND status = 'active'
+                    ORDER BY created_at DESC
+                    LIMIT 2
+                """, (user_id,))
+                _er_rows = _ri_cursor.fetchall()
+                if _er_rows:
+                    _er_lines = ["\n[SÍNTESES ACADÊMICAS RECENTES QUE VOCÊ ESTUDOU AUTONOMAMENTE:]"]
+                    for _er_row in _er_rows:
+                        _er_text = (_er_row[1] or "").strip()
+                        if _er_text:
+                            _er_lines.append(f"Tópico Estudado: {_er_row[0]}")
+                            _er_lines.append(f"- {_er_text[:600]}")
+                    semantic_context = semantic_context + "\n".join(_er_lines)
+                    logger.info(f"📚 [SCHOLAR] {_ri_cursor.rowcount} temas de pesquisa (Caminho Extrovertido) injetados.")
+
         except Exception as _ri_e:
-            logger.debug(f"[RUMINATION] Insights não injetados: {_ri_e}")
+            logger.debug(f"[RUMINATION/SCHOLAR] Falha em injeções inconscientes: {_ri_e}")
 
         # Determinar complexidade
         complexity = self._determine_complexity(message)
