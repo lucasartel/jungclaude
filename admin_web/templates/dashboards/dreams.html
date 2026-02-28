@@ -73,8 +73,16 @@
         </div>
 
         <div class="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Dream Narrative -->
+            <!-- Dream Narrative & Image -->
             <div class="bg-black/30 rounded-lg p-5 border border-purple-500/10 relative">
+
+                {% if dream.image_url %}
+                <div class="mb-4 rounded-lg overflow-hidden border border-purple-500/30">
+                    <img src="{{ dream.image_url }}" alt="Visão Onírica"
+                        class="w-full h-auto object-cover hover:scale-105 transition-transform duration-500">
+                </div>
+                {% endif %}
+
                 <div class="flex items-center gap-2 mb-3 relative z-10">
                     <span class="text-purple-400 text-sm font-semibold tracking-wide uppercase">Metáfora Surreal</span>
                 </div>

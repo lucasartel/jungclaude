@@ -1675,7 +1675,7 @@ async def dreams_dashboard(
     # Buscar todos os sonhos do banco
     cursor.execute("""
         SELECT id, user_id, dream_content, symbolic_theme, 
-               extracted_insight, status, 
+               extracted_insight, status, image_url, image_prompt,
                datetime(created_at, 'localtime') as created_at,
                datetime(delivered_at, 'localtime') as delivered_at
         FROM agent_dreams
