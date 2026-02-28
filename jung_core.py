@@ -688,6 +688,17 @@ class HybridDatabaseManager:
             )
         """)
 
+        # Auto-migração para bancos antigos
+        try:
+            cursor.execute("ALTER TABLE agent_dreams ADD COLUMN image_url TEXT;")
+        except sqlite3.OperationalError:
+            pass # Coluna já existe
+            
+        try:
+            cursor.execute("ALTER TABLE agent_dreams ADD COLUMN image_prompt TEXT;")
+        except sqlite3.OperationalError:
+            pass # Coluna já existe
+
         # ========== PESQUISA AUTÔNOMA (Caminho Extrovertido) ==========
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS external_research (
