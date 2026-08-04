@@ -2431,7 +2431,12 @@ class ConsciousnessLoopManager:
                 prop_id = prop.get("id")
                 if not prop_id:
                     continue
-                if prop.get("gate_level") != "internal_only":
+                gate = prop.get("gate_level")
+                # Dispatch internal_only and admin_communicate proposals.
+                # admin_communicate sends a Telegram message to the admin
+                # with cadence/cooldown enforced by the action_catalog
+                # cooldown_minutes per action type.
+                if gate not in ("internal_only", "admin_communicate"):
                     continue
                 dispatch_result = runner.dispatch_proposal(
                     proposal_id=prop_id, user_id=self.admin_user_id
@@ -2440,6 +2445,7 @@ class ConsciousnessLoopManager:
                     {
                         "proposal_id": prop_id,
                         "action_type": dispatch_result.get("action_type"),
+                        "gate_level": gate,
                         "status": dispatch_result.get("status"),
                     }
                 )
@@ -2447,7 +2453,7 @@ class ConsciousnessLoopManager:
             result["raw_result"]["action_dispatched"] = dispatched
             if dispatched:
                 logger.info(
-                    "LOOP WILL dispatched %d internal_only action proposals (cycle=%s)",
+                    "LOOP WILL dispatched %d action proposals (cycle=%s)",
                     len(dispatched),
                     result["cycle_id"],
                 )

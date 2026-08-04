@@ -130,7 +130,6 @@ class TestDispatchPendingHandler:
         "action_type,gate_level",
         [
             ("synthesize_cross_source", "internal_only"),
-            ("pose_strategic_question", "admin_communicate"),
             ("compose_essay_draft", "artifact_for_review"),
             ("curate_portfolio", "internal_only"),
         ],

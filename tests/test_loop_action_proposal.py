@@ -149,7 +149,8 @@ class TestRunActionProposalCycle:
         assert result["metrics"]["action_proposals_dispatched"] >= 1
         assert "action_proposer_failed" not in result["warnings"]
 
-    def test_admin_communicate_proposals_not_dispatched(self):
+    def test_admin_communicate_proposals_are_dispatched(self):
+        """admin_communicate proposals should now be dispatched (Corte 3.1)."""
         loop_module = _load_loop_module()
         db = _CycleDB(sqlite3.connect(":memory:"))
         db.conn.row_factory = sqlite3.Row
@@ -177,10 +178,13 @@ class TestRunActionProposalCycle:
 
         proposals = result["raw_result"].get("action_proposals", {}).get("proposals", [])
         admin_comms = [p for p in proposals if p.get("gate_level") == "admin_communicate"]
-        # If any admin_communicate was proposed, it must NOT have been dispatched.
-        dispatched_ids = {d["proposal_id"] for d in result["raw_result"].get("action_dispatched", [])}
-        for p in admin_comms:
-            assert p["id"] not in dispatched_ids
+        dispatched = result["raw_result"].get("action_dispatched", [])
+        dispatched_gates = {d.get("gate_level") for d in dispatched}
+        # admin_communicate proposals should now be dispatched (attempted).
+        # They may show as "failed" (no real Telegram in tests) but should NOT
+        # be absent from dispatched list.
+        if admin_comms:
+            assert "admin_communicate" in dispatched_gates
 
     def test_exception_in_proposer_becomes_warning(self, monkeypatch):
         loop_module = _load_loop_module()

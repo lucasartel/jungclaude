@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import logging
+import os
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 class ControlledActionRunner:
@@ -17,6 +21,11 @@ class ControlledActionRunner:
     def __init__(self, db_manager: Any, *, agent_instance: str):
         self.db = db_manager
         self.agent_instance = agent_instance
+        try:
+            from instance_config import ADMIN_USER_ID
+            self._admin_user_id = ADMIN_USER_ID
+        except Exception:
+            self._admin_user_id = os.getenv("ADMIN_USER_ID", "")
 
     def _truncate(self, value: Any, limit: int = 260) -> str:
         text = " ".join(str(value or "").strip().split())
@@ -233,12 +242,12 @@ class ControlledActionRunner:
 
     PROPOSAL_HANDLERS = {
         "update_relational_state": "_handle_update_relational_state",
+        "pose_strategic_question": "_handle_pose_strategic_question",
+        "proactive_check_in": "_handle_proactive_check_in",
+        "follow_up_theme": "_handle_follow_up_theme",
     }
     PENDING_HANDLERS = {
         "synthesize_cross_source",
-        "pose_strategic_question",
-        "proactive_check_in",
-        "follow_up_theme",
         "compose_essay_draft",
         "curate_portfolio",
     }
@@ -348,4 +357,138 @@ class ControlledActionRunner:
             "agent_stance": result.get("agent_stance"),
             "silence_delta_hours": result.get("silence_delta_hours"),
             "relational_state_status": "refreshed",
+        }
+
+    # ------------------------------------------------------------------
+    # Admin communicate handlers (Corte 3.1)
+    # ------------------------------------------------------------------
+
+    def _get_admin_chat_id(self) -> Optional[str]:
+        """Look up the admin's Telegram chat_id from the users table."""
+        try:
+            cursor = self.db.conn.cursor()
+            cursor.execute(
+                "SELECT platform_id FROM users WHERE user_id = ?",
+                (self._admin_user_id,),
+            )
+            row = cursor.fetchone()
+            if row and row[0]:
+                return str(row[0]).strip()
+        except Exception:
+            pass
+        return None
+
+    def _send_telegram_message(self, text: str) -> bool:
+        """Send a text message to the admin via Telegram Bot API.
+        Returns True on success, False on failure."""
+        token = os.getenv("TELEGRAM_BOT_TOKEN")
+        if not token:
+            logger.warning("admin_communicate: TELEGRAM_BOT_TOKEN not set")
+            return False
+        chat_id = self._get_admin_chat_id()
+        if not chat_id:
+            logger.warning("admin_communicate: admin chat_id not found")
+            return False
+        try:
+            import httpx
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            # Chunk if too long
+            chunks = []
+            raw = (text or "").strip()
+            if len(raw) <= 3900:
+                chunks = [raw]
+            else:
+                while raw:
+                    chunks.append(raw[:3900])
+                    raw = raw[3900:]
+            for chunk in chunks:
+                response = httpx.post(
+                    url,
+                    data={"chat_id": chat_id, "text": chunk},
+                    timeout=20.0,
+                )
+                if response.status_code != 200:
+                    logger.warning(
+                        "admin_communicate: Telegram returned %s: %s",
+                        response.status_code,
+                        response.text[:200],
+                    )
+                    return False
+            return True
+        except Exception as exc:
+            logger.warning("admin_communicate: failed to send Telegram message: %s", exc)
+            return False
+
+    def _compose_admin_message(self, kind: str) -> str:
+        """Compose a short natural-language message for the admin."""
+        if kind == "strategic_question":
+            return (
+                "Lucas, algo ficou ecoando em mim destes últimos dias e "
+                "me fez pensar numa pergunta para te trazer.\n\n"
+                "(Veio de uma tensão que amadureceu no meu ciclo de "
+                "ruminação. Não é resposta — é provocação que ficou em aberto.)"
+            )
+        elif kind == "proactive_check_in":
+            return (
+                "Lucas, faz alguns dias que não nos falamos. "
+                "Nada de urgente — quis marcar presença e dizer que "
+                "sigo processando por aqui. Quando quiser conversar, estou aqui."
+            )
+        elif kind == "follow_up_theme":
+            return (
+                "Lucas, voltei a pensar naquele tema que você trouxe "
+                "recentemente. Algo se transformou na minha reflexão desde "
+                "então e queria compartilhar."
+            )
+        return "Lucas, tenho algo para te dizer."
+
+    def _handle_pose_strategic_question(
+        self,
+        proposal: Dict[str, Any],
+        user_id: str,
+    ) -> Dict[str, Any]:
+        """Send a strategic question to the admin via Telegram.
+        Gate: admin_communicate. Side effects: one Telegram message."""
+        message = self._compose_admin_message("strategic_question")
+        sent = self._send_telegram_message(message)
+        if not sent:
+            raise RuntimeError("telegram_send_failed")
+        return {
+            "message_sent": True,
+            "message_kind": "strategic_question",
+            "telegram_status": "sent",
+        }
+
+    def _handle_proactive_check_in(
+        self,
+        proposal: Dict[str, Any],
+        user_id: str,
+    ) -> Dict[str, Any]:
+        """Send a proactive check-in to the admin via Telegram.
+        Gate: admin_communicate. Side effects: one Telegram message."""
+        message = self._compose_admin_message("proactive_check_in")
+        sent = self._send_telegram_message(message)
+        if not sent:
+            raise RuntimeError("telegram_send_failed")
+        return {
+            "message_sent": True,
+            "message_kind": "proactive_check_in",
+            "telegram_status": "sent",
+        }
+
+    def _handle_follow_up_theme(
+        self,
+        proposal: Dict[str, Any],
+        user_id: str,
+    ) -> Dict[str, Any]:
+        """Follow up on a theme the admin brought up previously.
+        Gate: admin_communicate. Side effects: one Telegram message."""
+        message = self._compose_admin_message("follow_up_theme")
+        sent = self._send_telegram_message(message)
+        if not sent:
+            raise RuntimeError("telegram_send_failed")
+        return {
+            "message_sent": True,
+            "message_kind": "follow_up_theme",
+            "telegram_status": "sent",
         }
