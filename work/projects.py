@@ -309,12 +309,12 @@ class WorkProjectMixin:
     # ------------------------------------------------------------------
 
     def list_projects_with_deadline(self) -> List[Dict[str, Any]]:
-        """Return active projects that have a deadline_at set."""
+        """Return projects that have a deadline_at set and are not deleted."""
         cursor = self.db.conn.cursor()
         cursor.execute(
             """
             SELECT * FROM work_projects
-            WHERE status = 'active' AND deadline_at IS NOT NULL
+            WHERE status != 'deleted' AND deadline_at IS NOT NULL
             ORDER BY deadline_at ASC, priority DESC
             """
         )

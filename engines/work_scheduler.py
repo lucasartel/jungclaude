@@ -125,6 +125,14 @@ class WorkScheduler:
         created_briefs: List[Dict[str, Any]] = []
 
         for project in projects:
+            # Skip projects where progress already reached or exceeded target.
+            # This prevents creating briefs for completed readings (e.g., Morin
+            # with progress=115.9/116 that kept getting "pages 116-115" briefs).
+            progress_val = float(project.get("progress_value") or 0)
+            target_val = float(project.get("effort_target") or 0)
+            if target_val > 0 and progress_val >= target_val:
+                continue
+
             remaining = _remaining_effort(project)
             if remaining <= 0:
                 continue
