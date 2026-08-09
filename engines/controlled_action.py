@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
-
-
 class ControlledActionRunner:
     """Runs small, auditable internal actions from goal steps.
 
@@ -245,9 +244,9 @@ class ControlledActionRunner:
         "pose_strategic_question": "_handle_pose_strategic_question",
         "proactive_check_in": "_handle_proactive_check_in",
         "follow_up_theme": "_handle_follow_up_theme",
+        "synthesize_cross_source": "_handle_synthesize_cross_source",
     }
     PENDING_HANDLERS = {
-        "synthesize_cross_source",
         "compose_essay_draft",
         "curate_portfolio",
     }
@@ -492,3 +491,12 @@ class ControlledActionRunner:
             "message_kind": "follow_up_theme",
             "telegram_status": "sent",
         }
+    # Saber: synthesize cross-source (Corte 4)
+    def _handle_synthesize_cross_source(
+        self,
+        proposal: Dict[str, Any],
+        user_id: str,
+    ) -> Dict[str, Any]:
+        """Delegate to engines/synthesis_action.py. Keeps this file < 500 lines."""
+        from engines.synthesis_action import handle_synthesize_cross_source
+        return handle_synthesize_cross_source(self.db, proposal, user_id)

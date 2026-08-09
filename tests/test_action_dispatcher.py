@@ -129,7 +129,6 @@ class TestDispatchPendingHandler:
     @pytest.mark.parametrize(
         "action_type,gate_level",
         [
-            ("synthesize_cross_source", "internal_only"),
             ("compose_essay_draft", "artifact_for_review"),
             ("curate_portfolio", "internal_only"),
         ],
