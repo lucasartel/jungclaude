@@ -141,20 +141,3 @@ class TestAdminCommunicateHandlers:
         finally:
             if old_token:
                 os.environ["TELEGRAM_BOT_TOKEN"] = old_token
-
-    def test_pending_handlers_still_skipped(self, monkeypatch):
-        """Actions still in PENDING_HANDLERS (compose_essay_draft, curate_portfolio)
-        should return skipped."""
-        db = _make_db()
-        pid = db.create_action_proposal(
-            agent_instance="test_jung_v0",
-            cycle_id="c1",
-            user_id="test_admin",
-            action_type="compose_essay_draft",
-            gate_level="artifact_for_review",
-            source_refs=["will#1"],
-        )
-        runner, _ = self._make_runner(db, monkeypatch)
-        result = runner.dispatch_proposal(proposal_id=pid, user_id="test_admin")
-        assert result["status"] == "skipped"
-        assert "handler_pending" in result["skipped_reason"]

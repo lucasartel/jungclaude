@@ -245,11 +245,10 @@ class ControlledActionRunner:
         "proactive_check_in": "_handle_proactive_check_in",
         "follow_up_theme": "_handle_follow_up_theme",
         "synthesize_cross_source": "_handle_synthesize_cross_source",
+        "compose_essay_draft": "_handle_compose_essay_draft",
+        "curate_portfolio": "_handle_curate_portfolio",
     }
-    PENDING_HANDLERS = {
-        "compose_essay_draft",
-        "curate_portfolio",
-    }
+    PENDING_HANDLERS = set()
 
     def dispatch_proposal(self, *, proposal_id: int, user_id: str) -> Dict[str, Any]:
         """Look up an action_proposal row and run its handler if available.
@@ -500,3 +499,16 @@ class ControlledActionRunner:
         """Delegate to engines/synthesis_action.py. Keeps this file < 500 lines."""
         from engines.synthesis_action import handle_synthesize_cross_source
         return handle_synthesize_cross_source(self.db, proposal, user_id)
+
+    # Expressar: compose essay + curate portfolio (Corte 5)
+    def _handle_compose_essay_draft(
+        self, proposal: Dict[str, Any], user_id: str,
+    ) -> Dict[str, Any]:
+        from engines.expressive_action import handle_compose_essay_draft
+        return handle_compose_essay_draft(self.db, proposal, user_id)
+
+    def _handle_curate_portfolio(
+        self, proposal: Dict[str, Any], user_id: str,
+    ) -> Dict[str, Any]:
+        from engines.expressive_action import handle_curate_portfolio
+        return handle_curate_portfolio(self.db, proposal, user_id)

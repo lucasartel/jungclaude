@@ -125,40 +125,6 @@ class TestDispatchUpdateRelationalState:
 # 2. dispatch_proposal: pending handler (skipped)
 # ---------------------------------------------------------------------------
 
-class TestDispatchPendingHandler:
-    @pytest.mark.parametrize(
-        "action_type,gate_level",
-        [
-            ("compose_essay_draft", "artifact_for_review"),
-            ("curate_portfolio", "internal_only"),
-        ],
-    )
-    def test_pending_handler_is_skipped(self, action_type, gate_level):
-        runner_module = _load_runner_module()
-        db = _make_db()
-        proposal_id = db.create_action_proposal(
-            agent_instance="test_jung_v0",
-            cycle_id="c1",
-            user_id="user_1",
-            action_type=action_type,
-            gate_level=gate_level,
-            source_refs=["will#1"],
-        )
-        runner = runner_module.ControlledActionRunner(db, agent_instance="test_jung_v0")
-        result = runner.dispatch_proposal(proposal_id=proposal_id, user_id="user_1")
-        assert result["status"] == "skipped"
-        assert "handler_pending" in result["skipped_reason"]
-        rows = db.list_action_proposals(
-            agent_instance="test_jung_v0", status="skipped"
-        )
-        assert any(r["id"] == proposal_id for r in rows)
-
-
-# ---------------------------------------------------------------------------
-# 3. dispatch_proposal: external_publish blocked
-# ---------------------------------------------------------------------------
-
-class TestExternalPublishBlocked:
     def test_external_publish_always_skipped(self):
         runner_module = _load_runner_module()
         db = _make_db()
