@@ -719,39 +719,65 @@ def fetch_latest_saber_event(cursor: sqlite3.Cursor, user_id: str) -> Optional[D
 
 
 def query_meta(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, Any]:
-    cursor.execute(
-        """
-        SELECT
-            id,
-            cycle_id,
-            phase,
-            status,
-            dominant_form,
-            emergent_shift,
-            dominant_gravity,
-            blind_spot,
-            integration_note,
-            internal_questions_json,
-            trigger_source,
-            created_at
-        FROM agent_meta_consciousness
-        WHERE user_id = ?
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-        """,
-        (args.user_id, args.limit),
-    )
-    rows = rows_to_dicts(cursor.fetchall())
-    for row in rows:
-        raw = row.get("internal_questions_json")
-        try:
-            row["internal_questions"] = json.loads(raw) if raw else []
-        except Exception:
-            row["internal_questions"] = []
+    rows = []
+    if table_exists(cursor, "agent_meta_consciousness"):
+        cursor.execute(
+            """
+            SELECT
+                id,
+                cycle_id,
+                phase,
+                status,
+                dominant_form,
+                emergent_shift,
+                dominant_gravity,
+                blind_spot,
+                integration_note,
+                internal_questions_json,
+                trigger_source,
+                created_at
+            FROM agent_meta_consciousness
+            WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (args.user_id, args.limit),
+        )
+        rows = rows_to_dicts(cursor.fetchall())
+        for row in rows:
+            raw = row.get("internal_questions_json")
+            try:
+                row["internal_questions"] = json.loads(raw) if raw else []
+            except Exception:
+                row["internal_questions"] = []
+    double_loop_rows = []
+    if table_exists(cursor, "agent_meta_cognition_evaluations"):
+        cursor.execute(
+            """
+            SELECT id, agent_instance, cycle_id, evaluation_type, resonance_score,
+                   coherence_score, biases_detected_json, heuristic_adjustments_json,
+                   recommendations_json, summary, created_at
+            FROM agent_meta_cognition_evaluations
+            WHERE agent_instance = ?
+            ORDER BY id DESC LIMIT ?
+            """,
+            (args.agent_instance, args.limit),
+        )
+        double_loop_rows = rows_to_dicts(cursor.fetchall())
+        for r in double_loop_rows:
+            for k in ("biases_detected_json", "heuristic_adjustments_json", "recommendations_json"):
+                raw = r.get(k)
+                target = k.replace("_json", "")
+                try:
+                    r[target] = json.loads(raw) if raw else []
+                except Exception:
+                    r[target] = []
+
     return {
         "probe": "meta",
         "user_id": args.user_id,
         "rows": rows,
+        "double_loop_evaluations": double_loop_rows,
     }
 
 

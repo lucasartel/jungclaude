@@ -30,6 +30,7 @@ from core.db.semantic_memory import SemanticMemoryDatabaseMixin
 from core.db.users import UserDatabaseMixin
 from core.db.working_memory import WorkingMemoryDatabaseMixin
 from core.db.work_tasks import WorkTaskDatabaseMixin
+from core.db.meta_cognition import MetaCognitionDatabaseMixin
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ try:
     from llm_fact_extractor import LLMFactExtractor
     LLM_FACT_EXTRACTOR_AVAILABLE = True
 except ImportError as e:
-    logger.warning(f"âš ï¸ LLMFactExtractor nÃ£o disponÃ­vel: {e}")
+    logger.warning(f"âš ï¸  LLMFactExtractor nÃ£o disponÃ­vel: {e}")
     LLM_FACT_EXTRACTOR_AVAILABLE = False
 
 class HybridDatabaseManager(
@@ -58,9 +59,10 @@ class HybridDatabaseManager(
     ActionProposalDatabaseMixin,
     WorkTaskDatabaseMixin,
     PsychometricsDatabaseMixin,
+    MetaCognitionDatabaseMixin,
 ):
     """
-    Gerenciador HÃBRIDO de memÃ³ria:
+    Gerenciador HÃ BRIDO de memÃ³ria:
     - SQLite: Metadados estruturados, fatos, padrÃµes, desenvolvimento
     - mem0/Qdrant: MemÃ³ria semÃ¢ntica conversacional em produÃ§Ã£o
     """

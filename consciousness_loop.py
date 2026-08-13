@@ -1051,6 +1051,32 @@ class ConsciousnessLoopManager:
             result["metrics"]["integrative_self_error"] = 1
             return None
 
+    def _run_double_loop_metacognition(self, result: Dict) -> Optional[Dict[str, Any]]:
+        if result.get("phase") != "will":
+            return None
+        try:
+            from engines.meta_cognition import DoubleLoopMetaCognitionEngine
+
+            engine = DoubleLoopMetaCognitionEngine(self.db, agent_instance=self.agent_instance)
+            eval_res = engine.run_double_loop_evaluation(
+                user_id=self.admin_user_id,
+                cycle_id=result.get("cycle_id", ""),
+                force=False,
+            )
+            if eval_res.get("status") == "success":
+                result["metrics"]["double_loop_eval_id"] = eval_res.get("eval_id")
+                result["metrics"]["resonance_score"] = eval_res.get("resonance_score")
+                result["metrics"]["coherence_score"] = eval_res.get("coherence_score")
+                logger.info(
+                    "LOOP Double-loop meta-cognition completed cycle_id=%s eval_id=%s",
+                    result.get("cycle_id"),
+                    eval_res.get("eval_id"),
+                )
+            return eval_res
+        except Exception as exc:
+            logger.warning("LOOP Double-loop meta-cognition failed cycle_id=%s error=%s", result.get("cycle_id"), exc)
+            return None
+
     def _promote_from_placeholder(self, result: Dict):
         result["warnings"] = [warning for warning in result["warnings"] if warning != "placeholder_execution"]
         result["metrics"]["phase_placeholder"] = 0
@@ -2541,6 +2567,7 @@ class ConsciousnessLoopManager:
             result["output_summary"] = will_result.get("daily_text") or "Modulo Will consolidado via fallback heuristico."
 
         self._generate_integrative_self_snapshot(result)
+        self._run_double_loop_metacognition(result)
 
         return result
 
