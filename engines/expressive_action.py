@@ -221,7 +221,6 @@ def handle_curate_portfolio(
     try:
         wm_id = db.create_working_memory_item(
             agent_instance=getattr(db, "agent_instance", "jung_v1"),
-            user_id=user_id,
             item_type="focus",
             phase="will",
             cycle_id="curated_portfolio",

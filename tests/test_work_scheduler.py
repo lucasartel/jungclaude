@@ -16,7 +16,7 @@ import json
 import sqlite3
 import sys
 import threading
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -320,16 +320,16 @@ class TestHelpers:
         assert _remaining_effort({}) == 1.0
 
     def test_days_until_future(self):
-        future = (datetime.utcnow() + timedelta(days=10)).isoformat()
+        future = (datetime.now() + timedelta(days=10)).isoformat()
         assert _days_until(future) == 10
 
     def test_days_until_past(self):
-        past = (datetime.utcnow() - timedelta(days=3)).isoformat()
+        past = (datetime.now() - timedelta(days=3)).isoformat()
         assert _days_until(past) == 1
 
     def test_effort_per_pulse_reading(self):
         project = {"effort_target": 300, "progress_value": 0, "effort_unit": "pages"}
-        project["deadline_at"] = (datetime.utcnow() + timedelta(days=10)).strftime("%Y-%m-%d")
+        project["deadline_at"] = (date.today() + timedelta(days=10)).strftime("%Y-%m-%d")
         epp = _effort_per_pulse(project, pulse_count=2, cap=50)
         assert 14 <= epp <= 16
 

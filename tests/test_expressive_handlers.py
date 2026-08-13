@@ -81,9 +81,9 @@ class _ExpressiveDB(ActionProposalDatabaseMixin):
         self.conn.commit()
         self._next_wm_id = 100
 
-    def create_working_memory_item(self, *, agent_instance, user_id, item_type,
-                                   phase, cycle_id, title, summary, priority,
-                                   source_refs):
+    def create_working_memory_item(self, *, agent_instance, user_id=None, item_type="focus",
+                                   phase="will", cycle_id=None, title="", summary="", priority=0.5,
+                                   source_refs=None, **kwargs):
         cursor = self.conn.cursor()
         cursor.execute(
             "INSERT INTO working_memory_items (agent_instance, user_id, item_type, "
