@@ -307,22 +307,117 @@ async def jung_mind_data(admin=None):
                         "smooth": {"type": "curvedCW", "roundness": 0.2}
                     })
 
-        stats = {
-            "total_fragments": len(fragments),
-            "total_tensions": len(tensions),
-            "total_insights": len(insights),
-            "total_synapses": sum(1 for e in edges if e["type"] == "synapse")
-        }
-
-        logger.info(f"📊 TOTAIS: {len(nodes)} nós, {len(edges)} edges")
-        logger.info(f"📊 STATS: {stats}")
-
         return JSONResponse({
             "nodes": nodes,
             "edges": edges,
-            "stats": stats
+            "stats": {
+                "total_fragments": len(fragments),
+                "total_tensions": len(tensions),
+                "total_insights": len(insights),
+                "total_synapses": sum(1 for e in edges if e["type"] == "synapse")
+            }
         })
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ Erro ao gerar dados do jung-mind: {e}", exc_info=True)
-        return internal_error_response("Erro ao gerar dados do mapa mental")
+        return internal_error_response(f"Erro ao carregar dados do mapa: {str(e)}")
+
+
+async def symbolic_graph_data(admin=None):
+    """API que retorna os dados do Grafo Simbólico (Fase V) formatados para Vis.js."""
+    try:
+        from instance_config import ADMIN_USER_ID, AGENT_INSTANCE
+        db = get_db()
+
+        # Se o grafo estiver vazio, faz uma extração automática de evidências iniciais
+        if hasattr(db, "get_symbolic_graph_stats"):
+            stats = db.get_symbolic_graph_stats(agent_instance=AGENT_INSTANCE)
+            if stats.get("total_triples", 0) == 0:
+                try:
+                    from engines.symbolic_graph import SymbolicGraphExtractor
+                    extractor = SymbolicGraphExtractor(db, agent_instance=AGENT_INSTANCE)
+                    extractor.extract_all_and_persist(user_id=ADMIN_USER_ID, limit_per_source=50)
+                except Exception as ex_ext:
+                    logger.warning("Falha na auto-extração inicial do Grafo Simbólico: %s", ex_ext)
+
+        triples = []
+        if hasattr(db, "list_symbolic_triples"):
+            triples = db.list_symbolic_triples(agent_instance=AGENT_INSTANCE, limit=150)
+
+        nodes_map = {}
+        vis_nodes = []
+        vis_edges = []
+
+        type_colors = {
+            "person": "#38bdf8",
+            "dialectic_pole": "#f43f5e",
+            "symbol": "#a855f7",
+            "concept": "#34d399",
+            "agent": "#c084fc",
+            "trabalho": "#fbbf24",
+            "personalidade": "#60a5fa",
+        }
+
+        for t in triples:
+            subj = t["subject"]
+            obj = t["object"]
+            subj_type = (t.get("subject_type") or "concept").lower()
+            obj_type = (t.get("object_type") or "concept").lower()
+
+            if subj not in nodes_map:
+                nodes_map[subj] = {
+                    "id": f"node_{len(nodes_map)+1}",
+                    "label": subj[:30] + ("..." if len(subj) > 30 else ""),
+                    "full_name": subj,
+                    "type": subj_type,
+                    "color": type_colors.get(subj_type, "#94a3b8"),
+                    "shape": "dot" if subj_type != "agent" else "star",
+                    "size": 26 if subj in ("Lucas", "JungAgent") else 16,
+                    "title": f"<b>{subj}</b><br>Tipo: {subj_type}",
+                }
+                vis_nodes.append(nodes_map[subj])
+
+            if obj not in nodes_map:
+                nodes_map[obj] = {
+                    "id": f"node_{len(nodes_map)+1}",
+                    "label": obj[:30] + ("..." if len(obj) > 30 else ""),
+                    "full_name": obj,
+                    "type": obj_type,
+                    "color": type_colors.get(obj_type, "#94a3b8"),
+                    "shape": "dot",
+                    "size": 16,
+                    "title": f"<b>{obj}</b><br>Tipo: {obj_type}",
+                }
+                vis_nodes.append(nodes_map[obj])
+
+            s_id = nodes_map[subj]["id"]
+            o_id = nodes_map[obj]["id"]
+            pred = t["predicate"]
+            conf = t.get("confidence", 1.0)
+            src = t.get("source_ref", "")
+
+            vis_edges.append({
+                "from": s_id,
+                "to": o_id,
+                "label": pred,
+                "title": f"<b>Relação:</b> {pred}<br><b>Confiança:</b> {int(conf*100)}%<br><b>Fonte:</b> {src}",
+                "arrows": "to",
+                "font": {"size": 10, "color": "#cbd5e1", "align": "middle"},
+                "color": {"color": "#818cf8", "highlight": "#c084fc"},
+                "full_data": t,
+            })
+
+        return JSONResponse({
+            "nodes": vis_nodes,
+            "edges": vis_edges,
+            "triples": triples,
+            "stats": {
+                "total_nodes": len(vis_nodes),
+                "total_triples": len(vis_edges),
+            }
+        })
+    except Exception as e:
+        logger.error(f"❌ Erro ao gerar dados do Grafo Simbólico: {e}", exc_info=True)
+        return internal_error_response(f"Erro ao carregar Grafo Simbólico: {str(e)}")

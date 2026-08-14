@@ -94,3 +94,9 @@ async def jung_mind_page(request: Request, admin: Dict = Depends(require_master)
 @router.get("/api/jung-mind-data")
 async def jung_mind_data(admin: Dict = Depends(require_master)):
     return await research_lab_mind.jung_mind_data(admin)
+
+
+@router.get("/api/symbolic-graph-data")
+async def symbolic_graph_data(admin: Dict = Depends(require_master)):
+    return await research_lab_mind.symbolic_graph_data(admin)
+

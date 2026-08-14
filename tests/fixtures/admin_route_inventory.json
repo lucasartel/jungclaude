@@ -774,6 +774,15 @@
     "migration_bucket": "research_lab_routes"
   },
   {
+    "module": "admin_web/routes/research_lab_routes.py",
+    "method": "GET",
+    "path": "/api/symbolic-graph-data",
+    "full_path": "/admin/api/symbolic-graph-data",
+    "endpoint": "symbolic_graph_data",
+    "line": 100,
+    "migration_bucket": "research_lab_routes"
+  },
+  {
     "module": "admin_web/routes/trigger_routes.py",
     "method": "POST",
     "path": "/rumination",

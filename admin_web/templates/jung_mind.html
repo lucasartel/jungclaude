@@ -1,24 +1,435 @@
 {% extends "base_v2.html" %}
-{% block title %}Visual Map - JungAgent Admin{% endblock %}
+{% block title %}Maps - JungAgent Admin{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-<style>.mind-row{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center}.mind-search{min-width:min(100%,22rem);flex:1 1 22rem;padding:.8rem 1rem;border:1px solid rgba(148,163,184,.18);border-radius:999px;background:rgba(15,23,42,.78);color:#e2e8f0;outline:none}.mind-search:focus{border-color:rgba(192,132,252,.7);box-shadow:0 0 0 .25rem rgba(192,132,252,.14)}.mind-filters{display:flex;flex-wrap:wrap;gap:.5rem}.mind-filter{padding:.65rem 1rem;border:1px solid rgba(148,163,184,.16);border-radius:999px;background:rgba(30,41,59,.72);color:#cbd5e1;cursor:pointer}.mind-filter:hover,.mind-filter.active{border-color:rgba(192,132,252,.55);color:#f5d0fe;background:rgba(88,28,135,.24)}.mind-layout{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(19rem,.9fr);gap:1rem}.mind-canvas-shell{position:relative;min-height:70vh}.mind-canvas{width:100%;height:70vh;border-radius:1rem;background:radial-gradient(circle at top,rgba(76,29,149,.18),rgba(15,23,42,.94) 48%)}.mind-loading{position:absolute;inset:1rem;display:flex;align-items:center;justify-content:center;border-radius:1rem;background:rgba(15,23,42,.72);color:#c4b5fd;font-weight:600}.mind-loading.hide{display:none}.mind-side{height:70vh;overflow:auto}.mind-field{display:grid;gap:.3rem;margin-bottom:1rem}.mind-label{color:#94a3b8;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em}.mind-value{color:#e2e8f0;line-height:1.55}.mind-value.hi{color:#f5d0fe;font-weight:600}.mind-close{padding:0;border:0;background:transparent;color:#94a3b8;cursor:pointer;font-size:1.35rem;line-height:1}.mind-close:hover{color:#f9a8d4}.mind-legend{display:grid;gap:.75rem}.mind-legend-row{display:flex;align-items:center;gap:.65rem;color:#cbd5e1}.mind-swatch{width:1rem;height:1rem;border-radius:999px;background:#64748b}.mind-swatch.diamond{border-radius:.2rem;transform:rotate(45deg)}.mind-swatch.box{border-radius:.2rem}.mind-line{width:2.5rem;height:2px;border-top:1px dashed rgba(192,132,252,.8)}@media (max-width:1100px){.mind-layout{grid-template-columns:1fr}.mind-canvas-shell,.mind-side,.mind-canvas{height:60vh;min-height:60vh}}</style>
+<style>
+.mind-row{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center}
+.mind-search{min-width:min(100%,22rem);flex:1 1 22rem;padding:.8rem 1rem;border:1px solid rgba(148,163,184,.18);border-radius:999px;background:rgba(15,23,42,.78);color:#e2e8f0;outline:none}
+.mind-search:focus{border-color:rgba(192,132,252,.7);box-shadow:0 0 0 .25rem rgba(192,132,252,.14)}
+.mind-filters{display:flex;flex-wrap:wrap;gap:.5rem}
+.mind-filter{padding:.65rem 1rem;border:1px solid rgba(148,163,184,.16);border-radius:999px;background:rgba(30,41,59,.72);color:#cbd5e1;cursor:pointer}
+.mind-filter:hover,.mind-filter.active{border-color:rgba(192,132,252,.55);color:#f5d0fe;background:rgba(88,28,135,.24)}
+.mind-layout{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(19rem,.9fr);gap:1rem}
+.mind-canvas-shell{position:relative;min-height:65vh}
+.mind-canvas{width:100%;height:65vh;border-radius:1rem;background:radial-gradient(circle at top,rgba(76,29,149,.18),rgba(15,23,42,.94) 48%)}
+.mind-loading{position:absolute;inset:1rem;display:flex;align-items:center;justify-content:center;border-radius:1rem;background:rgba(15,23,42,.72);color:#c4b5fd;font-weight:600}
+.mind-loading.hide{display:none}
+.mind-side{height:65vh;overflow:auto}
+.mind-field{display:grid;gap:.3rem;margin-bottom:1rem}
+.mind-label{color:#94a3b8;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em}
+.mind-value{color:#e2e8f0;line-height:1.55}
+.mind-value.hi{color:#f5d0fe;font-weight:600}
+.mind-close{padding:0;border:0;background:transparent;color:#94a3b8;cursor:pointer;font-size:1.35rem;line-height:1}
+.mind-close:hover{color:#f9a8d4}
+.mind-legend{display:grid;gap:.75rem}
+.mind-legend-row{display:flex;align-items:center;gap:.65rem;color:#cbd5e1}
+.mind-swatch{width:1rem;height:1rem;border-radius:999px;background:#64748b}
+.mind-swatch.diamond{border-radius:.2rem;transform:rotate(45deg)}
+.mind-swatch.box{border-radius:.2rem}
+.mind-line{width:2.5rem;height:2px;border-top:1px dashed rgba(192,132,252,.8)}
+.section-divider{margin:2.5rem 0 1.5rem;border:0;border-top:1px solid rgba(148,163,184,.15)}
+@media (max-width:1100px){.mind-layout{grid-template-columns:1fr}.mind-canvas-shell,.mind-side,.mind-canvas{height:55vh;min-height:55vh}}
+</style>
 {% endblock %}
 {% block content %}
 <section class="page-shell-v2">
-<header class="page-header-v2"><div><p class="page-kicker-v2">Loop &middot; Psychic cartography</p><h1 class="page-title-v2">Visual Map</h1><p class="page-subtitle-v2">Visualization of the chain between fragments, tensions, and insights in the agent organism.</p></div></header>
-<section class="panel-v2"><div class="panel-header-v2"><div><h2 class="panel-title-v2">Map controls</h2><p class="panel-subtitle-v2">Text search, type filters, and a quick reading of the network's current density.</p></div></div><div class="panel-body-v2 stack-v2"><div class="mind-row"><input type="text" id="search-input" class="mind-search" placeholder="Search node text..."><button class="button-v2 button-v2--ghost" id="clear-btn">Clear</button></div><div class="mind-row"><div class="mind-filters"><button class="mind-filter active" data-filter="all">All</button><button class="mind-filter" data-filter="fragment">Fragments</button><button class="mind-filter" data-filter="tension">Tensions</button><button class="mind-filter" data-filter="insight">Insights</button></div><div class="mind-row"><span class="table-badge-v2">Fragments <strong id="stat-fragments">0</strong></span><span class="table-badge-v2">Tensions <strong id="stat-tensions">0</strong></span><span class="table-badge-v2">Insights <strong id="stat-insights">0</strong></span><span class="table-badge-v2">Synapses <strong id="stat-synapses">0</strong></span></div></div></div></section>
-<section class="mind-layout"><section class="panel-v2 mind-canvas-shell"><div id="loading" class="mind-loading">Loading visual map...</div><div id="network-container" class="mind-canvas"></div></section><section class="panel-v2 mind-side" id="info-panel"><div class="panel-header-v2"><div><h2 class="panel-title-v2" id="panel-title">Select a node</h2><p class="panel-subtitle-v2">Details for the chosen element appear here.</p></div><button id="close-panel" class="mind-close" aria-label="Close panel">&times;</button></div><div class="panel-body-v2" id="panel-content">Click a network node to open contextual details for the fragment, tension, or insight.</div></section></section>
-<section class="panel-v2"><div class="panel-header-v2"><div><h2 class="panel-title-v2">Legend</h2><p class="panel-subtitle-v2">Colors preserve categories and states of internal metabolism.</p></div></div><div class="panel-body-v2 mind-legend"><div class="mind-legend-row"><span class="mind-swatch" style="background:#a78bfa;"></span> Jung at the center</div><div class="mind-legend-row"><span class="mind-swatch" style="background:#10b981;"></span> Value fragment</div><div class="mind-legend-row"><span class="mind-swatch" style="background:#3b82f6;"></span> Belief fragment</div><div class="mind-legend-row"><span class="mind-swatch" style="background:#f59e0b;"></span> Active tension or behavior</div><div class="mind-legend-row"><span class="mind-swatch" style="background:#ec4899;"></span> Ready insight or desire</div><div class="mind-legend-row"><span class="mind-swatch" style="background:#ef4444;"></span> Fear fragment</div><div class="mind-legend-row"><span class="mind-swatch diamond" style="background:#6b7280;"></span> Archived tension</div><div class="mind-legend-row"><span class="mind-swatch box" style="background:#8b5cf6;"></span> Delivered insight</div><div class="mind-legend-row"><span class="mind-line"></span> Lateral synapse by shared theme</div></div></section>
+<header class="page-header-v2">
+    <div>
+        <p class="page-kicker-v2">Organism &middot; Cognitive Maps & Cartography</p>
+        <h1 class="page-title-v2">Maps</h1>
+        <p class="page-subtitle-v2">Symbolic Knowledge Graph (SKG) and Rumination Metabolism topology.</p>
+    </div>
+</header>
+
+<!-- ==================== 1. SYMBOLIC KNOWLEDGE GRAPH (FASE V) ==================== -->
+<section class="panel-v2">
+    <div class="panel-header-v2">
+        <div>
+            <span class="table-badge-v2" style="background:rgba(56,189,248,.15);color:#38bdf8;border:1px solid rgba(56,189,248,.3);">Fase V &middot; Stage A</span>
+            <h2 class="panel-title-v2" style="margin-top:.4rem;">Symbolic Knowledge Graph (SKG)</h2>
+            <p class="panel-subtitle-v2">Deterministic relational triples (Subject &rarr; Predicate &rarr; Object) anchored to verified evidence with causal navigation.</p>
+        </div>
+    </div>
+    <div class="panel-body-v2 stack-v2">
+        <div class="mind-row">
+            <input type="text" id="symbolic-search-input" class="mind-search" placeholder="Search symbolic entities or relations...">
+            <button class="button-v2 button-v2--ghost" id="symbolic-clear-btn">Clear</button>
+        </div>
+        <div class="mind-row">
+            <div class="mind-filters">
+                <button class="mind-filter active" data-sfilter="all">All</button>
+                <button class="mind-filter" data-sfilter="person">Persons</button>
+                <button class="mind-filter" data-sfilter="dialectic_pole">Dialectic Poles</button>
+                <button class="mind-filter" data-sfilter="symbol">Symbols</button>
+                <button class="mind-filter" data-sfilter="concept">Concepts</button>
+            </div>
+            <div class="mind-row">
+                <span class="table-badge-v2">Nodes <strong id="stat-sym-nodes">0</strong></span>
+                <span class="table-badge-v2">Triples <strong id="stat-sym-triples">0</strong></span>
+                <span class="table-badge-v2">Evidence Precision <strong>100%</strong></span>
+                <span class="table-badge-v2" style="color:#a78bfa;">SQL Causal Traversal <strong>Active</strong></span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="mind-layout">
+    <section class="panel-v2 mind-canvas-shell">
+        <div id="symbolic-loading" class="mind-loading">Loading Symbolic Graph...</div>
+        <div id="symbolic-network-container" class="mind-canvas"></div>
+    </section>
+    <section class="panel-v2 mind-side" id="symbolic-info-panel">
+        <div class="panel-header-v2">
+            <div>
+                <h2 class="panel-title-v2" id="symbolic-panel-title">Select an entity or relation</h2>
+                <p class="panel-subtitle-v2">Details and evidence anchors appear here.</p>
+            </div>
+            <button id="symbolic-close-panel" class="mind-close" aria-label="Close panel">&times;</button>
+        </div>
+        <div class="panel-body-v2" id="symbolic-panel-content">
+            Click on any node or connection in the symbolic graph to inspect its evidence anchor (<code>conversation#</code>, <code>insight#</code>), confidence score, and relational context.
+        </div>
+    </section>
+</section>
+
+<section class="panel-v2">
+    <div class="panel-header-v2">
+        <div>
+            <h2 class="panel-title-v2">Symbolic Graph Legend</h2>
+            <p class="panel-subtitle-v2">Entity types and confidence classifications.</p>
+        </div>
+    </div>
+    <div class="panel-body-v2 mind-legend">
+        <div class="mind-legend-row"><span class="mind-swatch" style="background:#38bdf8;"></span> Person / Admin (Lucas)</div>
+        <div class="mind-legend-row"><span class="mind-swatch" style="background:#c084fc;"></span> Agent Core (JungAgent)</div>
+        <div class="mind-legend-row"><span class="mind-swatch" style="background:#f43f5e;"></span> Dialectic Pole / Contradiction (Ego vs. Sombra)</div>
+        <div class="mind-legend-row"><span class="mind-swatch" style="background:#a855f7;"></span> Symbol / Archetypal Anchor</div>
+        <div class="mind-legend-row"><span class="mind-swatch" style="background:#34d399;"></span> Concept / Value / Trait</div>
+        <div class="mind-legend-row"><span class="mind-line" style="border-color:#818cf8;"></span> Directed Predicate with Evidence Anchor</div>
+    </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ==================== 2. COGNITIVE RUMINATION MAP ==================== -->
+<section class="panel-v2">
+    <div class="panel-header-v2">
+        <div>
+            <span class="table-badge-v2" style="background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3);">Rumination Engine</span>
+            <h2 class="panel-title-v2" style="margin-top:.4rem;">Cognitive Rumination Map</h2>
+            <p class="panel-subtitle-v2">Hierarchical chain between fragments, tensions, and crystallized insights in the agent organism.</p>
+        </div>
+    </div>
+    <div class="panel-body-v2 stack-v2">
+        <div class="mind-row">
+            <input type="text" id="search-input" class="mind-search" placeholder="Search rumination node text...">
+            <button class="button-v2 button-v2--ghost" id="clear-btn">Clear</button>
+        </div>
+        <div class="mind-row">
+            <div class="mind-filters">
+                <button class="mind-filter active" data-filter="all">All</button>
+                <button class="mind-filter" data-filter="fragment">Fragments</button>
+                <button class="mind-filter" data-filter="tension">Tensions</button>
+                <button class="mind-filter" data-filter="insight">Insights</button>
+            </div>
+            <div class="mind-row">
+                <span class="table-badge-v2">Fragments <strong id="stat-fragments">0</strong></span>
+                <span class="table-badge-v2">Tensions <strong id="stat-tensions">0</strong></span>
+                <span class="table-badge-v2">Insights <strong id="stat-insights">0</strong></span>
+                <span class="table-badge-v2">Synapses <strong id="stat-synapses">0</strong></span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="mind-layout">
+    <section class="panel-v2 mind-canvas-shell">
+        <div id="loading" class="mind-loading">Loading visual map...</div>
+        <div id="network-container" class="mind-canvas"></div>
+    </section>
+    <section class="panel-v2 mind-side" id="info-panel">
+        <div class="panel-header-v2">
+            <div>
+                <h2 class="panel-title-v2" id="panel-title">Select a node</h2>
+                <p class="panel-subtitle-v2">Details for the chosen element appear here.</p>
+            </div>
+            <button id="close-panel" class="mind-close" aria-label="Close panel">&times;</button>
+        </div>
+        <div class="panel-body-v2" id="panel-content">
+            Click a network node to open contextual details for the fragment, tension, or insight.
+        </div>
+    </section>
+</section>
+
+<section class="panel-v2">
+    <div class="panel-header-v2">
+        <div>
+            <h2 class="panel-title-v2">Rumination Map Legend</h2>
+            <p class="panel-subtitle-v2">Colors preserve categories and states of internal metabolism.</p>
+        </div>
+    </div>
+    <div class="panel-body-v2 mind-legend">
+        <div class="mind-legend-row"><span class="mind-swatch" style="background:#a78bfa;"></span> Jung at the center</div>
+        <div class="mind-legend-row"><span class="mind-swatch" style="background:#10b981;"></span> Value fragment</div>
+        <div class="mind-legend-row"><span class="mind-swatch" style="background:#3b82f6;"></span> Belief fragment</div>
+        <div class="mind-legend-row"><span class="mind-swatch" style="background:#f59e0b;"></span> Active tension or behavior</div>
+        <div class="mind-legend-row"><span class="mind-swatch" style="background:#ec4899;"></span> Ready insight or desire</div>
+        <div class="mind-legend-row"><span class="mind-swatch" style="background:#ef4444;"></span> Fear fragment</div>
+        <div class="mind-legend-row"><span class="mind-swatch diamond" style="background:#6b7280;"></span> Archived tension</div>
+        <div class="mind-legend-row"><span class="mind-swatch box" style="background:#8b5cf6;"></span> Delivered insight</div>
+        <div class="mind-legend-row"><span class="mind-line"></span> Lateral synapse by shared theme</div>
+    </div>
+</section>
+
 </section>
 {% endblock %}
-{% block scripts %}<script>
+
+{% block scripts %}
+<script>
+// ==================== 1. SYMBOLIC GRAPH JAVASCRIPT ====================
+let symNetwork=null, symNodes=null, symEdges=null, allSymNodes=[], allSymEdges=[], allSymNodesData=[], allSymEdgesData=[];
+
+async function loadSymbolicData(){
+    try {
+        const r = await fetch("/admin/api/symbolic-graph-data");
+        const d = await r.json();
+        if(d.error){
+            document.getElementById("symbolic-loading").textContent = "Error loading Symbolic Graph.";
+            return;
+        }
+        allSymNodes = d.nodes || [];
+        allSymEdges = d.edges || [];
+        allSymNodesData = [...allSymNodes];
+        allSymEdgesData = [...allSymEdges];
+        document.getElementById("stat-sym-nodes").textContent = d.stats ? d.stats.total_nodes : allSymNodes.length;
+        document.getElementById("stat-sym-triples").textContent = d.stats ? d.stats.total_triples : allSymEdges.length;
+        initSymbolicNetwork(allSymNodes, allSymEdges);
+        document.getElementById("symbolic-loading").classList.add("hide");
+    } catch(e) {
+        document.getElementById("symbolic-loading").textContent = "Connection error loading Symbolic Graph.";
+    }
+}
+
+function initSymbolicNetwork(nodesArr, edgesArr){
+    const container = document.getElementById("symbolic-network-container");
+    symNodes = new vis.DataSet(nodesArr);
+    symEdges = new vis.DataSet(edgesArr);
+    symNetwork = new vis.Network(container, {nodes: symNodes, edges: symEdges}, {
+        nodes: {
+            font: {color: "#e2e8f0", size: 13, face: "Segoe UI"},
+            borderWidth: 2,
+            borderWidthSelected: 4,
+            chosen: {
+                node(values, id, selected){
+                    if(selected){
+                        values.borderWidth=4;
+                        values.shadow=true;
+                        values.shadowColor="#38bdf8";
+                        values.shadowSize=16;
+                    }
+                }
+            }
+        },
+        edges: {
+            smooth: {enabled: true, type: "continuous"},
+            arrows: {to: {enabled: true, scaleFactor: 0.6}},
+            color: {color: "#6366f1", highlight: "#38bdf8"}
+        },
+        physics: {
+            enabled: true,
+            solver: "forceAtlas2Based",
+            forceAtlas2Based: {gravitationalConstant: -40, centralGravity: 0.015, springLength: 120, springConstant: 0.08, damping: 0.4, avoidOverlap: 0.6},
+            stabilization: {enabled: true, iterations: 700, updateInterval: 25}
+        },
+        interaction: {hover: true, tooltipDelay: 100, navigationButtons: true, keyboard: true, zoomView: true, dragView: true}
+    });
+
+    symNetwork.on("click", (params) => {
+        if(params.nodes.length > 0){
+            const node = allSymNodes.find(item => item.id === params.nodes[0]);
+            if(node) showSymbolicNodeInfo(node);
+        } else if (params.edges.length > 0) {
+            const edge = allSymEdges.find(item => item.id === params.edges[0]);
+            if(edge) showSymbolicEdgeInfo(edge);
+        } else {
+            hideSymbolicInfo();
+        }
+    });
+    symNetwork.on("stabilizationIterationsDone", () => symNetwork.setOptions({physics: {enabled: false}}));
+}
+
+function showSymbolicNodeInfo(node){
+    const title = document.getElementById("symbolic-panel-title");
+    const content = document.getElementById("symbolic-panel-content");
+    title.textContent = node.full_name || node.label || "Entity";
+    let html = `
+        <div class="mind-field"><div class="mind-label">Entity Name</div><div class="mind-value hi">${node.full_name || node.label}</div></div>
+        <div class="mind-field"><div class="mind-label">Entity Type</div><div class="mind-value"><span class="table-badge-v2" style="background:rgba(56,189,248,.12);color:#38bdf8;">${node.type || 'concept'}</span></div></div>
+    `;
+    const connectedEdges = allSymEdges.filter(e => e.from === node.id || e.to === node.id);
+    html += `<div class="mind-field"><div class="mind-label">Direct Triples (${connectedEdges.length})</div><div class="mind-value">`;
+    connectedEdges.slice(0, 8).forEach(e => {
+        const fromNode = allSymNodes.find(n => n.id === e.from);
+        const toNode = allSymNodes.find(n => n.id === e.to);
+        const src = (e.full_data && e.full_data.source_ref) ? e.full_data.source_ref : '';
+        html += `<div style="margin-bottom:.5rem;padding:.4rem .6rem;background:rgba(15,23,42,.6);border-radius:.4rem;font-size:.85rem;">
+            <strong>${fromNode ? fromNode.label : ''}</strong> &rarr; <span style="color:#a78bfa;">${e.label}</span> &rarr; <strong>${toNode ? toNode.label : ''}</strong>
+            ${src ? `<br><small style="color:#94a3b8;">Ref: <code>${src}</code></small>` : ''}
+        </div>`;
+    });
+    html += `</div></div>`;
+    content.innerHTML = html;
+}
+
+function showSymbolicEdgeInfo(edge){
+    const title = document.getElementById("symbolic-panel-title");
+    const content = document.getElementById("symbolic-panel-content");
+    const t = edge.full_data || {};
+    title.textContent = `Rel: ${edge.label}`;
+    content.innerHTML = `
+        <div class="mind-field"><div class="mind-label">Subject</div><div class="mind-value hi">${t.subject || ''}</div></div>
+        <div class="mind-field"><div class="mind-label">Predicate</div><div class="mind-value" style="color:#a78bfa;font-weight:600;">${edge.label || ''}</div></div>
+        <div class="mind-field"><div class="mind-label">Object</div><div class="mind-value hi">${t.object || ''}</div></div>
+        <div class="mind-field"><div class="mind-label">Confidence</div><div class="mind-value">${((t.confidence || 1.0)*100).toFixed(0)}%</div></div>
+        <div class="mind-field"><div class="mind-label">Evidence Anchor (Canonical)</div><div class="mind-value"><code>${t.source_ref || 'N/A'}</code></div></div>
+        <div class="mind-field"><div class="mind-label">Status</div><div class="mind-value"><span class="table-badge-v2">${t.status || 'verified'}</span></div></div>
+    `;
+}
+
+function hideSymbolicInfo(){
+    document.getElementById("symbolic-panel-title").textContent = "Select an entity or relation";
+    document.getElementById("symbolic-panel-content").textContent = "Click on any node or connection in the symbolic graph to inspect its evidence anchor, confidence score, and relational context.";
+}
+
+function searchSymbolicNodes(query){
+    if(!query || query.trim() === ""){
+        symNetwork.setData({nodes: new vis.DataSet(allSymNodes), edges: new vis.DataSet(allSymEdges)});
+        return;
+    }
+    const q = query.toLowerCase();
+    const filteredNodes = allSymNodes.filter(n => (n.full_name && n.full_name.toLowerCase().includes(q)) || (n.label && n.label.toLowerCase().includes(q)));
+    const ids = new Set(filteredNodes.map(n => n.id));
+    const filteredEdges = allSymEdges.filter(e => ids.has(e.from) || ids.has(e.to));
+    symNetwork.setData({nodes: new vis.DataSet(filteredNodes), edges: new vis.DataSet(filteredEdges)});
+    if(filteredNodes.length > 0){
+        symNetwork.fit({nodes: filteredNodes.map(n => n.id), animation: {duration: 800, easingFunction: "easeInOutQuad"}});
+    }
+}
+
+function applySymbolicFilter(filterType){
+    if(filterType === "all"){
+        symNodes.update(allSymNodesData);
+        symEdges.update(allSymEdgesData);
+    } else {
+        const filtered = allSymNodesData.filter(n => n.type === filterType);
+        const ids = new Set(filtered.map(n => n.id));
+        const filteredE = allSymEdgesData.filter(e => ids.has(e.from) && ids.has(e.to));
+        symNodes.clear(); symEdges.clear();
+        symNodes.add(filtered); symEdges.add(filteredE);
+    }
+    document.querySelectorAll("[data-sfilter]").forEach(btn => btn.classList.remove("active"));
+    document.querySelector(`[data-sfilter="${filterType}"]`).classList.add("active");
+}
+
+document.getElementById("symbolic-search-input").addEventListener("input", (e) => searchSymbolicNodes(e.target.value));
+document.getElementById("symbolic-clear-btn").addEventListener("click", () => {
+    document.getElementById("symbolic-search-input").value = "";
+    searchSymbolicNodes("");
+});
+document.getElementById("symbolic-close-panel").addEventListener("click", hideSymbolicInfo);
+document.querySelectorAll("[data-sfilter]").forEach(btn => btn.addEventListener("click", function(){ applySymbolicFilter(this.dataset.sfilter); }));
+
+// ==================== 2. RUMINATION MAP JAVASCRIPT ====================
 let network=null,nodes=null,edges=null,allNodes=[],allEdges=[],allNodesData=[],allEdgesData=[];
-async function loadData(){try{const r=await fetch("/admin/api/jung-mind-data");const d=await r.json();if(d.error){document.getElementById("loading").textContent="Error loading map data.";return}allNodes=d.nodes;allEdges=d.edges;allNodesData=[...d.nodes];allEdgesData=[...d.edges];document.getElementById("stat-fragments").textContent=d.stats.total_fragments;document.getElementById("stat-tensions").textContent=d.stats.total_tensions;document.getElementById("stat-insights").textContent=d.stats.total_insights;document.getElementById("stat-synapses").textContent=d.stats.total_synapses;initNetwork(allNodes,allEdges);document.getElementById("loading").classList.add("hide")}catch(e){document.getElementById("loading").textContent="Connection error while loading the map."}}
-function initNetwork(nodesArray,edgesArray){const container=document.getElementById("network-container");nodes=new vis.DataSet(nodesArray);edges=new vis.DataSet(edgesArray);network=new vis.Network(container,{nodes,edges},{nodes:{font:{color:"#e2e8f0",size:14,face:"Segoe UI"},borderWidth:2,borderWidthSelected:4,chosen:{node(values,id,selected){if(selected){values.borderWidth=4;values.shadow=true;values.shadowColor="#c084fc";values.shadowSize=18}}}},edges:{smooth:{enabled:true,type:"continuous"},arrows:{to:{enabled:true,scaleFactor:.5}}},physics:{enabled:true,solver:"forceAtlas2Based",forceAtlas2Based:{gravitationalConstant:-50,centralGravity:.01,springLength:150,springConstant:.08,damping:.4,avoidOverlap:.5},stabilization:{enabled:true,iterations:1000,updateInterval:25}},interaction:{hover:true,tooltipDelay:100,navigationButtons:true,keyboard:true,zoomView:true,dragView:true},layout:{hierarchical:false}});network.on("click",(params)=>{if(params.nodes.length>0){const node=allNodes.find((item)=>item.id===params.nodes[0]);if(node)showNodeInfo(node)}else hideNodeInfo()});network.on("stabilizationIterationsDone",()=>network.setOptions({physics:{enabled:false}}))}
-function showNodeInfo(node){const title=document.getElementById("panel-title");const content=document.getElementById("panel-content");title.textContent={center:"Identity",fragment:"Fragment",tension:"Tension",insight:"Insight"}[node.type]||"Information";let html="";if(node.type==="center"){html='<div class="mind-field"><div class="mind-value hi">Cognitive rumination system</div></div><div class="mind-field"><div class="mind-value">The Jung core that metabolizes fragments, sustains tensions, and crystallizes insights.</div></div>'}else if(node.full_data){const d=node.full_data;if(node.type==="fragment"){html=`<div class="mind-field"><div class="mind-label">Category</div><div class="mind-value hi">${d.type}</div></div><div class="mind-field"><div class="mind-label">Content</div><div class="mind-value">${d.content}</div></div><div class="mind-field"><div class="mind-label">Emotional weight</div><div class="mind-value">${(d.weight*100).toFixed(0)}%</div></div><div class="mind-field"><div class="mind-label">Created at</div><div class="mind-value">${d.created_at}</div></div>${d.context?`<div class="mind-field"><div class="mind-label">Context</div><div class="mind-value">${d.context}</div></div>`:""}`}else if(node.type==="tension"){html=`<div class="mind-field"><div class="mind-label">Type</div><div class="mind-value hi">${d.type}</div></div><div class="mind-field"><div class="mind-label">Pole A</div><div class="mind-value">${d.pole_a}</div></div><div class="mind-field"><div class="mind-label">Pole B</div><div class="mind-value">${d.pole_b}</div></div><div class="mind-field"><div class="mind-label">Intensity</div><div class="mind-value">${(d.intensity*100).toFixed(0)}%</div></div><div class="mind-field"><div class="mind-label">Maturity</div><div class="mind-value">${(d.maturity*100).toFixed(0)}%</div></div><div class="mind-field"><div class="mind-label">Status</div><div class="mind-value hi">${d.status}</div></div><div class="mind-field"><div class="mind-label">Detected at</div><div class="mind-value">${d.first_detected_at}</div></div>`}else if(node.type==="insight"){html=`<div class="mind-field"><div class="mind-label">Symbol</div><div class="mind-value hi">${d.symbol}</div></div><div class="mind-field"><div class="mind-label">Internal thought</div><div class="mind-value">${d.thought}</div></div><div class="mind-field"><div class="mind-label">Internal question</div><div class="mind-value">${d.question}</div></div><div class="mind-field"><div class="mind-label">Depth</div><div class="mind-value">${(d.depth*100).toFixed(0)}%</div></div><div class="mind-field"><div class="mind-label">Status</div><div class="mind-value hi">${d.status}</div></div><div class="mind-field"><div class="mind-label">Crystallized at</div><div class="mind-value">${d.crystallized_at}</div></div>`}}content.innerHTML=html}
-function hideNodeInfo(){document.getElementById("panel-title").textContent="Select a node";document.getElementById("panel-content").textContent="Click a network node to open contextual details for the fragment, tension, or insight."}
-function searchNodes(query){if(!query||query.trim()===""){network.setData({nodes:new vis.DataSet(allNodes),edges:new vis.DataSet(allEdges)});return}const q=query.toLowerCase();const filteredNodes=allNodes.filter((node)=>node.label&&node.label.toLowerCase().includes(q)||node.full_data&&JSON.stringify(node.full_data).toLowerCase().includes(q));const ids=new Set(filteredNodes.map((node)=>node.id));if(!ids.has("jung")){const jung=allNodes.find((node)=>node.id==="jung");if(jung){filteredNodes.push(jung);ids.add("jung")}}const filteredEdges=allEdges.filter((edge)=>ids.has(edge.from)||ids.has(edge.to));network.setData({nodes:new vis.DataSet(filteredNodes),edges:new vis.DataSet(filteredEdges)});const focus=filteredNodes.filter((node)=>node.id!=="jung").map((node)=>node.id);if(focus.length>0){network.fit({nodes:focus,animation:{duration:1000,easingFunction:"easeInOutQuad"}})}}
-function applyFilter(filterType){if(filterType==="all"){nodes.update(allNodesData);edges.update(allEdgesData)}else{const filteredNodes=allNodesData.filter((node)=>node.id==="jung"||node.type===filterType);const ids=new Set(filteredNodes.map((node)=>node.id));const filteredEdges=allEdgesData.filter((edge)=>ids.has(edge.from)&&ids.has(edge.to));nodes.clear();edges.clear();nodes.add(filteredNodes);edges.add(filteredEdges)}document.querySelectorAll(".mind-filter").forEach((button)=>button.classList.remove("active"));document.querySelector(`[data-filter="${filterType}"]`).classList.add("active")}
-document.getElementById("search-input").addEventListener("input",(e)=>searchNodes(e.target.value));document.getElementById("clear-btn").addEventListener("click",()=>{document.getElementById("search-input").value="";searchNodes("")});document.getElementById("close-panel").addEventListener("click",hideNodeInfo);document.querySelectorAll(".mind-filter").forEach((button)=>button.addEventListener("click",function(){applyFilter(this.dataset.filter)}));loadData();
-</script>{% endblock %}
+async function loadData(){
+    try{
+        const r=await fetch("/admin/api/jung-mind-data");
+        const d=await r.json();
+        if(d.error){document.getElementById("loading").textContent="Error loading map data.";return;}
+        allNodes=d.nodes||[];allEdges=d.edges||[];allNodesData=[...allNodes];allEdgesData=[...allEdges];
+        document.getElementById("stat-fragments").textContent=d.stats?d.stats.total_fragments:0;
+        document.getElementById("stat-tensions").textContent=d.stats?d.stats.total_tensions:0;
+        document.getElementById("stat-insights").textContent=d.stats?d.stats.total_insights:0;
+        document.getElementById("stat-synapses").textContent=d.stats?d.stats.total_synapses:0;
+        initNetwork(allNodes,allEdges);
+        document.getElementById("loading").classList.add("hide");
+    }catch(e){
+        document.getElementById("loading").textContent="Connection error while loading the map.";
+    }
+}
+
+function initNetwork(nodesArray,edgesArray){
+    const container=document.getElementById("network-container");
+    nodes=new vis.DataSet(nodesArray);
+    edges=new vis.DataSet(edgesArray);
+    network=new vis.Network(container,{nodes,edges},{
+        nodes:{font:{color:"#e2e8f0",size:14,face:"Segoe UI"},borderWidth:2,borderWidthSelected:4,chosen:{node(values,id,selected){if(selected){values.borderWidth=4;values.shadow=true;values.shadowColor="#c084fc";values.shadowSize=18;}}}},
+        edges:{smooth:{enabled:true,type:"continuous"},arrows:{to:{enabled:true,scaleFactor:.5}}},
+        physics:{enabled:true,solver:"forceAtlas2Based",forceAtlas2Based:{gravitationalConstant:-50,centralGravity:.01,springLength:150,springConstant:.08,damping:.4,avoidOverlap:.5},stabilization:{enabled:true,iterations:1000,updateInterval:25}},
+        interaction:{hover:true,tooltipDelay:100,navigationButtons:true,keyboard:true,zoomView:true,dragView:true},layout:{hierarchical:false}
+    });
+    network.on("click",(params)=>{
+        if(params.nodes.length>0){const node=allNodes.find((item)=>item.id===params.nodes[0]);if(node)showNodeInfo(node);}else hideNodeInfo();
+    });
+    network.on("stabilizationIterationsDone",()=>network.setOptions({physics:{enabled:false}}));
+}
+
+function showNodeInfo(node){
+    const title=document.getElementById("panel-title");
+    const content=document.getElementById("panel-content");
+    title.textContent={center:"Identity",fragment:"Fragment",tension:"Tension",insight:"Insight"}[node.type]||"Information";
+    let html="";
+    if(node.type==="center"){
+        html='<div class="mind-field"><div class="mind-value hi">Cognitive rumination system</div></div><div class="mind-field"><div class="mind-value">The Jung core that metabolizes fragments, sustains tensions, and crystallizes insights.</div></div>';
+    }else if(node.full_data){
+        const d=node.full_data;
+        if(node.type==="fragment"){
+            html=`<div class="mind-field"><div class="mind-label">Category</div><div class="mind-value hi">${d.type}</div></div><div class="mind-field"><div class="mind-label">Content</div><div class="mind-value">${d.content}</div></div><div class="mind-field"><div class="mind-label">Emotional weight</div><div class="mind-value">${(d.weight*100).toFixed(0)}%</div></div><div class="mind-field"><div class="mind-label">Created at</div><div class="mind-value">${d.created_at}</div></div>${d.context?`<div class="mind-field"><div class="mind-label">Context</div><div class="mind-value">${d.context}</div></div>`:""}`;
+        }else if(node.type==="tension"){
+            html=`<div class="mind-field"><div class="mind-label">Type</div><div class="mind-value hi">${d.type}</div></div><div class="mind-field"><div class="mind-label">Pole A</div><div class="mind-value">${d.pole_a}</div></div><div class="mind-field"><div class="mind-label">Pole B</div><div class="mind-value">${d.pole_b}</div></div><div class="mind-field"><div class="mind-label">Intensity</div><div class="mind-value">${(d.intensity*100).toFixed(0)}%</div></div><div class="mind-field"><div class="mind-label">Maturity</div><div class="mind-value">${(d.maturity*100).toFixed(0)}%</div></div><div class="mind-field"><div class="mind-label">Status</div><div class="mind-value hi">${d.status}</div></div><div class="mind-field"><div class="mind-label">Detected at</div><div class="mind-value">${d.first_detected_at}</div></div>`;
+        }else if(node.type==="insight"){
+            html=`<div class="mind-field"><div class="mind-label">Symbol</div><div class="mind-value hi">${d.symbol}</div></div><div class="mind-field"><div class="mind-label">Internal thought</div><div class="mind-value">${d.thought}</div></div><div class="mind-field"><div class="mind-label">Internal question</div><div class="mind-value">${d.question}</div></div><div class="mind-field"><div class="mind-label">Depth</div><div class="mind-value">${(d.depth*100).toFixed(0)}%</div></div><div class="mind-field"><div class="mind-label">Status</div><div class="mind-value hi">${d.status}</div></div><div class="mind-field"><div class="mind-label">Crystallized at</div><div class="mind-value">${d.crystallized_at}</div></div>`;
+        }
+    }
+    content.innerHTML=html;
+}
+
+function hideNodeInfo(){
+    document.getElementById("panel-title").textContent="Select a node";
+    document.getElementById("panel-content").textContent="Click a network node to open contextual details for the fragment, tension, or insight.";
+}
+
+function searchNodes(query){
+    if(!query||query.trim()===""){network.setData({nodes:new vis.DataSet(allNodes),edges:new vis.DataSet(allEdges)});return;}
+    const q=query.toLowerCase();
+    const filteredNodes=allNodes.filter((node)=>node.label&&node.label.toLowerCase().includes(q)||node.full_data&&JSON.stringify(node.full_data).toLowerCase().includes(q));
+    const ids=new Set(filteredNodes.map((node)=>node.id));
+    if(!ids.has("jung")){const jung=allNodes.find((node)=>node.id==="jung");if(jung){filteredNodes.push(jung);ids.add("jung");}}
+    const filteredEdges=allEdges.filter((edge)=>ids.has(edge.from)||ids.has(edge.to));
+    network.setData({nodes:new vis.DataSet(filteredNodes),edges:new vis.DataSet(filteredEdges)});
+    const focus=filteredNodes.filter((node)=>node.id!=="jung").map((node)=>node.id);
+    if(focus.length>0){network.fit({nodes:focus,animation:{duration:1000,easingFunction:"easeInOutQuad"}});}
+}
+
+function applyFilter(filterType){
+    if(filterType==="all"){nodes.update(allNodesData);edges.update(allEdgesData);}
+    else{
+        const filteredNodes=allNodesData.filter((node)=>node.id==="jung"||node.type===filterType);
+        const ids=new Set(filteredNodes.map((node)=>node.id));
+        const filteredEdges=allEdgesData.filter((edge)=>ids.has(edge.from)&&ids.has(edge.to));
+        nodes.clear();edges.clear();nodes.add(filteredNodes);edges.add(filteredEdges);
+    }
+    document.querySelectorAll(".mind-filter").forEach((button)=>button.classList.remove("active"));
+    document.querySelector(`[data-filter="${filterType}"]`).classList.add("active");
+}
+
+document.getElementById("search-input").addEventListener("input",(e)=>searchNodes(e.target.value));
+document.getElementById("clear-btn").addEventListener("click",()=>{document.getElementById("search-input").value="";searchNodes("");});
+document.getElementById("close-panel").addEventListener("click",hideNodeInfo);
+document.querySelectorAll(".mind-filter").forEach((button)=>button.addEventListener("click",function(){applyFilter(this.dataset.filter);}));
+
+// Initial loads
+loadSymbolicData();
+loadData();
+</script>
+{% endblock %}
