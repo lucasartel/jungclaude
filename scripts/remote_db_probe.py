@@ -1676,24 +1676,60 @@ def query_audio(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, A
     }
 
 
+def query_graph(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, Any]:
+    nodes_count = 0
+    triples_count = 0
+    recent_triples = []
+    if table_exists(cursor, "symbolic_nodes"):
+        cursor.execute("SELECT COUNT(*) FROM symbolic_nodes WHERE agent_instance = ?", (args.agent_instance,))
+        row = cursor.fetchone()
+        nodes_count = int(row[0]) if row else 0
+    if table_exists(cursor, "symbolic_triples"):
+        cursor.execute("SELECT COUNT(*) FROM symbolic_triples WHERE agent_instance = ?", (args.agent_instance,))
+        row = cursor.fetchone()
+        triples_count = int(row[0]) if row else 0
+        cursor.execute(
+            """
+            SELECT t.id, ns.entity_name AS subject, t.predicate, no.entity_name AS object,
+                   t.confidence, t.source_ref, t.status, t.created_at
+            FROM symbolic_triples t
+            JOIN symbolic_nodes ns ON t.subject_id = ns.id
+            JOIN symbolic_nodes no ON t.object_id = no.id
+            WHERE t.agent_instance = ?
+            ORDER BY t.id DESC LIMIT ?
+            """,
+            (args.agent_instance, args.limit),
+        )
+        recent_triples = rows_to_dicts(cursor.fetchall())
+
+    return {
+        "probe": "graph",
+        "agent_instance": args.agent_instance,
+        "total_nodes": nodes_count,
+        "total_triples": triples_count,
+        "recent_triples": recent_triples,
+    }
+
+
 PROBES: Dict[str, Callable[[sqlite3.Cursor, argparse.Namespace], Dict[str, Any]]] = {
+    "audio": query_audio,
     "dreams": query_dreams,
     "goals": query_goals,
+    "graph": query_graph,
     "identity": query_identity,
     "integration": query_integration,
     "knowledge_gaps": query_knowledge_gaps,
     "loop": query_loop,
+    "meta": query_meta,
     "phase_pulses": query_phase_pulses,
-    "will": query_will,
     "pressure": query_pressure,
     "relational_state": query_relational_state,
-    "meta": query_meta,
     "rumination": query_rumination,
-    "world": query_world,
+    "tables": query_tables,
+    "will": query_will,
     "work": query_work,
     "working_memory": query_working_memory,
-    "tables": query_tables,
-    "audio": query_audio,
+    "world": query_world,
 }
 
 

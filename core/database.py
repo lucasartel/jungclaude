@@ -31,6 +31,7 @@ from core.db.users import UserDatabaseMixin
 from core.db.working_memory import WorkingMemoryDatabaseMixin
 from core.db.work_tasks import WorkTaskDatabaseMixin
 from core.db.meta_cognition import MetaCognitionDatabaseMixin
+from core.db.symbolic_graph import SymbolicGraphDatabaseMixin
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ try:
     from llm_fact_extractor import LLMFactExtractor
     LLM_FACT_EXTRACTOR_AVAILABLE = True
 except ImportError as e:
-    logger.warning(f"âš ï¸  LLMFactExtractor nÃ£o disponÃ­vel: {e}")
+    logger.warning(f"⚠️ LLMFactExtractor não disponível: {e}")
     LLM_FACT_EXTRACTOR_AVAILABLE = False
 
 class HybridDatabaseManager(
@@ -60,6 +61,7 @@ class HybridDatabaseManager(
     WorkTaskDatabaseMixin,
     PsychometricsDatabaseMixin,
     MetaCognitionDatabaseMixin,
+    SymbolicGraphDatabaseMixin,
 ):
     """
     Gerenciador HÃ BRIDO de memÃ³ria:

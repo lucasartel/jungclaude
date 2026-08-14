@@ -1151,6 +1151,9 @@ class SchemaDatabaseMixin:
         if hasattr(self, "_init_meta_cognition_schema"):
             self._init_meta_cognition_schema()
 
+        if hasattr(self, "_init_symbolic_graph_schema"):
+            self._init_symbolic_graph_schema()
+
         # R2: project-level attachments (replaces work_task_attachments)
         cursor.execute(
             """
