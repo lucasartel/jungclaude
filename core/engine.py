@@ -590,11 +590,50 @@ class JungianEngine:
                     self.db.mark_dream_delivered(pending_dream["id"])
             identity_text = agent_identity_text + dream_instruction + development_policy.get("prompt_block", "")
             ism_context = self._build_ism_prompt_context(user_id)
-            return identity_text + (f"\n\n{ism_context}" if ism_context else "")
+            symbolic_context = self._build_symbolic_graph_prompt_context(user_id)
+            full_context = identity_text
+            if ism_context:
+                full_context += f"\n\n{ism_context}"
+            if symbolic_context:
+                full_context += f"\n\n{symbolic_context}"
+            return full_context
 
         identity_text = Config.STANDARD_IDENTITY_PROMPT + development_policy.get("prompt_block", "")
         ism_context = self._build_ism_prompt_context(user_id)
-        return identity_text + (f"\n\n{ism_context}" if ism_context else "")
+        symbolic_context = self._build_symbolic_graph_prompt_context(user_id)
+        full_context = identity_text
+        if ism_context:
+            full_context += f"\n\n{ism_context}"
+        if symbolic_context:
+            full_context += f"\n\n{symbolic_context}"
+        return full_context
+
+    def _build_symbolic_graph_prompt_context(self, user_id: str, message_text: str = "") -> str:
+        if not getattr(Config, "SYMBOLIC_GRAPH_PROMPT_CONTEXT_ENABLED", False):
+            return ""
+        if getattr(Config, "SYMBOLIC_GRAPH_PROMPT_CONTEXT_ADMIN_ONLY", True) and str(user_id) != self._get_admin_user_id():
+            return ""
+        if not hasattr(self.db, "query_causal_neighborhood"):
+            logger.warning("[SKG] SymbolicGraphDatabaseMixin indisponivel; contexto causal nao sera injetado.")
+            return ""
+
+        try:
+            from engines.symbolic_context import SymbolicGraphContextBuilder
+
+            builder = SymbolicGraphContextBuilder(
+                self.db,
+                agent_instance=getattr(self.db, "agent_instance", getattr(Config, "AGENT_INSTANCE", "jung_v1")),
+                max_hops=getattr(Config, "SYMBOLIC_GRAPH_MAX_HOPS", 2),
+                max_triples=getattr(Config, "SYMBOLIC_GRAPH_MAX_TRIPLES", 12),
+            )
+            res = builder.build_causal_context(user_id=user_id, message_text=message_text)
+            if res.get("status") == "available":
+                logger.info("[SKG] Contexto do Grafo Simbólico injetado no prompt: triples=%s", res.get("triple_count"))
+                return res.get("context_block", "")
+        except Exception as exc:
+            logger.warning("[SKG] Falha ao montar contexto do Grafo Simbólico: %s", exc)
+
+        return ""
 
     def _build_ism_prompt_context(self, user_id: str) -> str:
         if not getattr(Config, "ISM_PROMPT_CONTEXT_ENABLED", False):

@@ -49,6 +49,10 @@ class Config:
     ACTIVE_CONSCIOUSNESS_ENABLED = os.getenv("ACTIVE_CONSCIOUSNESS_ENABLED", "true").strip().lower() in ("1", "true", "yes", "on")
     ISM_PROMPT_CONTEXT_ENABLED = os.getenv("ISM_PROMPT_CONTEXT_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
     ISM_PROMPT_CONTEXT_ADMIN_ONLY = os.getenv("ISM_PROMPT_CONTEXT_ADMIN_ONLY", "true").strip().lower() in ("1", "true", "yes", "on")
+    SYMBOLIC_GRAPH_PROMPT_CONTEXT_ENABLED = os.getenv("SYMBOLIC_GRAPH_PROMPT_CONTEXT_ENABLED", "true").strip().lower() in ("1", "true", "yes", "on")
+    SYMBOLIC_GRAPH_PROMPT_CONTEXT_ADMIN_ONLY = os.getenv("SYMBOLIC_GRAPH_PROMPT_CONTEXT_ADMIN_ONLY", "true").strip().lower() in ("1", "true", "yes", "on")
+    SYMBOLIC_GRAPH_MAX_HOPS = int(os.getenv("SYMBOLIC_GRAPH_MAX_HOPS", "2"))
+    SYMBOLIC_GRAPH_MAX_TRIPLES = int(os.getenv("SYMBOLIC_GRAPH_MAX_TRIPLES", "12"))
 
     # mem0/Qdrant is the production semantic memory backend.
     DATABASE_URL = os.getenv("DATABASE_URL")  # PostgreSQL Railway (obrigatório para mem0)
