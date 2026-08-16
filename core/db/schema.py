@@ -1154,6 +1154,9 @@ class SchemaDatabaseMixin:
         if hasattr(self, "_init_symbolic_graph_schema"):
             self._init_symbolic_graph_schema()
 
+        if hasattr(self, "_init_theory_of_mind_schema"):
+            self._init_theory_of_mind_schema()
+
         # R2: project-level attachments (replaces work_task_attachments)
         cursor.execute(
             """

@@ -1711,6 +1711,54 @@ def query_graph(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, A
     }
 
 
+def query_tom(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, Any]:
+    snapshots = []
+    inbox_items = []
+    if table_exists(cursor, "agent_theory_of_mind_snapshots"):
+        cursor.execute(
+            """
+            SELECT id, agent_instance, user_id, snapshot_date,
+                   epistemic_state_json, affective_trajectory_json,
+                   relational_needs_json, evidence_refs_json, created_at
+            FROM agent_theory_of_mind_snapshots
+            WHERE agent_instance = ? AND user_id = ?
+            ORDER BY snapshot_date DESC LIMIT ?
+            """,
+            (args.agent_instance, args.user_id, args.limit),
+        )
+        snapshots = rows_to_dicts(cursor.fetchall())
+        for s in snapshots:
+            for k in ("epistemic_state_json", "affective_trajectory_json", "relational_needs_json", "evidence_refs_json"):
+                raw = s.get(k)
+                target = k.replace("_json", "")
+                try:
+                    s[target] = json.loads(raw) if raw else {}
+                except Exception:
+                    s[target] = {}
+
+    if table_exists(cursor, "async_maturation_inbox"):
+        cursor.execute(
+            """
+            SELECT id, agent_instance, user_id, inbound_message_text,
+                   relational_threshold, status, notes, created_at, delivered_at
+            FROM async_maturation_inbox
+            WHERE agent_instance = ?
+            ORDER BY id DESC LIMIT ?
+            """,
+            (args.agent_instance, args.limit),
+        )
+        inbox_items = rows_to_dicts(cursor.fetchall())
+
+    return {
+        "probe": "tom",
+        "agent_instance": args.agent_instance,
+        "user_id": args.user_id,
+        "total_snapshots": len(snapshots),
+        "recent_snapshots": snapshots,
+        "maturation_inbox": inbox_items,
+    }
+
+
 PROBES: Dict[str, Callable[[sqlite3.Cursor, argparse.Namespace], Dict[str, Any]]] = {
     "audio": query_audio,
     "dreams": query_dreams,
@@ -1726,6 +1774,7 @@ PROBES: Dict[str, Callable[[sqlite3.Cursor, argparse.Namespace], Dict[str, Any]]
     "relational_state": query_relational_state,
     "rumination": query_rumination,
     "tables": query_tables,
+    "tom": query_tom,
     "will": query_will,
     "work": query_work,
     "working_memory": query_working_memory,

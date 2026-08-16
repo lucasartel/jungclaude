@@ -591,22 +591,63 @@ class JungianEngine:
             identity_text = agent_identity_text + dream_instruction + development_policy.get("prompt_block", "")
             ism_context = self._build_ism_prompt_context(user_id)
             symbolic_context = self._build_symbolic_graph_prompt_context(user_id)
+            tom_context = self._build_theory_of_mind_prompt_context(user_id)
             full_context = identity_text
             if ism_context:
                 full_context += f"\n\n{ism_context}"
             if symbolic_context:
                 full_context += f"\n\n{symbolic_context}"
+            if tom_context:
+                full_context += f"\n\n{tom_context}"
             return full_context
 
         identity_text = Config.STANDARD_IDENTITY_PROMPT + development_policy.get("prompt_block", "")
         ism_context = self._build_ism_prompt_context(user_id)
         symbolic_context = self._build_symbolic_graph_prompt_context(user_id)
+        tom_context = self._build_theory_of_mind_prompt_context(user_id)
         full_context = identity_text
         if ism_context:
             full_context += f"\n\n{ism_context}"
         if symbolic_context:
             full_context += f"\n\n{symbolic_context}"
+        if tom_context:
+            full_context += f"\n\n{tom_context}"
         return full_context
+
+    def _build_theory_of_mind_prompt_context(self, user_id: str) -> str:
+        if not getattr(Config, "THEORY_OF_MIND_ENABLED", False):
+            return ""
+        if getattr(Config, "THEORY_OF_MIND_ADMIN_ONLY", True) and str(user_id) != self._get_admin_user_id():
+            return ""
+
+        blocks = []
+        tom_snapshot = None
+        try:
+            from engines.theory_of_mind import TheoryOfMindEngine
+
+            tom_engine = TheoryOfMindEngine(
+                self.db,
+                agent_instance=getattr(self.db, "agent_instance", getattr(Config, "AGENT_INSTANCE", "jung_v1")),
+            )
+            tom_snapshot = tom_engine.compute_interlocutor_snapshot(user_id=user_id)
+        except Exception as exc:
+            logger.debug("[ToM] Snapshot error: %s", exc)
+
+        if getattr(Config, "BAKHTINIAN_POLYPHONY_ENABLED", True):
+            try:
+                from engines.bakhtinian_polyphony import BakhtinianPolyphonyEngine
+
+                poly_engine = BakhtinianPolyphonyEngine(
+                    self.db,
+                    agent_instance=getattr(self.db, "agent_instance", getattr(Config, "AGENT_INSTANCE", "jung_v1")),
+                )
+                poly_block = poly_engine.build_polyphonic_prompt_block(user_id=user_id, tom_snapshot=tom_snapshot)
+                if poly_block:
+                    blocks.append(poly_block)
+            except Exception as exc:
+                logger.debug("[ToM] Polyphony error: %s", exc)
+
+        return "\n\n".join(blocks)
 
     def _build_symbolic_graph_prompt_context(self, user_id: str, message_text: str = "") -> str:
         if not getattr(Config, "SYMBOLIC_GRAPH_PROMPT_CONTEXT_ENABLED", False):

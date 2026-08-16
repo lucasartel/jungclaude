@@ -32,6 +32,7 @@ from core.db.working_memory import WorkingMemoryDatabaseMixin
 from core.db.work_tasks import WorkTaskDatabaseMixin
 from core.db.meta_cognition import MetaCognitionDatabaseMixin
 from core.db.symbolic_graph import SymbolicGraphDatabaseMixin
+from core.db.theory_of_mind import TheoryOfMindDatabaseMixin
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ class HybridDatabaseManager(
     PsychometricsDatabaseMixin,
     MetaCognitionDatabaseMixin,
     SymbolicGraphDatabaseMixin,
+    TheoryOfMindDatabaseMixin,
 ):
     """
     Gerenciador HÃ BRIDO de memÃ³ria:
