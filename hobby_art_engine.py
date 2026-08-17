@@ -348,11 +348,21 @@ Responda APENAS com JSON valido:
 
     def _dig_for_image_url(self, value: Any) -> Optional[str]:
         if isinstance(value, str):
+            # Check for markdown image or URL
+            url_match = re.search(r"https?://[^\s\)\"']+", value)
+            if url_match:
+                return url_match.group(0)
+            data_match = re.search(r"data:image/[^;]+;base64,[A-Za-z0-9+/=]+", value)
+            if data_match:
+                return data_match.group(0)
             return persistable_image_url(value)
 
         if isinstance(value, dict):
-            for key in ("image_url", "imageUrl", "url", "download_url", "output_url"):
-                candidate = persistable_image_url(value.get(key))
+            for key in ("image_url", "imageUrl", "url", "download_url", "output_url", "b64_json"):
+                val = value.get(key)
+                if isinstance(val, dict) and val.get("url"):
+                    return str(val["url"])
+                candidate = persistable_image_url(val)
                 if candidate:
                     return candidate
             for item in value.values():
@@ -366,9 +376,6 @@ Responda APENAS com JSON valido:
                 if candidate:
                     return candidate
         return None
-
-    def _redact_image_data_urls(self, value: Any) -> Any:
-        return sanitize_persisted_payload(value)
 
     def _generate_image_with_openrouter(self, image_prompt: str) -> Dict[str, Any]:
         api_key = os.getenv("OPENROUTER_API_KEY")
@@ -385,7 +392,7 @@ Responda APENAS com JSON valido:
                 {
                     "role": "user",
                     "content": (
-                        "Crie uma imagem quadrada a partir deste material psiquico do JungAgent. "
+                        "Crie uma pintura impressionista quadrada a partir deste material psiquico do JungAgent. "
                         "Nao inclua texto escrito na imagem.\n\n"
                         f"{image_prompt}"
                     ),
@@ -502,29 +509,6 @@ Responda APENAS com JSON valido:
             "provider": "minimax",
         }
 
-    def _generate_image_with_pollinations(
-        self,
-        image_prompt: str,
-        cycle_id: str,
-        fallback_reason: str = "Provider principal indisponivel ou nao configurado.",
-    ) -> Dict[str, Any]:
-        seed = abs(hash(f"{cycle_id}:{image_prompt}")) % 1000000
-        encoded_prompt = urllib.parse.quote(image_prompt)
-        image_url = (
-            f"https://image.pollinations.ai/prompt/{encoded_prompt}"
-            f"?width=1024&height=1024&nologo=true&seed={seed}"
-        )
-        return {
-            "success": True,
-            "status": "generated_fallback",
-            "image_url": image_url,
-            "raw_response": {
-                "provider": "pollinations",
-                "fallback_reason": fallback_reason,
-            },
-            "provider": "pollinations",
-        }
-
     def _save_artifact(
         self,
         user_id: str,
@@ -585,27 +569,22 @@ Responda APENAS com JSON valido:
 
         if self.image_provider == "minimax":
             image_result = self._generate_image_with_minimax(art_payload["image_prompt"])
-        elif self.image_provider == "pollinations":
-            image_result = self._generate_image_with_pollinations(
-                art_payload["image_prompt"],
-                cycle_id=cycle_id,
-                fallback_reason="Pollinations configurado explicitamente.",
-            )
         else:
             image_result = self._generate_image_with_openrouter(art_payload["image_prompt"])
 
         if not image_result.get("success"):
-            logger.info(
-                "HobbyArtEngine usando fallback Pollinations (provider=%s, status=%s, reason=%s)",
+            logger.warning(
+                "HobbyArtEngine falha na geracao visual de alta definicao (provider=%s, status=%s, reason=%s)",
                 self.image_provider,
                 image_result.get("status"),
                 image_result.get("reason"),
             )
-            image_result = self._generate_image_with_pollinations(
-                art_payload["image_prompt"],
-                cycle_id=cycle_id,
-                fallback_reason=image_result.get("reason") or "Provider principal indisponivel.",
-            )
+            return {
+                "success": False,
+                "status": image_result.get("status", "failed"),
+                "reason": image_result.get("reason", "Falha no provedor de alta fidelidade"),
+                "art_payload": art_payload,
+            }
 
         evaluation_result = self._evaluate_generated_image(
             image_url=image_result["image_url"],
