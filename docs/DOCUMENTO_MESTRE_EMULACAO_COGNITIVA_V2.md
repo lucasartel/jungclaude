@@ -1,12 +1,12 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 2.3 - Estado Realizado e Roadmap Vivo - Julho 2026**
+**Versao 2.4 - Estado Real e Roadmap Vivo - Agosto 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
 *Reformulacao completa do documento de Maio/2026. O projeto nao persegue "AGI"; persegue a emulacao cognitiva mais coerente e bem documentada possivel.*
 
-*Diagnostico inicial verificado contra codigo, git, GitHub e Railway em 11/06/2026. Decisoes de escopo registradas em 16/06/2026. Estado realizado atualizado em 08/07/2026 apos verificacao de codigo, GitHub Actions, Railway e probes de producao.*
+*Diagnostico inicial verificado contra codigo, git, GitHub e Railway em 11/06/2026. Decisoes de escopo registradas em 16/06/2026. Estado realizado atualizado em 17/08/2026 apos verificacao de codigo, CI, Railway e probes de producao.*
 
 *Tres leitores: o mantenedor (decide), o consultor estrategico (orienta e audita) e o modelo executor (codifica). A Parte II e enderecada diretamente ao executor.*
 
@@ -107,9 +107,11 @@ Regras transversais:
 
 Fluxo padrao historico: **mantenedor escolhe a tarefa -> executor implementa em branch e abre PR -> CI valida -> mantenedor mergeia -> Railway deploya**. Fluxo atual autorizado para trabalho assistido: quando o mantenedor pedir explicitamente, o executor pode commitar direto em `main`, aguardar CI/Railway e validar por probes. O consultor audita em cadencia mensal ou sob demanda e ajusta o roadmap.
 
-## 4. Estado verificado - 08/07/2026
+## 4. Estado verificado - 17/08/2026
 
 **Concluido e em producao**: Fase I do roadmap antigo (circuitos da ruminacao corrigidos, sonhos alimentam ruminacao, failure policy no loop, entrega de insights) e Fase II substancial (diario autobiografico evidence-first, perfil injetado no prompt, avaliacao narrativa de fases com politica executiva, Chroma removido). O agente ja possui circuito de self-work via GitHub/Railway, mantido sob revisao do mantenedor.
+
+**Estado operacional atual**: o `main` remoto esta no commit `3b26988`, com CI verde, incluindo suite, sintaxe e regressao cognitiva mock. O Railway permanece online, com o deploy desse commit aguardando fila no momento desta atualizacao; a validacao pos-deploy por healthcheck e probes ainda deve ser repetida. O volume de producao esta em aproximadamente 171 MB de 500 MB.
 
 **Fase 0 concluida como etapa bloqueante**:
 
@@ -132,7 +134,7 @@ Fluxo padrao historico: **mantenedor escolhe a tarefa -> executor implementa em 
 | Goal Manager / acao composta controlada | Implementado e verificado com `controlled_action_run#1`, sem efeito externo |
 | Relational State | Implementado em `engines/relational_state.py` e `core/db/relational_state.py`; fechado em 08/07/2026 no loop antes do Will |
 | Will + relacao | `will_engine.py` consome `relational_state` e persiste `agent_stance` quando houver snapshot |
-| Verificacao longitudinal de WM | Pendente como evidencia de saida: ultimo relatorio indicava 2 de 7 dias observaveis |
+| Verificacao longitudinal de WM | Operacao sustentada observavel em ciclos recentes; fechamento formal do criterio de 7 dias ainda pendente |
 
 **Fase IV realizada antes da conclusao formal da Fase III**:
 
@@ -141,6 +143,15 @@ Fluxo padrao historico: **mantenedor escolhe a tarefa -> executor implementa em 
 | IV.0 Pulso de Fase | Implementada e verificada em producao: `pulse_count`, agenda persistida, cockpit, retry por pulso, skip de pulsos stale, metadados de pulso e leitura pelo ISM |
 | IV.1 ISM read-only | Implementada e verificada: snapshot integrativo observavel, limites ontologicos, `influence_mode=read_only`, sem mutacao de prompt/loop/WM/acoes externas |
 | IV.2 ISM no prompt | Infraestrutura criada e gateada por feature flag (`ISM_PROMPT_CONTEXT_ENABLED`, default off; admin-only por default); nao ativada como comportamento padrao |
+| IV.3 Metacognicao | Implementada e integrada ao loop com cooldown; probes recentes mostram registros `fallback`, portanto a qualidade longitudinal e o uso de auto-ajuste ainda nao estao formalmente validados |
+
+**Fases V a VII - implementacao tecnica com gates ainda abertos**:
+
+| Fase | Evidencia confirmada | O que ainda impede o encerramento formal |
+|---|---|---|
+| V - Grafo simbolico | Grafo persistido em producao com 238 nos e 183 triplas; contexto causal integrado ao prompt do admin | Auditoria manual de 100 triplas com precisao >= 80% ainda nao registrada como evidencia de saida |
+| VI - Theory of Mind | Codigo integrado, um snapshot real persistido e `agent_stance` consumido pelo Will | Falta evidencia longitudinal da maturacao assincrona; inbox de maturacao ainda esta vazia |
+| VII - Agencia epistemica e multimodal | `essay_engine.py`, persistencia de ensaios e circuito de imagens implementados; CI cobre os ensaios | Gate exige Fases 0-VI estaveis por duas semanas e aprovacao escrita; correcao de imagens `3b26988` ainda aguarda confirmacao pos-deploy |
 
 **Fechamento curto de 08/07/2026**:
 
@@ -151,11 +162,22 @@ Fluxo padrao historico: **mantenedor escolhe a tarefa -> executor implementa em 
 - GitHub Actions verde no commit final;
 - validacao local do corte: `325 passed`.
 
+**Atualizacao de 17/08/2026**:
+
+- CI do commit `3b26988`: verde, com sintaxe, suite e regressao cognitiva mock;
+- a suite canonica local `tests/` passou com `435 passed`, incluindo os testes locais ainda nao publicados de fatos;
+- a correcao de imagens trocou o endpoint de geracao para `/api/v1/images`, salva o arquivo no volume e serve pela rota `/art/`;
+- no Railway, antes da nova entrega, a fase `hobby` ainda registrava `partial_success` por ausencia de imagem reconhecivel; esse resultado deve ser reavaliado depois do deploy;
+- os probes confirmaram WM ativa, pulsos duplos em `world` e `work`, `relational_state#112`, `will#254`, 238 nos/183 triplas e um snapshot de Theory of Mind.
+
 **Pendencias reais registradas**:
 
-- `relational_state` esta disponivel em producao, mas ainda sem linhas ate a proxima execucao real de `identity` ou `will` apos o deploy de 08/07/2026;
-- confirmar `agent_stance` preenchido no proximo `will` real via `remote_db_probe.py will --pretty`;
-- concluir/verificar a janela longitudinal de 7 dias da Working Memory;
+- confirmar o deploy do commit `3b26988` no Railway e repetir `instance_healthcheck.py` e os probes de loop, will, working_memory e hobby;
+- concluir/verificar formalmente a janela longitudinal de 7 dias da Working Memory;
+- registrar a auditoria de 100 triplas do grafo simbolico e sua precisao;
+- acompanhar Theory of Mind por mais ciclos e produzir entrada real na inbox de maturacao antes de declarar maturacao assincrona;
+- manter o ISM no prompt desligado ate regressao antes/depois, canario admin-only e probe saudavel;
+- respeitar o gate de duas semanas e aprovacao escrita antes de declarar a Fase VII encerrada;
 - `main.py` permanece monolitico e deve ser tratado em fase de higiene estrutural posterior;
 - custo LLM continua fora do cronograma ativo, por decisao do mantenedor, salvo mudanca de risco operacional.
 
@@ -168,11 +190,11 @@ Fluxo padrao historico: **mantenedor escolhe a tarefa -> executor implementa em 
 
 ```text
 Fase 0 - Consolidacao e Instrumentacao        <- CONCLUIDA
-  -> Fase III - Direcao Propria + Working Memory  <- EM FECHAMENTO / PROTAGONISMO
-      -> Fase IV - ISM + Metacognicao completa    <- IV.0 e IV.1 CONCLUIDAS; IV.2 GATEADA
-          -> Fase V - Grafo simbolico (com portao de qualidade)
-              -> Fase VI - Simulacao contrafactual
-                  -> Fase VII - Tool-making + multimodal (gate rigido)
+  -> Fase III - Direcao Propria + Working Memory  <- IMPLEMENTADA; FECHAMENTO EVIDENCIAL PENDENTE
+      -> Fase IV - ISM + Metacognicao completa    <- IV.0/IV.1 CONCLUIDAS; IV.2 GATEADA; IV.3 EM OBSERVACAO
+          -> Fase V - Grafo simbolico               <- TECNICAMENTE IMPLEMENTADA; AUDITORIA PENDENTE
+              -> Fase VI - Theory of Mind            <- IMPLEMENTACAO INICIAL; LONGITUDINAL PENDENTE
+                  -> Fase VII - Agencia epistemica  <- IMPLEMENTACAO INICIAL; GATE FORMAL PENDENTE
 ```
 
 Transversais a todas as fases: suite de regressao verde a cada merge, probes read-only de producao apos deploy relevante, relatorios de pesquisa em `docs/research/` quando houver frente empirica, e manutencao do principio da evidencia. A avaliacao cega deixou de ser criterio bloqueante, mas permanece protocolo de pesquisa preservado.
@@ -415,6 +437,7 @@ Aceite da Fase IV.0:
 | Versao 2.1 - Edicao de Execucao Delegada | 10/06/2026 | Governanca em tres papeis; contrato do executor; backlog como especificacoes; estado e avisos operacionais atualizados |
 | Consolidacao canonica V2 | 11/06/2026 | Este arquivo substitui o redirecionamento e passa a ser o documento mestre de autoridade |
 | Versao 2.3 - Estado Realizado e Roadmap Vivo | 08/07/2026 | Atualiza Fase 0 como concluida, Fase III como em fechamento/protagonismo, IV.0/IV.1 como realizadas, IV.2 como infraestrutura gateada, e registra o fechamento `relational_state -> will` |
+| Versao 2.4 - Estado Real e Roadmap Vivo | 17/08/2026 | Registra os avancos reais das Fases III-VII, separa implementacao tecnica de evidencia de encerramento, atualiza os probes de producao e explicita o deploy de imagens ainda em fila |
 
 ---
 
