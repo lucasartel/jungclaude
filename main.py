@@ -1986,6 +1986,13 @@ if os.path.exists(static_dir) and os.path.isdir(static_dir):
 else:
     logger.warning(f"⚠️  Diretório static não encontrado: {static_dir} - Continuando sem arquivos estáticos")
 
+# Montar diretório de arte gerada (imagens do HobbyArtEngine / DreamEngine)
+_volume_root = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", "./data")
+_art_dir = os.path.join(_volume_root, "art")
+os.makedirs(_art_dir, exist_ok=True)
+app.mount("/art", StaticFiles(directory=_art_dir), name="art")
+logger.info(f"✅ Diretório de arte montado: {_art_dir}")
+
 
 # Rotas de Cron Jobs (Serviços de Background)
 try:

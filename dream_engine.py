@@ -661,37 +661,85 @@ Responda APENAS com 1 ou 2 frases curtas (max 320 caracteres no total).
             return "{}"
 
     def _generate_openrouter_image(self, image_prompt: str) -> tuple[Optional[str], str]:
+        import base64 as _b64
+
         api_key = os.getenv("OPENROUTER_API_KEY")
         if not api_key:
             logger.warning("Dream Engine sem OPENROUTER_API_KEY; usando fallback de imagem")
             return None, "{}"
-        if OpenAI is None:
-            logger.warning("Dream Engine sem pacote openai disponivel; usando fallback de imagem")
+
+        payload = {
+            "model": self.image_model,
+            "prompt": (
+                "Impressionist painting of a dream: visible brushstrokes, luminous color, "
+                "vibrant atmosphere, diffused natural light, soft edges, pictorial texture, "
+                "poetic composition, surreal oneiric quality, no text in image.\n\n"
+                f"{image_prompt}"
+            ),
+            "aspect_ratio": "1:1",
+        }
+
+        try:
+            with httpx.Client(timeout=120.0) as client:
+                response = client.post(
+                    "https://openrouter.ai/api/v1/images",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+        except Exception as exc:
+            logger.warning("Dream Engine erro de rede ao gerar imagem: %s", exc)
+            return None, json.dumps({"error": str(exc)})
+
+        try:
+            response_json = response.json()
+        except Exception:
             return None, "{}"
 
-        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
-        response = client.chat.completions.create(
-            model=self.image_model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Crie uma imagem quadrada a partir deste sonho. "
-                        "Nao inclua texto escrito na imagem.\n\n"
-                        f"{image_prompt}"
-                    ),
-                }
-            ],
-            temperature=0.6,
-            max_tokens=300,
-            extra_body={
-                "modalities": ["image", "text"],
-                "image_config": {
-                    "aspect_ratio": "1:1",
-                },
-            },
-        )
-        return self._extract_openrouter_image_url(response), self._sanitize_openrouter_response(response)
+        if response.status_code >= 400:
+            logger.warning("Dream Engine OpenRouter Images retornou HTTP %s", response.status_code)
+            return None, json.dumps({"http_status": response.status_code})
+
+        # Extract base64 image from /api/v1/images response
+        data_list = response_json.get("data") or []
+        b64_data = None
+        media_type = "image/jpeg"
+        if isinstance(data_list, list):
+            for item in data_list:
+                if isinstance(item, dict) and item.get("b64_json"):
+                    b64_data = item["b64_json"]
+                    media_type = item.get("media_type", "image/jpeg")
+                    break
+
+        if not b64_data:
+            logger.warning("Dream Engine OpenRouter Images respondeu sem b64_json")
+            return None, self._sanitize_openrouter_response(response_json)
+
+        # Save to volume
+        ext = "jpg" if "jpeg" in media_type else media_type.split("/")[-1]
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        filename = f"dream_{timestamp}.{ext}"
+        volume_root = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", "./data")
+        art_dir = os.path.join(volume_root, "art")
+        os.makedirs(art_dir, exist_ok=True)
+        filepath = os.path.join(art_dir, filename)
+        image_bytes = _b64.b64decode(b64_data)
+        with open(filepath, "wb") as f:
+            f.write(image_bytes)
+
+        logger.info("DreamEngine salvou imagem em %s (%d bytes)", filepath, len(image_bytes))
+        image_url = f"/art/{filename}"
+
+        usage = response_json.get("usage") or {}
+        raw_meta = json.dumps({
+            "provider": "openrouter",
+            "model": self.image_model,
+            "cost": usage.get("cost", 0),
+            "image_tokens": (usage.get("completion_tokens_details") or {}).get("image_tokens", 0),
+        })
+        return image_url, raw_meta
 
     def _generate_dream_image(self, dream_id: int, dream_content: str, symbolic_theme: str):
         """Gera imagem de alta qualidade do sonho via OpenRouter/Gemini."""

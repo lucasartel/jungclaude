@@ -380,6 +380,26 @@ Responda APENAS com JSON valido:
     def _redact_image_data_urls(self, value: Any) -> Any:
         return sanitize_persisted_payload(value)
 
+    def _save_image_to_volume(self, b64_data: str, media_type: str = "image/jpeg") -> str:
+        """Save base64-encoded image to the Railway volume and return a serveable URL path."""
+        import base64
+
+        ext = "jpg" if "jpeg" in media_type else media_type.split("/")[-1]
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        filename = f"art_{timestamp}.{ext}"
+
+        volume_root = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", "./data")
+        art_dir = os.path.join(volume_root, "art")
+        os.makedirs(art_dir, exist_ok=True)
+
+        filepath = os.path.join(art_dir, filename)
+        image_bytes = base64.b64decode(b64_data)
+        with open(filepath, "wb") as f:
+            f.write(image_bytes)
+
+        logger.info("HobbyArtEngine salvou imagem em %s (%d bytes)", filepath, len(image_bytes))
+        return f"/art/{filename}"
+
     def _generate_image_with_openrouter(self, image_prompt: str) -> Dict[str, Any]:
         api_key = os.getenv("OPENROUTER_API_KEY")
         if not api_key:
@@ -391,28 +411,20 @@ Responda APENAS com JSON valido:
 
         payload = {
             "model": self.image_model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": (
-                        "Crie uma pintura impressionista quadrada a partir deste material psiquico do JungAgent. "
-                        "Nao inclua texto escrito na imagem.\n\n"
-                        f"{image_prompt}"
-                    ),
-                }
-            ],
-            "modalities": ["image", "text"],
-            "image_config": {
-                "aspect_ratio": "1:1",
-            },
-            "temperature": 0.6,
-            "max_tokens": 300,
+            "prompt": (
+                "Impressionist painting: visible brushstrokes, luminous color, "
+                "vibrant atmosphere, diffused natural light, soft edges, pictorial texture, "
+                "poetic composition, lived-in moment, no photorealism, no 3D render, "
+                "no anime, no text in image.\n\n"
+                f"{image_prompt}"
+            ),
+            "aspect_ratio": "1:1",
         }
 
         try:
             with httpx.Client(timeout=120.0) as client:
                 response = client.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
+                    "https://openrouter.ai/api/v1/images",
                     headers={
                         "Authorization": f"Bearer {api_key}",
                         "Content-Type": "application/json",
@@ -423,7 +435,7 @@ Responda APENAS com JSON valido:
             return {
                 "success": False,
                 "status": "network_error",
-                "reason": f"Erro de rede na chamada OpenRouter: {exc}",
+                "reason": f"Erro de rede na chamada OpenRouter Images: {exc}",
                 "provider": DEFAULT_ART_IMAGE_PROVIDER,
             }
 
@@ -436,26 +448,46 @@ Responda APENAS com JSON valido:
             return {
                 "success": False,
                 "status": "http_error",
-                "reason": f"OpenRouter retornou HTTP {response.status_code}",
+                "reason": f"OpenRouter Images retornou HTTP {response.status_code}",
                 "raw_response": self._redact_image_data_urls(response_json),
                 "provider": DEFAULT_ART_IMAGE_PROVIDER,
             }
 
-        image_url = self._dig_for_image_url(response_json)
-        if not image_url:
+        # Extract base64 image from /api/v1/images response format
+        b64_data = None
+        media_type = "image/jpeg"
+        data_list = response_json.get("data") or []
+        if isinstance(data_list, list):
+            for item in data_list:
+                if isinstance(item, dict) and item.get("b64_json"):
+                    b64_data = item["b64_json"]
+                    media_type = item.get("media_type", "image/jpeg")
+                    break
+
+        if not b64_data:
             return {
                 "success": False,
-                "status": "missing_image_url",
-                "reason": "OpenRouter respondeu sem data URL de imagem identificavel.",
+                "status": "missing_image_data",
+                "reason": "OpenRouter Images respondeu sem dados de imagem (b64_json ausente).",
                 "raw_response": self._redact_image_data_urls(response_json),
                 "provider": DEFAULT_ART_IMAGE_PROVIDER,
             }
+
+        # Save image to volume as file
+        image_url = self._save_image_to_volume(b64_data, media_type)
+        usage = response_json.get("usage") or {}
+        cost = usage.get("cost", 0)
 
         return {
             "success": True,
             "status": "generated",
             "image_url": image_url,
-            "raw_response": self._redact_image_data_urls(response_json),
+            "raw_response": {
+                "provider": DEFAULT_ART_IMAGE_PROVIDER,
+                "model": self.image_model,
+                "cost": cost,
+                "image_tokens": (usage.get("completion_tokens_details") or {}).get("image_tokens", 0),
+            },
             "provider": DEFAULT_ART_IMAGE_PROVIDER,
             "model": self.image_model,
         }

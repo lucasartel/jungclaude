@@ -7,11 +7,11 @@ MAX_PERSISTED_STRING_CHARS = 12000
 
 
 def persistable_image_url(value: Any) -> Optional[str]:
-    """Return only externally addressable image URLs for database storage."""
+    """Return only externally addressable image URLs or volume paths for database storage."""
     if not isinstance(value, str):
         return None
     candidate = value.strip()
-    if candidate.startswith(("http://", "https://")):
+    if candidate.startswith(("http://", "https://", "/art/")):
         return candidate
     return None
 
