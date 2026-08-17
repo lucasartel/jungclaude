@@ -659,15 +659,8 @@ Responda APENAS com 1 ou 2 frases curtas (max 320 caracteres no total).
         )
         return self._extract_openrouter_image_url(response), self._sanitize_openrouter_response(response)
 
-    def _build_pollinations_image_url(self, dream_id: int, image_prompt: str) -> str:
-        encoded_prompt = urllib.parse.quote(image_prompt)
-        return (
-            f"https://image.pollinations.ai/prompt/{encoded_prompt}"
-            f"?width=1024&height=1024&nologo=true&seed={dream_id * 42}"
-        )
-
     def _generate_dream_image(self, dream_id: int, dream_content: str, symbolic_theme: str):
-        """Gera imagem do sonho via OpenRouter, preservando fallback Pollinations."""
+        """Gera imagem de alta qualidade do sonho via OpenRouter/Gemini."""
         image_prompt = self._apply_image_style_policy(dream_content)
         if not image_prompt:
             logger.warning(
@@ -687,39 +680,31 @@ Responda APENAS com 1 ou 2 frases curtas (max 320 caracteres no total).
             image_model = self.image_model
             image_status = "generated"
 
-            if self.image_provider == DEFAULT_DREAM_IMAGE_PROVIDER:
-                logger.info(
-                    "Gerando imagem do sonho #%s via OpenRouter/Nano Banana 2 (Tema: %s)...",
-                    dream_id,
-                    symbolic_theme,
-                )
-                try:
-                    image_url, raw_response_json = self._generate_openrouter_image(image_prompt)
-                except Exception as e:
-                    logger.warning("OpenRouter falhou para sonho #%s; acionando fallback: %s", dream_id, e)
-
-            if not image_url:
-                provider = "pollinations"
-                image_model = "pollinations.ai"
-                image_status = "fallback_generated"
-                logger.info(
-                    "Gerando link fallback via Pollinations.ai para sonho #%s (Tema: %s)...",
-                    dream_id,
-                    symbolic_theme,
-                )
-                image_url = self._build_pollinations_image_url(dream_id, image_prompt)
-
-            success = self.db.update_dream_image(
+            logger.info(
+                "Gerando imagem do sonho #%s via OpenRouter/Gemini (Tema: %s)...",
                 dream_id,
-                image_url,
-                image_prompt,
-                image_provider=provider,
-                image_model=image_model,
-                image_status=image_status,
-                image_raw_response_json=raw_response_json,
+                symbolic_theme,
             )
-            if success:
-                logger.info(f"URL da imagem do sonho #{dream_id} atualizada com sucesso no banco!")
+            try:
+                image_url, raw_response_json = self._generate_openrouter_image(image_prompt)
+            except Exception as e:
+                logger.warning("Falha ao gerar imagem do sonho #%s via provider principal: %s", dream_id, e)
+                image_status = "failed"
+
+            if image_url:
+                success = self.db.update_dream_image(
+                    dream_id,
+                    image_url,
+                    image_prompt,
+                    image_provider=provider,
+                    image_model=image_model,
+                    image_status=image_status,
+                    image_raw_response_json=raw_response_json,
+                )
+                if success:
+                    logger.info(f"URL da imagem do sonho #{dream_id} atualizada com sucesso no banco!")
+                else:
+                    logger.error(f"Falha ao salvar URL da imagem do sonho #{dream_id} na DB.")
             else:
                 logger.error(f"Falha ao salvar URL da imagem do sonho #{dream_id} na DB.")
 

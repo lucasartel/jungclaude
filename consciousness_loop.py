@@ -1077,6 +1077,34 @@ class ConsciousnessLoopManager:
             logger.warning("LOOP Double-loop meta-cognition failed cycle_id=%s error=%s", result.get("cycle_id"), exc)
             return None
 
+    def _run_epistemic_agency_essay(self, result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Executa a redacao autonoma de ensaio filosofico quando oportuno (Fase VII)."""
+        cycle_id = result.get("cycle_id") or date.today().isoformat()
+        try:
+            from engines.essay_engine import PhilosophicalEssayEngine
+
+            engine = PhilosophicalEssayEngine(
+                self.db,
+                agent_instance=getattr(self, "agent_instance", "jung_v1"),
+            )
+            essay_res = engine.generate_cycle_essay(cycle_id=cycle_id)
+            if essay_res.get("status") == "success" and essay_res.get("essay_id"):
+                logger.info(
+                    "LOOP Phase VII Ensaio filosofico gerado: #%s - '%s'",
+                    essay_res.get("essay_id"),
+                    essay_res.get("title"),
+                )
+                self.record_artifact(
+                    result,
+                    artifact_id=essay_res.get("essay_id"),
+                    artifact_table="agent_philosophical_essays",
+                    summary=essay_res.get("title") or "ensaio filosofico autoral",
+                )
+            return essay_res
+        except Exception as exc:
+            logger.debug("LOOP Phase VII Ensaio filosofico nao gerado neste ciclo: %s", exc)
+            return None
+
     def _promote_from_placeholder(self, result: Dict):
         result["warnings"] = [warning for warning in result["warnings"] if warning != "placeholder_execution"]
         result["metrics"]["phase_placeholder"] = 0
@@ -2568,6 +2596,7 @@ class ConsciousnessLoopManager:
 
         self._generate_integrative_self_snapshot(result)
         self._run_double_loop_metacognition(result)
+        self._run_epistemic_agency_essay(result)
 
         return result
 

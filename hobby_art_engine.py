@@ -227,11 +227,12 @@ Responda APENAS com JSON valido:
         data = self._extract_json(raw)
         image_prompt = (data.get("image_prompt") or "").strip()
         if not image_prompt:
-            raise ValueError("HobbyArtEngine nao conseguiu compor image_prompt valido")
+            theme_hint = inspirations.get("world_consciousness_headline") or inspirations.get("dream_summary") or "Uma paisagem de transicao e luz sobre as aguas"
+            image_prompt = f"Pintura impressionista retratando {theme_hint}, com pinceladas visiveis, luz natural difusa, cores vibrantes e profunda atmosfera poetica."
         image_prompt = self._apply_art_style_policy(image_prompt)
         return {
-            "title": (data.get("title") or "Peca sem titulo").strip(),
-            "summary": (data.get("summary") or "Sintese imagetica do ciclo recente.").strip(),
+            "title": (data.get("title") or "Gesto Pictorico do Ciclo").strip(),
+            "summary": (data.get("summary") or "Sintese imagetica e simbolica do ciclo recente.").strip(),
             "image_prompt": image_prompt,
         }
 
