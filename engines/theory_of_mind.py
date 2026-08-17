@@ -14,11 +14,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from instance_config import ADMIN_USER_ID, AGENT_INSTANCE
 
-logger = logging.getLogger(__name__)
+from core.db.theory_of_mind import PROFILE_SOURCE_RE
 
-PROFILE_SOURCE_RE = re.compile(
-    r"\b(?:loop|conversation|dream|will|meta|rumination_insight|work_run|work_ticket|work_delivery|hobby_artifact|agent_development|relational_state)#\d+\b"
-)
+logger = logging.getLogger(__name__)
 
 
 class TheoryOfMindEngine:
@@ -35,7 +33,7 @@ class TheoryOfMindEngine:
         snapshot_date: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Builds a longitudinal Theory of Mind snapshot for the user."""
-        target_date = snapshot_date or date.today().isoformat()
+        target_date = snapshot_date or datetime.now(timezone.utc).date().isoformat()
         evidence_refs: List[str] = []
 
         # 1. Obter relational_state
@@ -80,9 +78,9 @@ class TheoryOfMindEngine:
 
         affective_trajectory = {
             "agent_stance": stance,
-            "tone_valence": rel_state.get("tone_recent_valence", 0.0),
-            "silence_hours": rel_state.get("silence_delta_hours", 0.0),
-            "pacing": "unhurried" if rel_state.get("silence_delta_hours", 0) > 12 else "engaged",
+            "tone_valence": (rel_state.get("tone_recent_valence") or 0.0),
+            "silence_hours": (rel_state.get("silence_delta_hours") or 0.0),
+            "pacing": "unhurried" if (rel_state.get("silence_delta_hours") or 0) > 12 else "engaged",
         }
 
         relational_needs = {
@@ -92,7 +90,7 @@ class TheoryOfMindEngine:
         }
 
         # Deduplicar evidências canônicas
-        clean_refs = list(dict.fromkeys([r for r in evidence_refs if PROFILE_SOURCE_RE.search(r)]))
+        clean_refs = list(dict.fromkeys(evidence_refs))
 
         snapshot_id = 0
         if hasattr(self.db, "upsert_tom_snapshot"):

@@ -15,10 +15,6 @@ from instance_config import ADMIN_USER_ID, AGENT_INSTANCE
 
 logger = logging.getLogger(__name__)
 
-PROFILE_SOURCE_RE = re.compile(
-    r"\b(?:loop|conversation|dream|will|meta|rumination_insight|work_run|work_ticket|work_delivery|hobby_artifact|agent_development)#\d+\b"
-)
-
 
 class SymbolicGraphContextBuilder:
     """Builds prompt context from the Symbolic Knowledge Graph for active reasoning."""
@@ -38,37 +34,33 @@ class SymbolicGraphContextBuilder:
 
     def find_seed_nodes(self, user_id: str, message_text: str = "") -> List[str]:
         """Identifies relevant seed entities to query from the graph."""
-        is_admin = (user_id == ADMIN_USER_ID or "admin" in str(user_id).lower())
+        import re
+        tokens = set(re.findall(r'\b\w{3,}\b', (message_text or "").lower()))
+        if not tokens:
+            return []
+
+        is_admin = (user_id == ADMIN_USER_ID)
         seeds: List[str] = []
         if is_admin:
             seeds.append("Lucas")
-        seeds.append("JungAgent")
 
-        clean_msg = (message_text or "").lower()
-        if not clean_msg:
-            return seeds
-
+        placeholders = ','.join('?' * len(tokens))
+        query = f"""
+            SELECT DISTINCT entity_name FROM symbolic_nodes
+            WHERE agent_instance = ? AND LOWER(entity_name) IN ({placeholders})
+            LIMIT 20
+        """
+        params = [self.agent_instance] + list(tokens)
         try:
             cursor = self.db.conn.cursor()
-            cursor.execute(
-                """
-                SELECT entity_name FROM symbolic_nodes
-                WHERE agent_instance = ? AND LENGTH(entity_name) >= 3
-                ORDER BY LENGTH(entity_name) DESC LIMIT 150
-                """,
-                (self.agent_instance,),
-            )
-            rows = cursor.fetchall()
-            for r in rows:
-                name = str(r["entity_name"])
-                if name.lower() in clean_msg and name not in seeds:
-                    seeds.append(name)
-                    if len(seeds) >= 6:
-                        break
+            cursor.execute(query, params)
+            for row in cursor.fetchall():
+                if row[0] not in seeds:
+                    seeds.append(row[0])
         except Exception as exc:
             logger.debug("SymbolicGraphContextBuilder: seed matching error: %s", exc)
 
-        return seeds
+        return seeds[:6]
 
     def build_causal_context(
         self,
@@ -101,11 +93,12 @@ class SymbolicGraphContextBuilder:
                 logger.debug("SymbolicGraphContextBuilder: query error for seed %s: %s", seed, exc)
 
         # Se tiver poucas conexões por travessia, busca as triplas mais recentes
+        # This is a deliberate warm-start strategy to ensure some context is available
         if len(collected_triples) < 4 and hasattr(self.db, "list_symbolic_triples"):
             try:
                 recent = self.db.list_symbolic_triples(
                     agent_instance=self.agent_instance,
-                    limit=self.max_triples,
+                    limit=min(3, self.max_triples),
                 )
                 for t in recent:
                     key = (t.get("subject", ""), t.get("predicate", ""), t.get("object", ""))
@@ -118,7 +111,7 @@ class SymbolicGraphContextBuilder:
         # Ordenar por relevância / profundidade / confiança
         def _sort_key(item: Dict[str, Any]) -> Tuple[int, float]:
             depth = item.get("depth", 1)
-            conf = float(item.get("confidence", 1.0))
+            conf = float(item.get("confidence") or 1.0)
             return (depth, -conf)
 
         collected_triples.sort(key=_sort_key)

@@ -377,6 +377,9 @@ Responda APENAS com JSON valido:
                     return candidate
         return None
 
+    def _redact_image_data_urls(self, value: Any) -> Any:
+        return sanitize_persisted_payload(value)
+
     def _generate_image_with_openrouter(self, image_prompt: str) -> Dict[str, Any]:
         api_key = os.getenv("OPENROUTER_API_KEY")
         if not api_key:
@@ -406,15 +409,23 @@ Responda APENAS com JSON valido:
             "max_tokens": 300,
         }
 
-        with httpx.Client(timeout=120.0) as client:
-            response = client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
+        try:
+            with httpx.Client(timeout=120.0) as client:
+                response = client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+        except Exception as exc:
+            return {
+                "success": False,
+                "status": "network_error",
+                "reason": f"Erro de rede na chamada OpenRouter: {exc}",
+                "provider": DEFAULT_ART_IMAGE_PROVIDER,
+            }
 
         try:
             response_json = response.json()
@@ -476,8 +487,16 @@ Responda APENAS com JSON valido:
             "response_format": "url",
         }
 
-        with httpx.Client(timeout=90.0) as client:
-            response = client.post(endpoint, headers=headers, json=payload)
+        try:
+            with httpx.Client(timeout=90.0) as client:
+                response = client.post(endpoint, headers=headers, json=payload)
+        except Exception as exc:
+            return {
+                "success": False,
+                "status": "network_error",
+                "reason": f"Erro de rede na chamada MiniMax: {exc}",
+                "provider": "minimax",
+            }
 
         try:
             response_json = response.json()
@@ -567,6 +586,7 @@ Responda APENAS com JSON valido:
                 "inspirations": inspirations,
             }
 
+        # Failover between providers is intentionally not implemented (single-provider design).
         if self.image_provider == "minimax":
             image_result = self._generate_image_with_minimax(art_payload["image_prompt"])
         else:

@@ -81,7 +81,7 @@ class TheoryOfMindDatabaseMixin:
     ) -> int:
         """Upserts a Theory of Mind daily snapshot for a user."""
         self._init_theory_of_mind_schema()
-        clean_refs = [r for r in evidence_refs if PROFILE_SOURCE_RE.search(str(r))]
+        clean_refs = [r for r in evidence_refs if PROFILE_SOURCE_RE.fullmatch(str(r))]
 
         with self._lock:
             cursor = self.conn.cursor()
@@ -143,10 +143,10 @@ class TheoryOfMindDatabaseMixin:
                 "agent_instance": row["agent_instance"],
                 "user_id": row["user_id"],
                 "snapshot_date": row["snapshot_date"],
-                "epistemic_state": json.loads(row["epistemic_state_json"] or "{}"),
-                "affective_trajectory": json.loads(row["affective_trajectory_json"] or "{}"),
-                "relational_needs": json.loads(row["relational_needs_json"] or "{}"),
-                "evidence_refs": json.loads(row["evidence_refs_json"] or "[]"),
+                "epistemic_state": json.loads(row["epistemic_state_json"] or "{}") or {},
+                "affective_trajectory": json.loads(row["affective_trajectory_json"] or "{}") or {},
+                "relational_needs": json.loads(row["relational_needs_json"] or "{}") or {},
+                "evidence_refs": json.loads(row["evidence_refs_json"] or "[]") or [],
                 "created_at": row["created_at"],
             }
 

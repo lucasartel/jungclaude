@@ -95,3 +95,23 @@ def test_symbolic_context_flag_controls(test_db, monkeypatch):
 
     # Test admin-only flag blocks regular users
     assert engine._build_symbolic_graph_prompt_context("other_user_id_123") == ""
+
+
+def test_find_seed_nodes_extraction(test_db):
+    cursor = test_db.conn.cursor()
+    cursor.execute(
+        "INSERT OR IGNORE INTO symbolic_nodes (agent_instance, entity_name) VALUES (?, ?)",
+        ("test_jung", "Python"),
+    )
+    test_db.conn.commit()
+
+    builder = SymbolicGraphContextBuilder(test_db, agent_instance="test_jung")
+
+    # Message with entity
+    seeds = builder.find_seed_nodes("user_test_123", "I love writing Python code.")
+    assert "Python" in seeds
+    assert "Lucas" not in seeds
+
+    # Message without entity
+    empty_seeds = builder.find_seed_nodes("user_test_123", "I love writing code.")
+    assert empty_seeds == []

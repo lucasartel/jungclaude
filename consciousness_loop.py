@@ -1079,7 +1079,7 @@ class ConsciousnessLoopManager:
 
     def _run_epistemic_agency_essay(self, result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Executa a redacao autonoma de ensaio filosofico quando oportuno (Fase VII)."""
-        cycle_id = result.get("cycle_id") or date.today().isoformat()
+        cycle_id = result.get("cycle_id") or datetime.now(timezone.utc).date().isoformat()
         try:
             from engines.essay_engine import PhilosophicalEssayEngine
 

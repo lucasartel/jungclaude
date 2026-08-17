@@ -590,6 +590,36 @@ Responda APENAS com 1 ou 2 frases curtas (max 320 caracteres no total).
 
         return f"{base_prompt}\n\n{style_clause}"
 
+    def _dig_for_image_url(self, value: Any) -> Optional[str]:
+        if isinstance(value, str):
+            url_match = re.search(r"https?://[^\s\)\"']+", value)
+            if url_match:
+                return url_match.group(0)
+            data_match = re.search(r"data:image/[^;]+;base64,[A-Za-z0-9+/=]+", value)
+            if data_match:
+                return data_match.group(0)
+            return persistable_image_url(value)
+
+        if isinstance(value, dict):
+            for key in ("image_url", "imageUrl", "url", "download_url", "output_url", "b64_json"):
+                val = value.get(key)
+                if isinstance(val, dict) and val.get("url"):
+                    return str(val["url"])
+                candidate = persistable_image_url(val)
+                if candidate:
+                    return candidate
+            for item in value.values():
+                candidate = self._dig_for_image_url(item)
+                if candidate:
+                    return candidate
+
+        if isinstance(value, list):
+            for item in value:
+                candidate = self._dig_for_image_url(item)
+                if candidate:
+                    return candidate
+        return None
+
     def _extract_openrouter_image_url(self, response: Any) -> Optional[str]:
         if response is None:
             return None
@@ -605,18 +635,22 @@ Responda APENAS com 1 ou 2 frases curtas (max 320 caracteres no total).
             return None
 
         message = choices[0].get("message") if isinstance(choices[0], dict) else None
-        images = message.get("images") if isinstance(message, dict) else None
-        if not images:
+        if not message:
             return None
 
-        for image in images:
-            image_url = image.get("image_url") if isinstance(image, dict) else None
-            url = image_url.get("url") if isinstance(image_url, dict) else None
-            candidate = persistable_image_url(url)
+        content = message.get("content")
+        if content:
+            candidate = self._dig_for_image_url(content)
             if candidate:
                 return candidate
 
-        return None
+        images = message.get("images")
+        if images:
+            candidate = self._dig_for_image_url(images)
+            if candidate:
+                return candidate
+
+        return self._dig_for_image_url(message)
 
     def _sanitize_openrouter_response(self, response: Any) -> str:
         try:

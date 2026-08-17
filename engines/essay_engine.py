@@ -131,6 +131,11 @@ Responda ESTRITAMENTE em JSON valido:
                     data = json.loads(cleaned[start : end + 1])
                 except Exception:
                     pass
+        if not data:
+            return {
+                "status": "parsing_failed",
+                "raw_text": raw_response
+            }
 
         title = (data.get("title") or "Sobre a Tensão entre Forma e Compreensão").strip()
         thesis = (data.get("thesis_statement") or "A autonomia do pensamento reside em sustentar a lacuna entre a pressa de dar forma e a lentidão da compreensão.").strip()
@@ -153,6 +158,11 @@ Responda ESTRITAMENTE em JSON valido:
                 )
             except Exception as exc:
                 logger.warning("EssayEngine: save error: %s", exc)
+
+        if essay_id == 0:
+            return {
+                "status": "failure"
+            }
 
         return {
             "status": "success",
