@@ -1,6 +1,6 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 2.4 - Estado Real e Roadmap Vivo - Agosto 2026**
+**Versao 2.5 - Estado Real e Pausa Operacional de Imagens - Agosto 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
@@ -111,7 +111,7 @@ Fluxo padrao historico: **mantenedor escolhe a tarefa -> executor implementa em 
 
 **Concluido e em producao**: Fase I do roadmap antigo (circuitos da ruminacao corrigidos, sonhos alimentam ruminacao, failure policy no loop, entrega de insights) e Fase II substancial (diario autobiografico evidence-first, perfil injetado no prompt, avaliacao narrativa de fases com politica executiva, Chroma removido). O agente ja possui circuito de self-work via GitHub/Railway, mantido sob revisao do mantenedor.
 
-**Estado operacional atual**: o `main` remoto esta no commit `3b26988`, com CI verde, incluindo suite, sintaxe e regressao cognitiva mock. O Railway permanece online, com o deploy desse commit aguardando fila no momento desta atualizacao; a validacao pos-deploy por healthcheck e probes ainda deve ser repetida. O volume de producao esta em aproximadamente 171 MB de 500 MB.
+**Estado operacional atual**: o `main` remoto esta no commit `d650f6f`, com CI verde, incluindo suite, sintaxe e regressao cognitiva mock. O Railway permanece online no deploy `7340eded-561e-4918-8738-8855a0da1f4c`, apos o commit `d650f6f`; o volume de producao esta em aproximadamente 173 MB de 500 MB. O CI esta verde e os healthchecks/probes read-only continuam funcionais.
 
 **Fase 0 concluida como etapa bloqueante**:
 
@@ -151,7 +151,7 @@ Fluxo padrao historico: **mantenedor escolhe a tarefa -> executor implementa em 
 |---|---|---|
 | V - Grafo simbolico | Grafo persistido em producao com 238 nos e 183 triplas; contexto causal integrado ao prompt do admin | Auditoria manual de 100 triplas com precisao >= 80% ainda nao registrada como evidencia de saida |
 | VI - Theory of Mind | Codigo integrado, um snapshot real persistido e `agent_stance` consumido pelo Will | Falta evidencia longitudinal da maturacao assincrona; inbox de maturacao ainda esta vazia |
-| VII - Agencia epistemica e multimodal | `essay_engine.py`, persistencia de ensaios e circuito de imagens implementados; CI cobre os ensaios | Gate exige Fases 0-VI estaveis por duas semanas e aprovacao escrita; correcao de imagens `3b26988` ainda aguarda confirmacao pos-deploy |
+| VII - Agencia epistemica e multimodal | `essay_engine.py`, persistencia de ensaios e circuito de imagens implementados; CI cobre os ensaios | Gate exige Fases 0-VI estaveis por duas semanas e aprovacao escrita; geracao de imagens esta pausada operacionalmente por `IMAGE_GENERATION_ENABLED=false` |
 
 **Fechamento curto de 08/07/2026**:
 
@@ -172,7 +172,7 @@ Fluxo padrao historico: **mantenedor escolhe a tarefa -> executor implementa em 
 
 **Pendencias reais registradas**:
 
-- confirmar o deploy do commit `3b26988` no Railway e repetir `instance_healthcheck.py` e os probes de loop, will, working_memory e hobby;
+- manter a geracao de imagens pausada enquanto o custo e o comportamento do provedor nao forem reavaliados; quando reativada, executar uma validacao controlada do circuito dream/hobby;
 - concluir/verificar formalmente a janela longitudinal de 7 dias da Working Memory;
 - registrar a auditoria de 100 triplas do grafo simbolico e sua precisao;
 - acompanhar Theory of Mind por mais ciclos e produzir entrada real na inbox de maturacao antes de declarar maturacao assincrona;
@@ -180,6 +180,13 @@ Fluxo padrao historico: **mantenedor escolhe a tarefa -> executor implementa em 
 - respeitar o gate de duas semanas e aprovacao escrita antes de declarar a Fase VII encerrada;
 - `main.py` permanece monolitico e deve ser tratado em fase de higiene estrutural posterior;
 - custo LLM continua fora do cronograma ativo, por decisao do mantenedor, salvo mudanca de risco operacional.
+
+**Atualizacao operacional de 18/08/2026**:
+
+- o commit `d650f6f` adicionou a flag reversivel `IMAGE_GENERATION_ENABLED`; quando `false`, dream e hobby preservam seus circuitos textuais e nao chamam provedores de imagem;
+- `IMAGE_GENERATION_ENABLED=false` foi aplicado ao servico Railway `jungclaude` em producao; o deploy concluiu online;
+- a suite canonica local passou com `437 passed`;
+- o agente permanece `running`, sem erros recentes no loop; a proxima passagem de `hobby` sera observada naturalmente, sem ser disparada manualmente.
 
 **Avisos operacionais**:
 - O clone de trabalho ativo deve ser `/Users/lucaspedro/jungproject`; a copia antiga em OneDrive causou problemas reais de I/O e nao deve ser usada para trabalho pesado.
@@ -438,6 +445,7 @@ Aceite da Fase IV.0:
 | Consolidacao canonica V2 | 11/06/2026 | Este arquivo substitui o redirecionamento e passa a ser o documento mestre de autoridade |
 | Versao 2.3 - Estado Realizado e Roadmap Vivo | 08/07/2026 | Atualiza Fase 0 como concluida, Fase III como em fechamento/protagonismo, IV.0/IV.1 como realizadas, IV.2 como infraestrutura gateada, e registra o fechamento `relational_state -> will` |
 | Versao 2.4 - Estado Real e Roadmap Vivo | 17/08/2026 | Registra os avancos reais das Fases III-VII, separa implementacao tecnica de evidencia de encerramento, atualiza os probes de producao e explicita o deploy de imagens ainda em fila |
+| Versao 2.5 - Estado Real e Pausa Operacional de Imagens | 18/08/2026 | Registra a flag reversivel de custo, a pausa de imagens em producao, a suite com 437 testes e a saude do agente durante o periodo de aguardo |
 
 ---
 
