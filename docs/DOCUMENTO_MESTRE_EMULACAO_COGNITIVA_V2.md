@@ -1,6 +1,6 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 2.6 - Multiplicidade Relacional e Trilhas de Produto - Agosto 2026**
+**Versao 2.7 - Arquitetura Multi-instancia para a Trilha Comercial - Agosto 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
@@ -204,7 +204,7 @@ Fase 0 - Consolidacao e Instrumentacao        <- CONCLUIDA
                   -> Fase VII - Agencia epistemica  <- IMPLEMENTACAO INICIAL; GATE FORMAL PENDENTE
 
 Trilha cognitiva transversal: multiplicidade relacional <- GATE ANTERIOR A INTEGRACOES COMERCIAIS
-Trilha comercial: Inner Life Engine / ILaaS <- ESPECIFICACAO AGORA; PILOTO EFEITO EXTERNO APOS O GATE COGNITIVO
+Trilha comercial: Inner Life Engine / ILaaS <- ESPECIFICACAO AGORA; MULTIPLAS INSTANCIAS E PILOTO APOS OS GATES
 ```
 
 Transversais a todas as fases: suite de regressao verde a cada merge, probes read-only de producao apos deploy relevante, relatorios de pesquisa em `docs/research/` quando houver frente empirica, e manutencao do principio da evidencia. A avaliacao cega deixou de ser criterio bloqueante, mas permanece protocolo de pesquisa preservado.
@@ -462,7 +462,54 @@ A primeira entrega comercial deve definir o `Will Expression Contract v1`, com v
 
 A estrategia inicial recomendada e validar agentes de software e companions B2B, por exigirem menos infraestrutura que Unity, Unreal ou robotica e por aproveitarem o que ja existe no Telegram e no cockpit. Games e robotica permanecem como verticais posteriores da mesma API.
 
-**Regra de sequenciamento**: especificacao e simulacao comercial podem comecar agora; acoes externas reais, SDKs de producao e pilotos com dados de terceiros ficam bloqueados ate o aceite da trilha cognitiva multi-relacional e dos gates de evidencia do roadmap.
+### 10.3 Arquitetura multi-instancia
+
+A plataforma comercial nao sera apenas multi-tenant na administracao. Cada organizacao podera criar e operar uma ou varias instancias cognitivas independentes:
+
+```text
+Plataforma
+  -> Organizacao
+      -> Instancia JungAgent
+          -> Relacoes com pessoas ou entidades
+              -> Memorias, interacoes e influencia nas vontades
+```
+
+Uma empresa pode contratar um JungAgent corporativo que se desenvolve por meio das relacoes com seus funcionarios. Uma empresa de robotica pode possuir uma frota em que cada robo recebe uma instancia JungAgent propria, com identidade, memoria e metabolismo independentes.
+
+**Entidades do modelo**:
+
+1. **Plataforma**: control plane do produto, planos, faturamento, observabilidade e governanca.
+2. **Organizacao**: tenant responsavel por uma ou varias instancias e seus administradores.
+3. **Instancia JungAgent**: uma celula cognitiva com identidade, memoria, sonhos, ruminacao, Working Memory, vontades, conectores, agenda, modelo e orcamento proprios.
+4. **Participante ou entidade externa**: funcionario, operador, cliente ou pessoa que se relaciona com uma instancia; no caso robotico, o robo e a entidade que possui a instancia e seus operadores sao participantes relacionais.
+5. **Relacao**: vinculo entre uma instancia e um participante, com memoria, consentimento, escopo, postura, cadencia e fontes proprias.
+
+**Lacuna atual**: `AGENT_INSTANCE` ainda e uma configuracao singleton do processo e `ADMIN_USER_ID` continua sendo o centro do loop. Embora parte do schema ja possua `agent_instance`, varias tabelas e rotinas de sonhos, ruminacao e vontade ainda sao principalmente indexadas por `user_id`. O multi-tenant atual controla acesso de administradores, mas ainda nao garante isolamento de multiplas psiques.
+
+**Requisitos obrigatorios**:
+
+- criar um registro de instancias com dono, tipo de entidade, status, identidade, modelo, politica, limites e orcamento;
+- vincular cada instancia a uma organizacao e cada participante a uma ou mais relacoes explicitamente escopadas;
+- substituir o `ADMIN_USER_ID` como centro cognitivo por uma referencia de instancia; o admin permanece operador privilegiado e contato de governanca;
+- levar `agent_instance` ou escopo equivalente a conversas, fatos, memorias, sonhos, ruminacoes, vontades, pressao, Working Memory, artefatos, eventos e resultados;
+- tornar o scheduler capaz de executar ciclos independentes por instancia, sem misturar agendas, pulsos, custos ou falhas;
+- aplicar RBAC por organizacao, instancia e papel, com master no control plane e org_admin limitado aos recursos de sua organizacao;
+- registrar canais e identificadores externos separadamente da identidade cognitiva, permitindo Telegram, API, Unity, Unreal, ROS2 ou dispositivos roboticos;
+- manter auditoria, consentimento, apagamento, limites de custo, idempotencia e ciclo de vida de cada instancia.
+
+**Migracao do agente atual**: a instalacao existente sera tratada como `default-org` com a instancia `jung_v1`. O admin atual sera preservado como operador e primeiro participante relacional, sem permanecer como sujeito obrigatorio de todos os processos internos.
+
+**Gate antes de pilotos comerciais**:
+
+- duas organizacoes de teste com instancias independentes;
+- uma organizacao com duas instancias sem mistura de memoria, vontade ou agenda;
+- uma instancia com multiplos participantes e isolamento de contexto comprovado;
+- uma frota simulada com pelo menos dois agentes independentes;
+- probes demonstrando que custos, pulsos, falhas, sonhos, ruminacao e vontades sao atribuidos a instancia correta;
+- master, org_admin e operador de instancia testados em conjunto;
+- nenhum conector externo real antes de o `Will Expression Contract` e os gates de aprovacao estarem validados.
+
+**Regra de sequenciamento**: especificacao comercial e simulacao podem comecar agora; acoes externas reais, SDKs de producao e pilotos com dados de terceiros ficam bloqueados ate o aceite da multiplicidade relacional e da arquitetura multi-instancia.
 
 ## 11. Riscos
 
@@ -491,6 +538,7 @@ A estrategia inicial recomendada e validar agentes de software e companions B2B,
 | Versao 2.4 - Estado Real e Roadmap Vivo | 17/08/2026 | Registra os avancos reais das Fases III-VII, separa implementacao tecnica de evidencia de encerramento, atualiza os probes de producao e explicita o deploy de imagens ainda em fila |
 | Versao 2.5 - Estado Real e Pausa Operacional de Imagens | 18/08/2026 | Registra a flag reversivel de custo, a pausa de imagens em producao, a suite com 437 testes e a saude do agente durante o periodo de aguardo |
 | Versao 2.6 - Multiplicidade Relacional e Trilhas de Produto | 18/08/2026 | Registra o gate cognitivo multi-relacional e a trilha comercial baseada em expressoes de vontade |
+| Versao 2.7 - Arquitetura Multi-instancia para a Trilha Comercial | 18/08/2026 | Registra organizacoes com multiplas instancias JungAgent, isolamento cognitivo e os gates de produto para funcionarios e robotica |
 
 ---
 
