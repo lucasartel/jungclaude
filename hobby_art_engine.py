@@ -21,6 +21,7 @@ except ImportError:  # pragma: no cover - production installs it via requirement
 
 from llm_providers import get_llm_response
 from payload_storage import persistable_image_url, sanitize_persisted_payload
+from instance_config import IMAGE_GENERATION_ENABLED
 
 logger = logging.getLogger(__name__)
 
@@ -606,6 +607,15 @@ Responda APENAS com JSON valido:
         return cursor.lastrowid
 
     def generate_cycle_art(self, user_id: str, cycle_id: str, world_state: Dict[str, Any]) -> Dict[str, Any]:
+        if not IMAGE_GENERATION_ENABLED:
+            logger.info("HobbyArtEngine: geracao de imagem pausada por IMAGE_GENERATION_ENABLED=false")
+            return {
+                "success": False,
+                "status": "disabled",
+                "reason": "Geracao de imagens pausada por configuracao operacional.",
+                "inspirations": [],
+            }
+
         inspirations = self._build_inspirations(user_id, cycle_id, world_state)
         try:
             art_payload = self._compose_art_payload(inspirations)

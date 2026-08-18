@@ -20,6 +20,7 @@ from jung_core import Config, HybridDatabaseManager
 from agent_identity_context_builder import AgentIdentityContextBuilder
 from jung_rumination import RuminationEngine
 from payload_storage import persistable_image_url, sanitize_persisted_payload
+from instance_config import IMAGE_GENERATION_ENABLED
 
 logger = logging.getLogger(__name__)
 
@@ -743,6 +744,10 @@ Responda APENAS com 1 ou 2 frases curtas (max 320 caracteres no total).
 
     def _generate_dream_image(self, dream_id: int, dream_content: str, symbolic_theme: str):
         """Gera imagem de alta qualidade do sonho via OpenRouter/Gemini."""
+        if not IMAGE_GENERATION_ENABLED:
+            logger.info("DreamEngine: geracao de imagem pausada por IMAGE_GENERATION_ENABLED=false")
+            return
+
         image_prompt = self._apply_image_style_policy(dream_content)
         if not image_prompt:
             logger.warning(

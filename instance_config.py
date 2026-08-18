@@ -84,6 +84,9 @@ if ADMIN_PLATFORM.lower() == "telegram" and ADMIN_PLATFORM_ID:
         TELEGRAM_ADMIN_IDS.append(platform_admin_id)
 
 PROACTIVE_ENABLED = env_flag("PROACTIVE_ENABLED", default=True)
+# Keeps the dream and hobby circuits alive while allowing image-provider calls
+# to be paused for cost control.
+IMAGE_GENERATION_ENABLED = env_flag("IMAGE_GENERATION_ENABLED", default=True)
 
 
 def instance_summary() -> dict:
@@ -97,4 +100,5 @@ def instance_summary() -> dict:
         "admin_platform_id_configured": bool(ADMIN_PLATFORM_ID),
         "telegram_admin_count": len(TELEGRAM_ADMIN_IDS),
         "proactive_enabled": PROACTIVE_ENABLED,
+        "image_generation_enabled": IMAGE_GENERATION_ENABLED,
     }
