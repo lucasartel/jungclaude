@@ -1,6 +1,6 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 2.5 - Estado Real e Pausa Operacional de Imagens - Agosto 2026**
+**Versao 2.6 - Multiplicidade Relacional e Trilhas de Produto - Agosto 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
@@ -202,6 +202,9 @@ Fase 0 - Consolidacao e Instrumentacao        <- CONCLUIDA
           -> Fase V - Grafo simbolico               <- TECNICAMENTE IMPLEMENTADA; AUDITORIA PENDENTE
               -> Fase VI - Theory of Mind            <- IMPLEMENTACAO INICIAL; LONGITUDINAL PENDENTE
                   -> Fase VII - Agencia epistemica  <- IMPLEMENTACAO INICIAL; GATE FORMAL PENDENTE
+
+Trilha cognitiva transversal: multiplicidade relacional <- GATE ANTERIOR A INTEGRACOES COMERCIAIS
+Trilha comercial: Inner Life Engine / ILaaS <- ESPECIFICACAO AGORA; PILOTO EFEITO EXTERNO APOS O GATE COGNITIVO
 ```
 
 Transversais a todas as fases: suite de regressao verde a cada merge, probes read-only de producao apos deploy relevante, relatorios de pesquisa em `docs/research/` quando houver frente empirica, e manutencao do principio da evidencia. A avaliacao cega deixou de ser criterio bloqueante, mas permanece protocolo de pesquisa preservado.
@@ -420,7 +423,48 @@ Aceite da Fase IV.0:
 
 **Fase VII - Tool-making + multimodal** (~5 semanas): gate rigido - so com Fases 0-VI estaveis por 2+ semanas e aprovacao escrita do mantenedor. Caminho preferencial de tool-making e o circuito de self-work via PR revisado por humano (ja existente); sandbox Docker efemero (timeout 30s, RAM 128MB, whitelist de rede, validacao AST) reservado a scripts efemeros de consulta, nunca a modificacao do proprio sistema. Prosodia e feedback visual de imagens oniricas entram aqui.
 
-## 10. Riscos
+## 10. Trilhas de evolucao: multiplicidade relacional e produto
+
+A partir de 18/08/2026, o roadmap passa a ter duas trilhas coordenadas. A trilha cognitiva completa a arquitetura interna; a trilha comercial transforma essa arquitetura em um motor reutilizavel por outras aplicacoes. A trilha comercial pode avancar em especificacao, descoberta de parceiros e simulacao, mas nao deve liberar efeitos externos antes do fechamento do gate cognitivo.
+
+### 10.1 Trilha cognitiva: JungAgent multi-relacional
+
+**Problema identificado**: o banco ja registra varios usuarios e alguns dominios sao filtrados por `user_id`, mas o metabolismo principal ainda e centrado no `ADMIN_USER_ID`. Loop, sonhos, ruminacao, vontade, pressao, dashboards e partes da identidade usam o admin como sujeito padrao. Portanto, o sistema possui multiusuarios cadastrais, mas ainda nao possui uma interioridade completa diante de multiplas relacoes.
+
+**Objetivo**: modelar como cada pessoa forma uma relacao especifica com o agente e como o conjunto dessas relacoes interfere, sem misturar memorias privadas nem reduzir a interioridade do agente a uma soma de mensagens.
+
+**Modelo alvo**:
+
+1. **Identidade do participante**: identidade canonica, identificadores por plataforma, consentimento, escopo de visibilidade e estado de acesso.
+2. **Memoria por relacao**: conversas, fatos, temas recorrentes, cadencia, tom, limites, identidade relacional e ancoras de evidencia especificas daquela pessoa.
+3. **Metabolismo por relacao**: ruminacao, lacunas, sonhos e sinais de vontade podem ser associados a uma relacao sem serem expostos a outra.
+4. **Campo relacional do agente**: uma camada agregada descreve padroes entre relacoes, tensoes de disponibilidade, compromissos e mudancas na propria identidade do agente, usando referencias e resumos autorizados, nunca vazamento de conteudo bruto.
+5. **Vontade contextual e global**: a resposta a uma pessoa le primeiro a relacao daquela pessoa; o ciclo global pode considerar sinais de varias relacoes com pesos de recencia, saliencia, pendencia e evidencia. Frequencia de mensagens isoladamente nao deve dominar a vontade.
+6. **Ruminacao de fronteira**: alem da ruminacao especifica por relacao, o agente pode metabolizar tensoes do conjunto de relacoes, como conflitos de papel, assimetrias de expectativa ou impossibilidade de atender demandas simultaneas.
+
+**Gate de aceite antes da trilha comercial**:
+
+- dois ou mais usuarios de teste formam relacoes e memorias distintas;
+- nenhuma memoria, fato ou estado relacional de um usuario aparece no contexto de outro sem autorizacao;
+- o agente mantem um estado proprio global distinto dos estados relacionais;
+- a vontade registra quando seus sinais vieram de uma ou de varias relacoes, com fontes auditaveis;
+- ruminacao, sonhos, pressao e Working Memory respeitam o escopo relacional definido;
+- probes e testes demonstram isolamento, agregacao controlada e ausencia de vazamento;
+- a politica de privacidade, apagamento e consentimento esta definida antes de qualquer piloto externo.
+
+### 10.2 Trilha comercial: Jung Inner Life Engine
+
+A trilha comercial sera construida sobre expressoes de vontade, e nao sobre acesso direto de terceiros ao banco ou aos prompts internos. O contrato entre engine e aplicacao externa sera:
+
+`perceive/evento -> metabolismo -> will_expression -> conector com gate -> resultado como evidencia`
+
+A primeira entrega comercial deve definir o `Will Expression Contract v1`, com vontade dominante, conflito, objetivo, acao proposta, confianca, evidencias, risco, custo, validade, idempotencia, politica de aprovacao e resultado esperado. Depois, um conector generico em modo dry-run/webhook podera validar o fluxo sem efeitos externos.
+
+A estrategia inicial recomendada e validar agentes de software e companions B2B, por exigirem menos infraestrutura que Unity, Unreal ou robotica e por aproveitarem o que ja existe no Telegram e no cockpit. Games e robotica permanecem como verticais posteriores da mesma API.
+
+**Regra de sequenciamento**: especificacao e simulacao comercial podem comecar agora; acoes externas reais, SDKs de producao e pilotos com dados de terceiros ficam bloqueados ate o aceite da trilha cognitiva multi-relacional e dos gates de evidencia do roadmap.
+
+## 11. Riscos
 
 | Risco | Antidoto |
 |---|---|
@@ -434,7 +478,7 @@ Aceite da Fase IV.0:
 | Seguranca de execucao (Fase VII) | Gate rigido; self-work via PR humano como caminho preferencial |
 | Descolamento do usuario | Principio do Encontro; metrica de ressonancia; blog compreensivel |
 
-## 11. Genealogia
+## 12. Genealogia
 
 | Documento | Data | Contribuicao |
 |---|---|---|
@@ -446,6 +490,7 @@ Aceite da Fase IV.0:
 | Versao 2.3 - Estado Realizado e Roadmap Vivo | 08/07/2026 | Atualiza Fase 0 como concluida, Fase III como em fechamento/protagonismo, IV.0/IV.1 como realizadas, IV.2 como infraestrutura gateada, e registra o fechamento `relational_state -> will` |
 | Versao 2.4 - Estado Real e Roadmap Vivo | 17/08/2026 | Registra os avancos reais das Fases III-VII, separa implementacao tecnica de evidencia de encerramento, atualiza os probes de producao e explicita o deploy de imagens ainda em fila |
 | Versao 2.5 - Estado Real e Pausa Operacional de Imagens | 18/08/2026 | Registra a flag reversivel de custo, a pausa de imagens em producao, a suite com 437 testes e a saude do agente durante o periodo de aguardo |
+| Versao 2.6 - Multiplicidade Relacional e Trilhas de Produto | 18/08/2026 | Registra o gate cognitivo multi-relacional e a trilha comercial baseada em expressoes de vontade |
 
 ---
 
