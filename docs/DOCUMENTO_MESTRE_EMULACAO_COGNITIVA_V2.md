@@ -1,6 +1,6 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 2.7 - Arquitetura Multi-instancia para a Trilha Comercial - Agosto 2026**
+**Versao 2.8 - Catalogo Futuro de Informacao da API - Agosto 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
@@ -204,7 +204,7 @@ Fase 0 - Consolidacao e Instrumentacao        <- CONCLUIDA
                   -> Fase VII - Agencia epistemica  <- IMPLEMENTACAO INICIAL; GATE FORMAL PENDENTE
 
 Trilha cognitiva transversal: multiplicidade relacional <- GATE ANTERIOR A INTEGRACOES COMERCIAIS
-Trilha comercial: Inner Life Engine / ILaaS <- ESPECIFICACAO AGORA; MULTIPLAS INSTANCIAS E PILOTO APOS OS GATES
+Trilha comercial: Inner Life Engine / ILaaS <- CATALOGAR API; MULTIPLAS INSTANCIAS E PILOTO APOS OS GATES
 ```
 
 Transversais a todas as fases: suite de regressao verde a cada merge, probes read-only de producao apos deploy relevante, relatorios de pesquisa em `docs/research/` quando houver frente empirica, e manutencao do principio da evidencia. A avaliacao cega deixou de ser criterio bloqueante, mas permanece protocolo de pesquisa preservado.
@@ -511,6 +511,34 @@ Uma empresa pode contratar um JungAgent corporativo que se desenvolve por meio d
 
 **Regra de sequenciamento**: especificacao comercial e simulacao podem comecar agora; acoes externas reais, SDKs de producao e pilotos com dados de terceiros ficam bloqueados ate o aceite da multiplicidade relacional e da arquitetura multi-instancia.
 
+### 10.4 Catalogo futuro de informacao da API
+
+A API devera poder fornecer, em principio e sem antecipar ainda as restricoes de exposicao, as seguintes familias de informacao:
+
+1. **Instancia**: identidade, organizacao, tipo de entidade, status, modelo, agenda, pulsos, limites e orcamento.
+2. **Pessoas e relacoes**: participantes, identificadores externos, papeis, postura, cadencia, silencio, temas, necessidades, compromissos, confianca e consentimentos.
+3. **Interacoes**: conversas, sessoes, mensagens, canais, eventos, comandos, respostas proativas, resultados, falhas e metadados afetivos.
+4. **Memoria**: fatos, memoria semantica, autobiografica e relacional, memorias compartilhadas ou privadas, correcoes, confianca, fontes, ancoras e buscas.
+5. **Identidade do agente**: crencas, valores, contradicoes, capitulos narrativos, mudancas, autoimagem, possiveis selves e evidencias.
+6. **Vontades**: scores de saber/relacionar/expressar, dominancia, constricao, conflito, pressao, pulsos, influencias relacionais, historico e expressoes de vontade.
+7. **Postura**: intencao, tom, estado afetivo estrutural, foco, contexto, memorias selecionadas, Working Memory, restricoes e confianca.
+8. **Ruminacao e sonhos**: fragmentos, tensoes, maturidade, insights, material onirico, temas simbolicos, funcao reguladora, residuos e evidencias.
+9. **Working Memory e objetivos**: foco, fringe, candidatos, broadcasts, objetivos, passos, evidencias esperadas, acoes propostas, gates, resultados, cooldown e idempotencia.
+10. **Mundo e grafo**: estado do mundo, gaps, pesquisas, fontes, descobertas, nos, triplas, predicados, confianca, caminhos causais e contradicoes.
+11. **Metacognicao e desenvolvimento**: estado integrativo, limites, mudancas de estrategia, falhas, hipoteses, autoavaliacao, fallbacks, tendencias de ajuste e historico.
+12. **Wellness e leitura de pessoas**: psicometria, valores, padroes, qualidade, trajetorias, evidencias, lacunas e versoes de relatorios; wellness permanece como recurso de compreensao, nao como diagnostico automatico.
+13. **Producao**: ensaios, pesquisas, artefatos, imagens, criticas, portfolios, projetos, briefs, tickets, entregas e destinos.
+14. **Saude operacional**: estado do loop, fases, pulsos, retries, warnings, latencia, tokens, custos, armazenamento, banco, memoria semantica, conectores, deploy e versao.
+15. **Governanca**: administradores, papeis, organizacoes, instancias acessiveis, permissoes, consentimentos, auditoria, exportacao, apagamento, politicas e aprovacoes.
+16. **Eventos**: eventos recebidos e emitidos, expressoes de vontade, mudancas de postura, insights, acoes, webhooks, assinaturas e resultados externos.
+
+A API devera oferecer pelo menos duas leituras complementares:
+
+- **API de estado**: como a instancia, a relacao ou o agente estao agora;
+- **API de ciclo**: o que aconteceu, o que mudou, quais evidencias sustentam a mudanca e o que foi proposto em seguida.
+
+O catalogo nao autoriza exposicao irrestrita. Ele e um inventario de possibilidades para a futura especificacao de contratos, escopos, consentimentos e gates. A API deve fornecer contexto, trajetoria, evidencia, intencao e causalidade, e nao apenas espelhar tabelas internas.
+
 ## 11. Riscos
 
 | Risco | Antidoto |
@@ -539,6 +567,7 @@ Uma empresa pode contratar um JungAgent corporativo que se desenvolve por meio d
 | Versao 2.5 - Estado Real e Pausa Operacional de Imagens | 18/08/2026 | Registra a flag reversivel de custo, a pausa de imagens em producao, a suite com 437 testes e a saude do agente durante o periodo de aguardo |
 | Versao 2.6 - Multiplicidade Relacional e Trilhas de Produto | 18/08/2026 | Registra o gate cognitivo multi-relacional e a trilha comercial baseada em expressoes de vontade |
 | Versao 2.7 - Arquitetura Multi-instancia para a Trilha Comercial | 18/08/2026 | Registra organizacoes com multiplas instancias JungAgent, isolamento cognitivo e os gates de produto para funcionarios e robotica |
+| Versao 2.8 - Catalogo Futuro de Informacao da API | 19/08/2026 | Registra a superficie futura de informacao, estado, evidencia, intencao, governanca e eventos da API |
 
 ---
 
