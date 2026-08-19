@@ -1,6 +1,6 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 2.8 - Catalogo Futuro de Informacao da API - Agosto 2026**
+**Versao 2.9 - Correcao e Auditoria Preliminar da Vontade - Agosto 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
@@ -204,7 +204,7 @@ Fase 0 - Consolidacao e Instrumentacao        <- CONCLUIDA
                   -> Fase VII - Agencia epistemica  <- IMPLEMENTACAO INICIAL; GATE FORMAL PENDENTE
 
 Trilha cognitiva transversal: multiplicidade relacional <- GATE ANTERIOR A INTEGRACOES COMERCIAIS
-Trilha comercial: Inner Life Engine / ILaaS <- CATALOGAR API; MULTIPLAS INSTANCIAS E PILOTO APOS OS GATES
+Trilha comercial: Inner Life Engine / ILaaS <- CATALOGAR API; AUDITAR VONTADE; MULTIPLAS INSTANCIAS E PILOTO APOS OS GATES
 ```
 
 Transversais a todas as fases: suite de regressao verde a cada merge, probes read-only de producao apos deploy relevante, relatorios de pesquisa em `docs/research/` quando houver frente empirica, e manutencao do principio da evidencia. A avaliacao cega deixou de ser criterio bloqueante, mas permanece protocolo de pesquisa preservado.
@@ -539,6 +539,35 @@ A API devera oferecer pelo menos duas leituras complementares:
 
 O catalogo nao autoriza exposicao irrestrita. Ele e um inventario de possibilidades para a futura especificacao de contratos, escopos, consentimentos e gates. A API deve fornecer contexto, trajetoria, evidencia, intencao e causalidade, e nao apenas espelhar tabelas internas.
 
+### 10.5 Auditoria preliminar do modulo de vontade
+
+Em 19/08/2026 foi auditado o caminho completo `scores -> pressao -> pulso -> acao -> resultado`, com sondas de producao, leitura de codigo e 440 testes offline.
+
+**Correcao realizada**:
+
+- uma falha de composicao, bloqueio ou envio nao descarrega mais a pressao da vontade;
+- a falha continua gerando frustacao para a ruminacao;
+- a falha nao sobrescreve `last_release_will` nem `last_release_at`, que devem representar apenas uma liberacao real;
+- foram adicionados testes para falha relacional, falha no pulso e liberacao bem-sucedida.
+
+**Achados para a fase futura da vontade**:
+
+1. O estado de pressao hoje e criado por `user_id + cycle_id` e um novo ciclo nasce com pressoes zeradas. E necessario decidir e testar a continuidade longitudinal da pressao entre ciclos.
+2. O pulso possui entrega em duas etapas, preparacao e envio, mas ainda precisa de um estado explicito de tentativa, retry, backoff e idempotencia para sobreviver a reinicios sem risco de duplicacao ou perda de resultado.
+3. Falhas de proatividade ainda podem ser registradas apenas como `mensagem invalida`, sem distinguir cooldown, resposta vazia, JSON invalido, erro de provedor, ausencia de destinatario ou falha de transporte.
+4. A pressao e as tabelas do modulo ainda sao predominantemente indexadas por `user_id`, com o `ADMIN_USER_ID` como centro. Isso bloqueia a vontade contextual por relacao e a futura multiplicidade de instancias.
+5. O `WillEngine` deve ser auditado para separar material vindo do interlocutor de mensagens proativas produzidas pelo proprio agente, evitando auto-influencia nao intencional.
+6. O efeito de sinais persistentes de silencio e conversa recente deve ser calibrado para que uma mesma evidencia nao produza alivio repetido ou crescimento desproporcional a cada pulso.
+
+**Criterios de aceite para a futura fase da vontade**:
+
+- nenhuma pressao diminui sem uma expressao, entrega ou resultado confirmado;
+- toda tentativa possui outcome, motivo, evidencia, retry policy e idempotency key;
+- a pressao atravessa a virada de ciclo conforme uma politica explicita e testada;
+- vontade global, vontade por relacao e vontade por instancia aparecem separadas e auditaveis;
+- falhas nao sao confundidas com liberacoes;
+- probes permitem reconstruir por que uma vontade cresceu, venceu, foi bloqueada, agiu, falhou ou recebeu alivio.
+
 ## 11. Riscos
 
 | Risco | Antidoto |
@@ -568,6 +597,7 @@ O catalogo nao autoriza exposicao irrestrita. Ele e um inventario de possibilida
 | Versao 2.6 - Multiplicidade Relacional e Trilhas de Produto | 18/08/2026 | Registra o gate cognitivo multi-relacional e a trilha comercial baseada em expressoes de vontade |
 | Versao 2.7 - Arquitetura Multi-instancia para a Trilha Comercial | 18/08/2026 | Registra organizacoes com multiplas instancias JungAgent, isolamento cognitivo e os gates de produto para funcionarios e robotica |
 | Versao 2.8 - Catalogo Futuro de Informacao da API | 19/08/2026 | Registra a superficie futura de informacao, estado, evidencia, intencao, governanca e eventos da API |
+| Versao 2.9 - Correcao e Auditoria Preliminar da Vontade | 19/08/2026 | Corrige descarga indevida em falhas de pulso, registra 440 testes e abre o backlog estrutural da futura fase da vontade |
 
 ---
 

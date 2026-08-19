@@ -721,24 +721,22 @@ ESTADO QUALITATIVO:
         winner: str,
         action_summary: str,
     ) -> Dict[str, Any]:
-        current_value = float(state.get(f"{winner}_pressure") or 0.0)
-        lowered = 18.0 if current_value >= 18.0 else max(10.0, current_value - 10.0)
+        """Registra uma tentativa frustrada sem simular uma descarga de pressao.
+
+        Uma vontade so deve ser aliviada depois de uma expressao ou entrega
+        confirmada. A falha ainda pode produzir frustacao para a ruminacao,
+        mas nao deve alterar a pressao nem sobrescrever a ultima liberacao real.
+        """
         pressure_map = {
-            "saber": lowered if winner == "saber" else float(state.get("saber_pressure") or 0.0),
-            "relacionar": lowered if winner == "relacionar" else float(state.get("relacionar_pressure") or 0.0),
-            "expressar": lowered if winner == "expressar" else float(state.get("expressar_pressure") or 0.0),
+            will_name: _clamp_pressure(state.get(f"{will_name}_pressure"))
+            for will_name in PRESSURE_ORDER
         }
         refreshed = self._update_state(
             state["id"],
-            **{
-                f"{winner}_pressure": lowered,
-                "dominant_pressure": self._dominant_pressure(pressure_map),
-                "threshold_crossed": 1 if any(value >= self.threshold for value in pressure_map.values()) else 0,
-                "last_release_will": winner,
-                "last_release_at": self._utcnow().isoformat(),
-                "last_action_status": "failed",
-                "last_action_summary": self._truncate(action_summary, 240),
-            }
+            dominant_pressure=self._dominant_pressure(pressure_map),
+            threshold_crossed=1 if any(value >= self.threshold for value in pressure_map.values()) else 0,
+            last_action_status="failed",
+            last_action_summary=self._truncate(action_summary, 240),
         )
         self._inject_frustration_into_rumination(state["user_id"], winner, action_summary)
         return refreshed
