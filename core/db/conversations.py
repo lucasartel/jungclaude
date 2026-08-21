@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 from core.models import ArchetypeConflict
 
@@ -14,6 +14,28 @@ class ConversationDatabaseMixin:
     # ========================================
     # CONVERSAS (SQLite + mem0/Qdrant)
     # ========================================
+
+    def _resolve_relation_id(self, user_id: str, relation_id: Optional[str]) -> Optional[str]:
+        if relation_id:
+            return str(relation_id)
+        resolver = getattr(self, "get_agent_relation_for_participant", None)
+        if not callable(resolver):
+            return None
+        agent_instance = getattr(self, "agent_instance", None)
+        if not agent_instance:
+            try:
+                from instance_config import AGENT_INSTANCE
+                agent_instance = AGENT_INSTANCE
+            except ImportError:
+                return None
+        relation = resolver(
+            agent_instance=agent_instance,
+            participant_user_id=str(user_id),
+        )
+        if not relation:
+            return None
+        resolved = relation.get("relation_id")
+        return str(resolved) if resolved else None
 
     def save_conversation(self, user_id: str, user_name: str, user_input: str,
                          ai_response: str, session_id: str = None,
@@ -26,7 +48,8 @@ class ConversationDatabaseMixin:
                          complexity: str = "medium",
                          keywords: List[str] = None,
                          platform: str = "telegram",
-                         chat_history: List[Dict] = None) -> int:
+                         chat_history: List[Dict] = None,
+                         relation_id: Optional[str] = None) -> int:
         """
         Salva conversa em SQLite e, quando habilitado, em memÃ³ria semÃ¢ntica
         via mem0/Qdrant.
@@ -34,6 +57,8 @@ class ConversationDatabaseMixin:
         Returns:
             int: ID da conversa no SQLite
         """
+
+        relation_id = self._resolve_relation_id(user_id, relation_id)
 
         # Log minimal metadata only. Avoid writing user content to application logs.
         logger.info(
@@ -56,22 +81,32 @@ class ConversationDatabaseMixin:
             cursor = self.conn.cursor()
 
             # 1. Salvar no SQLite (metadados)
-            cursor.execute("""
-                INSERT INTO conversations
-                (user_id, user_name, session_id, user_input, ai_response,
-                 archetype_analyses, detected_conflicts,
-                 tension_level, affective_charge, existential_depth,
-                 intensity_level, complexity, keywords, platform)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
+            conversation_columns = {
+                row[1] for row in cursor.execute("PRAGMA table_info(conversations)").fetchall()
+            }
+            insert_columns = [
+                "user_id", "user_name", "session_id", "user_input", "ai_response",
+                "archetype_analyses", "detected_conflicts", "tension_level",
+                "affective_charge", "existential_depth", "intensity_level",
+                "complexity", "keywords", "platform",
+            ]
+            insert_values = [
                 user_id, user_name, session_id, user_input, ai_response,
                 json.dumps({k: asdict(v) for k, v in archetype_analyses.items()}) if archetype_analyses else None,
                 json.dumps([asdict(c) for c in detected_conflicts]) if detected_conflicts else None,
                 tension_level, affective_charge, existential_depth,
                 intensity_level, complexity,
                 ",".join(keywords) if keywords else "",
-                platform
-            ))
+                platform,
+            ]
+            if relation_id and "relation_id" in conversation_columns:
+                insert_columns.append("relation_id")
+                insert_values.append(relation_id)
+            placeholders = ", ".join("?" for _ in insert_values)
+            cursor.execute(
+                f"INSERT INTO conversations ({', '.join(insert_columns)}) VALUES ({placeholders})",
+                tuple(insert_values),
+            )
 
             conversation_id = cursor.lastrowid
             chroma_id = f"conv_{conversation_id}"
@@ -165,7 +200,8 @@ class ConversationDatabaseMixin:
         self,
         user_id: str,
         limit: int = 10,
-        include_proactive: bool = False
+        include_proactive: bool = False,
+        relation_id: Optional[str] = None,
     ) -> List[Dict]:
         """
         Busca Ãºltimas conversas do usuÃ¡rio (SQLite)
@@ -180,25 +216,24 @@ class ConversationDatabaseMixin:
         """
         cursor = self.conn.cursor()
 
-        if include_proactive:
-            # Incluir TODAS as conversas (reativas + proativas)
-            query = """
-                SELECT * FROM conversations
-                WHERE user_id = ?
-                ORDER BY timestamp DESC
-                LIMIT ?
-            """
-            params = (user_id, limit)
-        else:
-            # Comportamento padrÃ£o: excluir proativas
-            query = """
-                SELECT * FROM conversations
-                WHERE user_id = ?
-                  AND (platform IS NULL OR platform NOT IN ('proactive', 'proactive_rumination'))
-                ORDER BY timestamp DESC
-                LIMIT ?
-            """
-            params = (user_id, limit)
+        conversation_columns = {
+            row[1] for row in cursor.execute("PRAGMA table_info(conversations)").fetchall()
+        }
+        clauses = ["user_id = ?"]
+        params: List[Any] = [user_id]
+        if relation_id and "relation_id" in conversation_columns:
+            clauses.append("relation_id = ?")
+            params.append(relation_id)
+        if not include_proactive:
+            clauses.append("(platform IS NULL OR platform NOT IN ('proactive', 'proactive_rumination'))")
+        params.append(limit)
+        query = f"""
+            SELECT * FROM conversations
+            WHERE {' AND '.join(clauses)}
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """
+
 
         cursor.execute(query, params)
 
@@ -217,10 +252,19 @@ class ConversationDatabaseMixin:
 
         return conversations
     
-    def count_conversations(self, user_id: str) -> int:
-        """Conta conversas do usuÃ¡rio"""
+    def count_conversations(self, user_id: str, relation_id: Optional[str] = None) -> int:
+        """Conta conversas do usuario, opcionalmente dentro de uma relacao."""
         cursor = self.conn.cursor()
-        cursor.execute("SELECT COUNT(*) as count FROM conversations WHERE user_id = ?", (user_id,))
+        clauses = ["user_id = ?"]
+        params: List[Any] = [user_id]
+        columns = {row[1] for row in cursor.execute("PRAGMA table_info(conversations)").fetchall()}
+        if relation_id and "relation_id" in columns:
+            clauses.append("relation_id = ?")
+            params.append(relation_id)
+        cursor.execute(
+            f"SELECT COUNT(*) AS count FROM conversations WHERE {' AND '.join(clauses)}",
+            tuple(params),
+        )
         return cursor.fetchone()['count']
 
     def conversations_to_chat_history(self, conversations: List[Dict]) -> List[Dict]:

@@ -1,6 +1,6 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 3.0 - Primeiro Corte do Dominio Relations - Agosto 2026**
+**Versao 3.1 - Vinculo Relacional nas Conversas - Agosto 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
@@ -435,6 +435,8 @@ A partir de 18/08/2026, o roadmap passa a ter duas trilhas coordenadas. A trilha
 
 **Primeiro corte implementado em 21/08/2026**: foi criado o registro persistente `agent_relations`, com escopo por `agent_instance` e `org_id`, participante, papel, estado da relacao, estado de consentimento, cadencia, ultima interacao, metadados e escopo JSON. O registro e idempotente por par instancia/participante, possui consultas filtradas e um probe read-only `relations`. Este corte e fundacional: ainda nao migra conversas, memoria, ruminacao, Working Memory, pressao ou vontade para o novo escopo.
 
+**Segundo corte implementado em 21/08/2026**: conversas passaram a aceitar `relation_id` de forma aditiva. Quando o participante ja possui uma relacao registrada para a instancia, o vinculo e resolvido automaticamente no salvamento; leituras e contagens podem filtrar por relacao. Historico antigo, usuarios sem relacao e esquemas de teste legados continuam validos. O estado relacional, a memoria semantica, a ruminacao e a vontade ainda nao foram migrados para esse escopo.
+
 **Modelo alvo**:
 
 1. **Identidade do participante**: identidade canonica, identificadores por plataforma, consentimento, escopo de visibilidade e estado de acesso.
@@ -601,6 +603,7 @@ Em 19/08/2026 foi auditado o caminho completo `scores -> pressao -> pulso -> aca
 | Versao 2.8 - Catalogo Futuro de Informacao da API | 19/08/2026 | Registra a superficie futura de informacao, estado, evidencia, intencao, governanca e eventos da API |
 | Versao 2.9 - Correcao e Auditoria Preliminar da Vontade | 19/08/2026 | Corrige descarga indevida em falhas de pulso, registra 440 testes e abre o backlog estrutural da futura fase da vontade |
 | Versao 3.0 - Primeiro Corte do Dominio Relations | 21/08/2026 | Cria o registro persistente de relacoes por instancia/organizacao, com consentimento, escopo, ciclo de vida, isolamento e probe read-only; memoria e vontade ainda aguardam cortes posteriores |
+| Versao 3.1 - Vinculo Relacional nas Conversas | 21/08/2026 | Adiciona `relation_id` de forma retrocompativel as conversas, com resolucao automatica para relacoes existentes e filtros por relacao |
 
 ---
 

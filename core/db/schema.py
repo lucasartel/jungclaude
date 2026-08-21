@@ -63,6 +63,13 @@ class SchemaDatabaseMixin:
             )
         """)
         
+        # Relation binding is additive so existing conversation history remains readable.
+        try:
+            cursor.execute("ALTER TABLE conversations ADD COLUMN relation_id TEXT")
+        except sqlite3.OperationalError as exc:
+            if "duplicate column name" not in str(exc).lower():
+                logger.warning("Could not add conversations.relation_id: %s", exc)
+
         # ========== FATOS ESTRUTURADOS ==========
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_facts (
@@ -1046,6 +1053,7 @@ class SchemaDatabaseMixin:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_user_timestamp ON conversations(user_id, timestamp DESC)")  # Composto
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_chroma ON conversations(chroma_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_session ON conversations(session_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_relation ON conversations(relation_id, timestamp DESC)")
 
         # Conflitos
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conflict_user ON archetype_conflicts(user_id)")
