@@ -2066,6 +2066,20 @@ except Exception as e:
     logger.error(f"❌ Erro ao carregar user analysis routes: {e}")
     logger.error(traceback.format_exc())
 
+# Cockpit multi-tenant de relações
+try:
+    from admin_web.routes.relations_routes import router as relations_router, init_relations_routes
+    if hasattr(bot_state, 'db') and bot_state.db:
+        init_relations_routes(bot_state.db)
+        app.include_router(relations_router)
+        logger.info("✅ Rotas de Relations carregadas")
+    else:
+        logger.warning("⚠️  DatabaseManager não disponível - Relations routes não carregadas")
+except Exception as e:
+    import traceback
+    logger.error(f"❌ Erro ao carregar Relations routes: {e}")
+    logger.error(traceback.format_exc())
+
 # Rotas legadas de psicometria
 try:
     from admin_web.routes.psychometrics_routes import router as psychometrics_router, init_psychometrics_routes

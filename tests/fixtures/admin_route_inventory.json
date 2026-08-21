@@ -639,6 +639,33 @@
     "migration_bucket": "psychometrics_routes"
   },
   {
+    "module": "admin_web/routes/relations_routes.py",
+    "method": "GET",
+    "path": "",
+    "full_path": "/admin/relations",
+    "endpoint": "relations_dashboard",
+    "line": 157,
+    "migration_bucket": "relations_routes"
+  },
+  {
+    "module": "admin_web/routes/relations_routes.py",
+    "method": "POST",
+    "path": "",
+    "full_path": "/admin/relations",
+    "endpoint": "create_or_update_relation",
+    "line": 164,
+    "migration_bucket": "relations_routes"
+  },
+  {
+    "module": "admin_web/routes/relations_routes.py",
+    "method": "POST",
+    "path": "/{relation_id}/state",
+    "full_path": "/admin/relations/{relation_id}/state",
+    "endpoint": "update_relation_state",
+    "line": 197,
+    "migration_bucket": "relations_routes"
+  },
+  {
     "module": "admin_web/routes/research_lab_routes.py",
     "method": "GET",
     "path": "/memory-metrics",
@@ -869,7 +896,7 @@
     "path": "/user/{user_id}/analysis",
     "full_path": "/admin/user/{user_id}/analysis",
     "endpoint": "user_analysis_page",
-    "line": 131,
+    "line": 76,
     "migration_bucket": "user_analysis_routes"
   },
   {
@@ -878,7 +905,7 @@
     "path": "/user/{user_id}/agent-data",
     "full_path": "/admin/user/{user_id}/agent-data",
     "endpoint": "user_agent_data_page",
-    "line": 167,
+    "line": 112,
     "migration_bucket": "user_analysis_routes"
   },
   {
