@@ -182,7 +182,52 @@ class RelationsDatabaseMixin:
                 (clean_instance, clean_participant),
             )
             row = cursor.fetchone()
-            return str(row[0]) if row else relation_id
+            resolved_relation_id = str(row[0]) if row else relation_id
+            self._bind_legacy_participant_rows(
+                participant_user_id=clean_participant,
+                relation_id=resolved_relation_id,
+            )
+            self.conn.commit()
+            return resolved_relation_id
+
+    def resolve_relation_id(
+        self,
+        *,
+        agent_instance: Optional[str] = None,
+        participant_user_id: Optional[str] = None,
+        relation_id: Optional[str] = None,
+    ) -> Optional[str]:
+        """Resolve the explicit relation scope while preserving legacy callers."""
+        if relation_id:
+            return str(relation_id)
+        if not participant_user_id:
+            return None
+        instance = agent_instance or getattr(self, "agent_instance", None)
+        if not instance:
+            try:
+                from instance_config import AGENT_INSTANCE
+                instance = AGENT_INSTANCE
+            except ImportError:
+                instance = None
+        if not instance:
+            return None
+        relation = self.get_agent_relation_for_participant(
+            agent_instance=str(instance),
+            participant_user_id=str(participant_user_id),
+        )
+        return str(relation["relation_id"]) if relation else None
+
+    def _bind_legacy_participant_rows(self, *, participant_user_id: str, relation_id: str) -> None:
+        """Bind pre-Relations rows to the participant's unique relation."""
+        cursor = self.conn.cursor()
+        for table in ("conversations", "user_facts", "user_facts_v2", "relational_state"):
+            columns = {row[1] for row in cursor.execute(f"PRAGMA table_info({table})")}
+            if "relation_id" not in columns or "user_id" not in columns:
+                continue
+            cursor.execute(
+                f"UPDATE {table} SET relation_id = ? WHERE user_id = ? AND relation_id IS NULL",
+                (relation_id, participant_user_id),
+            )
 
     def get_agent_relation(self, relation_id: str) -> Optional[Dict[str, Any]]:
         cursor = self.conn.cursor()

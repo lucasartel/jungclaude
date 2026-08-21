@@ -6,6 +6,19 @@ logger = logging.getLogger(__name__)
 
 
 class FactLookupDatabaseMixin:
+    def _fact_relation_scope(self, table: str, user_id: str, relation_id=None):
+        if not relation_id:
+            resolver = getattr(self, "resolve_relation_id", None)
+            if callable(resolver):
+                relation_id = resolver(participant_user_id=user_id)
+        try:
+            columns = {row[1] for row in self.conn.execute(f"PRAGMA table_info({table})")}
+        except Exception:
+            columns = set()
+        if relation_id and "relation_id" in columns:
+            return " AND relation_id = ?", [str(relation_id)]
+        return "", []
+
     def _is_factual_memory_query(self, text: str) -> bool:
         """
         Detecta perguntas factuais diretas sobre o usuÃ¡rio.
@@ -37,16 +50,24 @@ class FactLookupDatabaseMixin:
             "meus filhos",
             "minha filha",
             "meu filho",
-            "minha profissÃ£o",
+            "minha profissã",
             "minha profissao",
             "onde trabalho",
             "meu trabalho",
             "minha idade",
             "meu pai",
-            "minha mÃ£e",
+            "minha mãe",
             "minha mae",
-            "minha famÃ­lia",
+            "minha família",
             "minha familia",
+            "sobre o nome",
+            "sobre nome",
+            "se lembra",
+            "lembra de",
+            "nome da minha",
+            "nome do meu",
+            "quem é",
+            "quem e",
         ]
 
         has_memory_marker = any(marker in text_lower for marker in memory_markers) or "?" in text_lower
@@ -54,8 +75,8 @@ class FactLookupDatabaseMixin:
 
         return has_memory_marker and has_identity_target
 
-    def _get_current_facts_any(self, user_id: str) -> List[Dict]:
-        """Retorna fatos atuais do usuÃ¡rio com fallback entre V2 e V1."""
+    def _get_current_facts_any(self, user_id: str, relation_id=None) -> List[Dict]:
+        """Retorna fatos atuais do usuário com fallback entre V2 e V1."""
         with self._lock:
             cursor = self.conn.cursor()
             cursor.execute("""
@@ -71,12 +92,13 @@ class FactLookupDatabaseMixin:
             use_v1 = cursor.fetchone() is not None
 
             if use_v2:
-                cursor.execute("""
+                scope_sql, scope_params = self._fact_relation_scope("user_facts_v2", user_id, relation_id)
+                cursor.execute(f"""
                     SELECT fact_category, fact_type, fact_attribute, fact_value, confidence
                     FROM user_facts_v2
-                    WHERE user_id = ? AND is_current = 1
+                    WHERE user_id = ? AND is_current = 1{scope_sql}
                     ORDER BY confidence DESC, fact_type, fact_attribute
-                """, (user_id,))
+                """, (user_id, *scope_params))
                 rows = cursor.fetchall()
                 return [
                     {
@@ -92,12 +114,13 @@ class FactLookupDatabaseMixin:
             if not use_v1:
                 return []
 
-            cursor.execute("""
+            scope_sql, scope_params = self._fact_relation_scope("user_facts", user_id, relation_id)
+            cursor.execute(f"""
                 SELECT fact_category, fact_key, fact_value, confidence
                 FROM user_facts
-                WHERE user_id = ? AND is_current = 1
+                WHERE user_id = ? AND is_current = 1{scope_sql}
                 ORDER BY confidence DESC, fact_category, fact_key
-            """, (user_id,))
+            """, (user_id, *scope_params))
             rows = cursor.fetchall()
             return [
                 {
@@ -110,14 +133,14 @@ class FactLookupDatabaseMixin:
                 for row in rows
             ]
 
-    def _get_priority_facts_for_query(self, user_id: str, query: str, limit: int = 8) -> List[Dict]:
+    def _get_priority_facts_for_query(self, user_id: str, query: str, limit: int = 8, relation_id=None) -> List[Dict]:
         """
-        Ranqueia fatos canÃ´nicos para perguntas factuais diretas.
+        Ranqueia fatos canônicos para perguntas factuais diretas.
         """
         if not self._is_factual_memory_query(query):
             return []
 
-        facts = self._get_current_facts_any(user_id)
+        facts = self._get_current_facts_any(user_id, relation_id=relation_id)
         if not facts:
             return []
 
@@ -125,9 +148,9 @@ class FactLookupDatabaseMixin:
         query_topics = set(self._detect_topics_in_text(query))
 
         topic_aliases = {
-            "familia": {"esposa", "marido", "filho", "filha", "pai", "mÃ£e", "mae", "famÃ­lia", "familia", "nome"},
-            "trabalho": {"profissÃ£o", "profissao", "trabalho", "empresa", "cargo", "funÃ§Ã£o", "funcao"},
-            "saude": {"saÃºde", "saude", "terapia", "ansiedade", "depressÃ£o", "depressao"},
+            "familia": {"esposa", "marido", "filho", "filha", "filhos", "pai", "mãe", "mae", "família", "familia", "nome", "irmão", "irmao", "irmã", "irma"},
+            "trabalho": {"profissão", "profissao", "trabalho", "empresa", "cargo", "função", "funcao"},
+            "saude": {"saúde", "saude", "terapia", "ansiedade", "depressão", "depressao"},
         }
 
         ranked = []
@@ -140,31 +163,31 @@ class FactLookupDatabaseMixin:
 
             score = confidence
 
-            if fact_type and fact_type in query_lower:
+            if fact_type and (fact_type in query_lower or query_lower in fact_type):
                 score += 4
             if attribute and attribute in query_lower:
                 score += 3
             if attribute == "nome" and "nome" in query_lower:
                 score += 4
-            if any(token in query_lower for token in [value]) and len(value) > 2:
-                score += 1
+            if value and len(value) > 2 and value in query_lower:
+                score += 3
 
             for topic in query_topics:
                 aliases = topic_aliases.get(topic, set())
                 if fact_type in aliases or attribute in aliases:
                     score += 3
-                if topic == "trabalho" and category == "trabalho":
+                if topic == "trabalho" and category in {"trabalho", "profissional"}:
                     score += 2
-                if topic == "familia" and category == "relacionamento":
+                if topic == "familia" and category in {"relacionamento", "familia"}:
                     score += 2
 
             if "esposa" in query_lower and fact_type == "esposa":
                 score += 5
-            if ("filhos" in query_lower or "filho" in query_lower or "filha" in query_lower) and fact_type == "filhos":
+            if ("filhos" in query_lower or "filho" in query_lower or "filha" in query_lower) and fact_type in {"filhos", "filho", "filha"}:
                 score += 5
-            if ("profissÃ£o" in query_lower or "profissao" in query_lower or "trabalho" in query_lower) and category == "trabalho":
+            if ("profissão" in query_lower or "profissao" in query_lower or "trabalho" in query_lower) and (category == "trabalho" or fact_type in {"profissao", "profissão", "cargo"}):
                 score += 4
-            if ("pai" in query_lower or "mÃ£e" in query_lower or "mae" in query_lower) and fact_type in {"pai", "mÃ£e", "mae"}:
+            if ("pai" in query_lower or "mãe" in query_lower or "mae" in query_lower) and fact_type in {"pai", "mãe", "mae"}:
                 score += 5
 
             ranked.append((score, fact))

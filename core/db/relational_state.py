@@ -101,6 +101,7 @@ class RelationalStateDatabaseMixin:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 agent_instance TEXT NOT NULL,
                 user_id TEXT NOT NULL,
+                relation_id TEXT,
                 snapshot_date DATE NOT NULL,
                 cadence_baseline_hours REAL,
                 last_contact_at DATETIME,
@@ -116,6 +117,10 @@ class RelationalStateDatabaseMixin:
             )
             """
         )
+        try:
+            cursor.execute("ALTER TABLE relational_state ADD COLUMN relation_id TEXT")
+        except Exception:
+            pass
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_relational_state_latest "
             "ON relational_state(agent_instance, user_id, snapshot_date DESC)"
@@ -123,6 +128,10 @@ class RelationalStateDatabaseMixin:
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_relational_state_user "
             "ON relational_state(user_id, snapshot_date DESC)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_relational_state_relation "
+            "ON relational_state(relation_id, snapshot_date DESC)"
         )
         self.conn.commit()
 
@@ -140,10 +149,17 @@ class RelationalStateDatabaseMixin:
         agent_stance: str = "curious",
         source_refs: Any = None,
         notes: Optional[str] = None,
+        relation_id: Optional[str] = None,
     ) -> int:
         snap_date = _normalize_snapshot_date(snapshot_date)
         stance = _normalize_stance(agent_stance)
         refs = _normalize_source_refs(source_refs, required=True)
+        resolver = getattr(self, "resolve_relation_id", None)
+        if not relation_id and callable(resolver):
+            relation_id = resolver(
+                agent_instance=agent_instance,
+                participant_user_id=user_id,
+            )
         last_contact_iso: Optional[str] = None
         if last_contact_at is not None:
             if isinstance(last_contact_at, datetime):
@@ -156,12 +172,12 @@ class RelationalStateDatabaseMixin:
             cursor.execute(
                 """
                 INSERT INTO relational_state (
-                    agent_instance, user_id, snapshot_date,
+                    agent_instance, user_id, relation_id, snapshot_date,
                     cadence_baseline_hours, last_contact_at, silence_delta_hours,
                     affective_tone_recent_json, recurring_themes_json,
                     agent_stance, source_refs_json, notes,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(agent_instance, user_id, snapshot_date) DO UPDATE SET
                     cadence_baseline_hours = excluded.cadence_baseline_hours,
                     last_contact_at = excluded.last_contact_at,
@@ -171,11 +187,13 @@ class RelationalStateDatabaseMixin:
                     agent_stance = excluded.agent_stance,
                     source_refs_json = excluded.source_refs_json,
                     notes = excluded.notes,
+                    relation_id = excluded.relation_id,
                     updated_at = excluded.updated_at
                 """,
                 (
                     agent_instance,
                     user_id,
+                    relation_id,
                     snap_date,
                     cadence_baseline_hours,
                     last_contact_iso,
@@ -205,16 +223,22 @@ class RelationalStateDatabaseMixin:
         *,
         agent_instance: str,
         user_id: str,
+        relation_id: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
+        resolver = getattr(self, "resolve_relation_id", None)
+        if not relation_id and callable(resolver):
+            relation_id = resolver(agent_instance=agent_instance, participant_user_id=user_id)
+        relation_clause = " AND relation_id = ?" if relation_id else ""
+        params = [agent_instance, user_id] + ([relation_id] if relation_id else [])
         cursor = self.conn.cursor()
         cursor.execute(
-            """
+            f"""
             SELECT * FROM relational_state
-            WHERE agent_instance = ? AND user_id = ?
+            WHERE agent_instance = ? AND user_id = ?{relation_clause}
             ORDER BY snapshot_date DESC, id DESC
             LIMIT 1
             """,
-            (agent_instance, user_id),
+            tuple(params),
         )
         row = cursor.fetchone()
         if not row:
@@ -227,16 +251,22 @@ class RelationalStateDatabaseMixin:
         agent_instance: str,
         user_id: str,
         limit: int = 20,
+        relation_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
+        resolver = getattr(self, "resolve_relation_id", None)
+        if not relation_id and callable(resolver):
+            relation_id = resolver(agent_instance=agent_instance, participant_user_id=user_id)
+        relation_clause = " AND relation_id = ?" if relation_id else ""
+        params = [agent_instance, user_id] + ([relation_id] if relation_id else []) + [int(limit)]
         cursor = self.conn.cursor()
         cursor.execute(
-            """
+            f"""
             SELECT * FROM relational_state
-            WHERE agent_instance = ? AND user_id = ?
+            WHERE agent_instance = ? AND user_id = ?{relation_clause}
             ORDER BY snapshot_date DESC, id DESC
             LIMIT ?
             """,
-            (agent_instance, user_id, int(limit)),
+            tuple(params),
         )
         return [self._relational_state_row_to_dict(row) for row in cursor.fetchall()]
 
@@ -245,6 +275,7 @@ class RelationalStateDatabaseMixin:
             "id",
             "agent_instance",
             "user_id",
+            "relation_id",
             "snapshot_date",
             "cadence_baseline_hours",
             "last_contact_at",
@@ -257,7 +288,13 @@ class RelationalStateDatabaseMixin:
             "created_at",
             "updated_at",
         )
-        data = dict(zip(cols, row))
+        if hasattr(row, "keys"):
+            data = dict(row)
+        elif len(row) == len(cols) - 1:
+            legacy_cols = tuple(col for col in cols if col != "relation_id")
+            data = dict(zip(legacy_cols, row))
+        else:
+            data = dict(zip(cols, row))
         data["affective_tone_recent"] = _json_loads(
             data.pop("affective_tone_recent_json", "{}"), default={}
         )

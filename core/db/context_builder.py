@@ -11,11 +11,14 @@ class ContextBuilderDatabaseMixin:
     # CONSTRUCAO DE CONTEXTO
     # ========================================
 
-    def build_priority_fact_context(self, user_id: str, query: str, limit: int = 8) -> str:
+    def build_priority_fact_context(self, user_id: str, query: str, limit: int = 8, relation_id=None) -> str:
         """
         ConstrÃ³i contexto factual prioritÃ¡rio para perguntas diretas de memÃ³ria.
         """
-        priority_facts = self._get_priority_facts_for_query(user_id, query, limit=limit)
+        if relation_id:
+            priority_facts = self._get_priority_facts_for_query(user_id, query, limit=limit, relation_id=relation_id)
+        else:
+            priority_facts = self._get_priority_facts_for_query(user_id, query, limit=limit)
         if not priority_facts:
             return ""
 
@@ -35,7 +38,7 @@ class ContextBuilderDatabaseMixin:
     # CONSTRUÃƒâ€¡ÃƒÆ’O DE CONTEXTO
     # ========================================
 
-    def _search_relevant_facts(self, user_id: str, query: str) -> List[Dict]:
+    def _search_relevant_facts(self, user_id: str, query: str, relation_id=None) -> List[Dict]:
         """
         Busca fatos relevantes ao input atual (Fase 5)
 
@@ -60,6 +63,15 @@ class ContextBuilderDatabaseMixin:
         use_v2 = cursor.fetchone() is not None
 
         relevant_facts = []
+        resolver = getattr(self, "resolve_relation_id", None)
+        if not relation_id and callable(resolver):
+            relation_id = resolver(participant_user_id=user_id)
+        def scope(table):
+            try:
+                columns = {row[1] for row in cursor.execute(f"PRAGMA table_info({table})")}
+            except Exception:
+                columns = set()
+            return (" AND relation_id = ?", [relation_id]) if relation_id and "relation_id" in columns else ("", [])
 
         # Buscar fatos sobre pessoas mencionadas
         if mentioned_names:
@@ -68,16 +80,16 @@ class ContextBuilderDatabaseMixin:
                     cursor.execute("""
                         SELECT fact_category, fact_type, fact_attribute, fact_value, confidence
                         FROM user_facts_v2
-                        WHERE user_id = ? AND fact_value LIKE ? AND is_current = 1
+                        WHERE user_id = ? AND fact_value LIKE ? AND is_current = 1{scope_sql}
                         LIMIT 5
-                    """, (user_id, f"%{name}%"))
+                    """.format(scope_sql=scope("user_facts_v2")[0]), (user_id, f"%{name}%", *scope("user_facts_v2")[1]))
                 else:
                     cursor.execute("""
                         SELECT fact_category, fact_key AS fact_attribute, fact_value
                         FROM user_facts
-                        WHERE user_id = ? AND fact_value LIKE ? AND is_current = 1
+                        WHERE user_id = ? AND fact_value LIKE ? AND is_current = 1{scope_sql}
                         LIMIT 5
-                    """, (user_id, f"%{name}%"))
+                    """.format(scope_sql=scope("user_facts")[0]), (user_id, f"%{name}%", *scope("user_facts")[1]))
 
                 relevant_facts.extend([dict(row) for row in cursor.fetchall()])
 
@@ -95,16 +107,16 @@ class ContextBuilderDatabaseMixin:
                     cursor.execute("""
                         SELECT fact_category, fact_type, fact_attribute, fact_value, confidence
                         FROM user_facts_v2
-                        WHERE user_id = ? AND fact_category = ? AND is_current = 1
+                        WHERE user_id = ? AND fact_category = ? AND is_current = 1{scope_sql}
                         LIMIT 5
-                    """, (user_id, category))
+                    """.format(scope_sql=scope("user_facts_v2")[0]), (user_id, category, *scope("user_facts_v2")[1]))
                 else:
                     cursor.execute("""
                         SELECT fact_category, fact_key AS fact_attribute, fact_value
                         FROM user_facts
-                        WHERE user_id = ? AND fact_category = ? AND is_current = 1
+                        WHERE user_id = ? AND fact_category = ? AND is_current = 1{scope_sql}
                         LIMIT 5
-                    """, (user_id, category))
+                    """.format(scope_sql=scope("user_facts")[0]), (user_id, category, *scope("user_facts")[1]))
 
                 relevant_facts.extend([dict(row) for row in cursor.fetchall()])
 
@@ -190,7 +202,7 @@ class ContextBuilderDatabaseMixin:
 
     def build_rich_context(self, user_id: str, current_input: str,
                           k_memories: int = None,
-                          chat_history: List[Dict] = None) -> str:
+                          chat_history: List[Dict] = None, relation_id=None) -> str:
         """
         ConstrÃ³i contexto HIERÃRQUICO e ESTRATIFICADO (Fase 5)
 
@@ -217,7 +229,7 @@ class ContextBuilderDatabaseMixin:
 
         context_parts = []
 
-        priority_fact_context = self.build_priority_fact_context(user_id, current_input, limit=8)
+        priority_fact_context = self.build_priority_fact_context(user_id, current_input, limit=8, relation_id=relation_id)
         if priority_fact_context:
             context_parts.append(priority_fact_context)
             context_parts.append("")
@@ -236,7 +248,7 @@ class ContextBuilderDatabaseMixin:
             context_parts.append("")
 
         # ===== LAYER 2: FATOS RELEVANTES =====
-        relevant_facts = self._search_relevant_facts(user_id, current_input)
+        relevant_facts = self._search_relevant_facts(user_id, current_input, relation_id=relation_id)
 
         if relevant_facts:
             context_parts.append("=== FATOS RELEVANTES ===\n")
@@ -245,7 +257,10 @@ class ContextBuilderDatabaseMixin:
 
 
         # ===== LAYER 3: MEMÃ“RIAS SEMÃ‚NTICAS =====
-        memories = self.semantic_search(user_id, current_input, k=k_memories, chat_history=chat_history)
+        if relation_id:
+            memories = self.semantic_search(user_id, current_input, k=k_memories, chat_history=chat_history, relation_id=relation_id)
+        else:
+            memories = self.semantic_search(user_id, current_input, k=k_memories, chat_history=chat_history)
 
         if memories:
             context_parts.append("=== MEMÃ“RIAS RELACIONADAS ===\n")

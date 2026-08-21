@@ -1,6 +1,6 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 3.2 - Cockpit de Relations - Agosto 2026**
+**Versao 3.3 - Escopo cognitivo por Relation - Agosto 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
@@ -439,6 +439,8 @@ A partir de 18/08/2026, o roadmap passa a ter duas trilhas coordenadas. A trilha
 
 **Terceiro corte implementado em 21/08/2026**: o cockpit administrativo ganhou a area `Relations`, com leitura multi-tenant das relacoes da instancia, cadastro explicito de vinculos, atualizacao de estado/consentimento e indicadores de interacoes por relacao. O antigo `/admin/wellness` permanece como redirecionamento de compatibilidade; Wellness deixa de ser a area principal e continua disponivel apenas como recurso legado de compreensao do admin. O cockpit nao carrega texto de conversas nem memoria bruta. A conexao de memoria, ruminacao e vontade ao vinculo relacional continua sendo o proximo corte cognitivo.
 
+**Quarto corte implementado em 21/08/2026**: o escopo cognitivo minimo passou a acompanhar `relation_id` em `relational_state`, fatos estruturados V1/V2 e fallback semantico SQLite. O registro de uma Relation reancora linhas legadas do participante em conversas, fatos e estado relacional; os leitores de fatos e contexto filtram a relacao explicita. O mem0/Qdrant passou a usar namespace exclusivo `relation:<id>`, sem fallback para namespace compartilhado. O corte preserva chamadas antigas sem Relation, mas nao mistura memoria semantica legada automaticamente: uma migracao de memoria historica devera ser definida antes de reimportar dados antigos. Ruminacao, vontade, pressao, Working Memory e campo relacional agregado ainda aguardam cortes proprios.
+
 **Modelo alvo**:
 
 1. **Identidade do participante**: identidade canonica, identificadores por plataforma, consentimento, escopo de visibilidade e estado de acesso.
@@ -607,6 +609,7 @@ Em 19/08/2026 foi auditado o caminho completo `scores -> pressao -> pulso -> aca
 | Versao 3.0 - Primeiro Corte do Dominio Relations | 21/08/2026 | Cria o registro persistente de relacoes por instancia/organizacao, com consentimento, escopo, ciclo de vida, isolamento e probe read-only; memoria e vontade ainda aguardam cortes posteriores |
 | Versao 3.1 - Vinculo Relacional nas Conversas | 21/08/2026 | Adiciona `relation_id` de forma retrocompativel as conversas, com resolucao automatica para relacoes existentes e filtros por relacao |
 | Versao 3.2 - Cockpit de Relations | 21/08/2026 | Substitui Wellness como area principal, adiciona cadastro/gestao de relacoes multi-tenant e preserva o endpoint legado por redirecionamento |
+| Versao 3.3 - Escopo cognitivo por Relation | 21/08/2026 | Propaga `relation_id` para estado relacional, fatos, fallback SQLite e namespace mem0, com reancoragem legada e testes de isolamento |
 
 ---
 

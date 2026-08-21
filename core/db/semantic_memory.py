@@ -276,7 +276,7 @@ class SemanticMemoryDatabaseMixin:
     # ========================================
 
     def semantic_search(self, user_id: str, query: str, k: int = None,
-                       chat_history: List[Dict] = None) -> List[Dict]:
+                       chat_history: List[Dict] = None, relation_id=None) -> List[Dict]:
         """
         Retrieve related memories from mem0/Qdrant, with SQLite/BM25 fallback.
 
@@ -288,10 +288,17 @@ class SemanticMemoryDatabaseMixin:
         if not user_id_str:
             logger.error("user_id vazio na busca semantica")
             return []
+        if not relation_id:
+            resolver = getattr(self, "resolve_relation_id", None)
+            if callable(resolver):
+                relation_id = resolver(participant_user_id=user_id_str)
 
         if self.mem0:
             try:
-                mem0_context = self.mem0.get_context(user_id_str, query, limit=limit)
+                if relation_id:
+                    mem0_context = self.mem0.get_context(user_id_str, query, limit=limit, relation_id=relation_id)
+                else:
+                    mem0_context = self.mem0.get_context(user_id_str, query, limit=limit)
                 mem0_memories = self._mem0_context_to_memory_rows(mem0_context, limit=limit)
                 if mem0_memories:
                     logger.info("mem0/Qdrant: %s memorias retornadas", len(mem0_memories))
@@ -300,7 +307,7 @@ class SemanticMemoryDatabaseMixin:
                 logger.warning("[MEM0] Falha na busca semantica; usando fallback SQLite/BM25: %s", exc)
 
         logger.info("mem0/Qdrant sem retorno; usando fallback SQLite/BM25")
-        return self._fallback_keyword_search(user_id_str, query, limit)
+        return self._fallback_keyword_search(user_id_str, query, limit, relation_id=relation_id)
 
     def _mem0_context_to_memory_rows(self, context: str, limit: int = 5) -> List[Dict]:
         rows: List[Dict] = []
@@ -321,18 +328,21 @@ class SemanticMemoryDatabaseMixin:
             })
         return rows
 
-    def _fallback_keyword_search(self, user_id: str, query: str, k: int = 5) -> List[Dict]:
+    def _fallback_keyword_search(self, user_id: str, query: str, k: int = 5, relation_id=None) -> List[Dict]:
         """Busca por keywords quando mem0/Qdrant nao retorna contexto suficiente."""
         cursor = self.conn.cursor()
         
         search_term = f"%{query}%"
-        cursor.execute("""
+        columns = {row[1] for row in cursor.execute("PRAGMA table_info(conversations)")}
+        relation_clause = " AND relation_id = ?" if relation_id and "relation_id" in columns else ""
+        params = [user_id, search_term, search_term] + ([relation_id] if relation_clause else []) + [k]
+        cursor.execute(f"""
             SELECT * FROM conversations
-            WHERE user_id = ? 
-            AND (user_input LIKE ? OR ai_response LIKE ?)
+            WHERE user_id = ?
+            AND (user_input LIKE ? OR ai_response LIKE ?){relation_clause}
             ORDER BY timestamp DESC
             LIMIT ?
-        """, (user_id, search_term, search_term, k))
+        """, tuple(params))
         
         results = []
         for row in cursor.fetchall():

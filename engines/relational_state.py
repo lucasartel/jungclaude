@@ -144,7 +144,7 @@ def _decide_stance(
 class RelationalStateEngine:
     """Builds relational_state snapshots from observed conversation signals."""
 
-    def __init__(self, db_manager: Any, agent_instance: Optional[str] = None):
+    def __init__(self, db_manager: Any, agent_instance: Optional[str] = None, relation_id: Optional[str] = None):
         self.db = db_manager
         self.agent_instance = agent_instance
         if not self.agent_instance:
@@ -152,6 +152,7 @@ class RelationalStateEngine:
         if not self.agent_instance:
             from instance_config import AGENT_INSTANCE
             self.agent_instance = AGENT_INSTANCE
+        self.relation_id = relation_id
 
     def _recent_conversations(
         self,
@@ -159,19 +160,30 @@ class RelationalStateEngine:
         *,
         baseline_days: int,
         recent_days: int,
+        relation_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
+        resolved_relation = relation_id or self.relation_id
+        resolver = getattr(self.db, "resolve_relation_id", None)
+        if not resolved_relation and callable(resolver):
+            resolved_relation = resolver(
+                agent_instance=self.agent_instance,
+                participant_user_id=user_id,
+            )
+        relation_clause = " AND relation_id = ?" if resolved_relation else ""
+        params = [user_id] + ([resolved_relation] if resolved_relation else []) + [max(baseline_days, recent_days) * 20]
         cursor = self.db.conn.cursor()
         cursor.execute(
-            """
+            f"""
             SELECT id, timestamp, user_input, ai_response,
                    affective_charge, intensity_level, tension_level
             FROM conversations
             WHERE user_id = ?
+              {relation_clause}
               AND timestamp IS NOT NULL
             ORDER BY timestamp DESC
             LIMIT ?
             """,
-            (user_id, max(baseline_days, recent_days) * 20),
+            tuple(params),
         )
         rows = []
         cols = [
@@ -194,15 +206,25 @@ class RelationalStateEngine:
         snapshot_date: Optional[str] = None,
         baseline_days: int = DEFAULT_BASELINE_WINDOW_DAYS,
         recent_days: int = DEFAULT_RECENT_WINDOW_DAYS,
+        relation_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         now = datetime.utcnow()
         baseline_cutoff = now - timedelta(days=baseline_days)
         recent_cutoff = now - timedelta(days=recent_days)
 
+        resolved_relation = relation_id or self.relation_id
+        if not resolved_relation:
+            resolver = getattr(self.db, "resolve_relation_id", None)
+            if callable(resolver):
+                resolved_relation = resolver(
+                    agent_instance=self.agent_instance,
+                    participant_user_id=user_id,
+                )
         conversations = self._recent_conversations(
             user_id,
             baseline_days=baseline_days,
             recent_days=recent_days,
+            relation_id=resolved_relation,
         )
 
         if not conversations:
@@ -216,6 +238,7 @@ class RelationalStateEngine:
                 "id": None,
                 "agent_instance": self.agent_instance,
                 "user_id": user_id,
+                "relation_id": resolved_relation,
                 "agent_stance": "curious",
                 "skipped_reason": "no_conversations_observed",
             }
@@ -318,6 +341,7 @@ class RelationalStateEngine:
             agent_stance=agent_stance,
             source_refs=source_refs,
             notes=notes,
+            relation_id=resolved_relation,
         )
         logger.info(
             "relational_state refreshed user_id=%s stance=%s silence=%.1fh cadence=%s n_sources=%d",
@@ -332,6 +356,7 @@ class RelationalStateEngine:
             "id": state_id,
             "agent_instance": self.agent_instance,
             "user_id": user_id,
+            "relation_id": resolved_relation,
             "cadence_baseline_hours": cadence_baseline_hours,
             "last_contact_at": last_contact_at.isoformat() if last_contact_at else None,
             "silence_delta_hours": silence_delta_hours,
@@ -341,8 +366,9 @@ class RelationalStateEngine:
             "source_refs": source_refs,
         }
 
-    def get_latest(self, *, user_id: str) -> Optional[Dict[str, Any]]:
+    def get_latest(self, *, user_id: str, relation_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         return self.db.get_latest_relational_state(
             agent_instance=self.agent_instance,
             user_id=user_id,
+            relation_id=relation_id or self.relation_id,
         )

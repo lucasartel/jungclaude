@@ -1153,6 +1153,19 @@ class SchemaDatabaseMixin:
         if hasattr(self, "_init_relations_schema"):
             self._init_relations_schema()
 
+        # Relation scope is additive for both generations of structured facts.
+        for table in ("user_facts", "user_facts_v2"):
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
+            if cursor.fetchone():
+                try:
+                    cursor.execute(f"ALTER TABLE {table} ADD COLUMN relation_id TEXT")
+                except sqlite3.OperationalError as exc:
+                    if "duplicate column name" not in str(exc).lower():
+                        logger.warning("Could not add %s.relation_id: %s", table, exc)
+                cursor.execute(
+                    f"CREATE INDEX IF NOT EXISTS idx_{table}_relation ON {table}(relation_id, user_id)"
+                )
+
         if hasattr(self, "_init_action_proposals_schema"):
             self._init_action_proposals_schema()
 

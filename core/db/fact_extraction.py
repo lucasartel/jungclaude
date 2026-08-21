@@ -7,8 +7,40 @@ logger = logging.getLogger(__name__)
 
 
 class FactExtractionDatabaseMixin:
-    def extract_and_save_facts(self, user_id: str, user_input: str, 
-                               conversation_id: int) -> List[Dict]:
+    def _table_has_column(self, table: str, column: str) -> bool:
+        try:
+            rows = self.conn.execute(f"PRAGMA table_info({table})").fetchall()
+            return column in {row[1] for row in rows}
+        except Exception:
+            return False
+
+    def _relation_id_for_fact(
+        self, user_id: str, relation_id: Optional[str] = None, conversation_id: Optional[int] = None
+    ) -> Optional[str]:
+        if relation_id:
+            return str(relation_id)
+        try:
+            if conversation_id is not None and self._table_has_column("conversations", "relation_id"):
+                row = self.conn.execute(
+                    "SELECT relation_id FROM conversations WHERE id = ? LIMIT 1",
+                    (conversation_id,),
+                ).fetchone()
+                if row and row[0]:
+                    return str(row[0])
+        except Exception:
+            pass
+        resolver = getattr(self, "resolve_relation_id", None)
+        if callable(resolver):
+            return resolver(participant_user_id=user_id)
+        return None
+
+    def _relation_scope(self, table: str, relation_id: Optional[str]):
+        if relation_id and self._table_has_column(table, "relation_id"):
+            return " AND relation_id = ?", [relation_id]
+        return "", []
+
+    def extract_and_save_facts(self, user_id: str, user_input: str,
+                               conversation_id: int, relation_id: Optional[str] = None) -> List[Dict]:
         """
         Extrai fatos estruturados do input do usuÃ¡rio
         
@@ -83,66 +115,55 @@ class FactExtractionDatabaseMixin:
         return extracted
     
     def _save_or_update_fact(self, user_id: str, category: str, key: str,
-                            value: str, conversation_id: int):
-        """Salva ou atualiza fato (com versionamento)"""
-
-        # Log fact metadata only. Avoid persisting extracted content in logs.
-        logger.info(
-            "Saving fact for user_id=%s category=%s key=%s",
-            user_id,
-            category,
-            key,
-        )
+                            value: str, conversation_id: int, relation_id: Optional[str] = None):
+        """Save or update a legacy fact inside the relation scope when available."""
+        relation_id = self._relation_id_for_fact(user_id, relation_id, conversation_id)
+        scope_sql, scope_params = self._relation_scope("user_facts", relation_id)
+        logger.info("Saving fact for user_id=%s category=%s key=%s", user_id, category, key)
 
         with self._lock:
             cursor = self.conn.cursor()
-
-            # Verificar se fato jÃ¡ existe
-            cursor.execute("""
-                SELECT id, fact_value FROM user_facts
-                WHERE user_id = ? AND fact_category = ? AND fact_key = ? AND is_current = 1
-            """, (user_id, category, key))
-
+            cursor.execute(
+                f"""SELECT id, fact_value FROM user_facts
+                    WHERE user_id = ? AND fact_category = ? AND fact_key = ?
+                    AND is_current = 1{scope_sql}""",
+                (user_id, category, key, *scope_params),
+            )
             existing = cursor.fetchone()
-
             if existing:
-                # Se valor mudou, criar nova versÃ£o
-                if existing['fact_value'] != value:
-                    logger.info(f"   âœï¸  Atualizando fato existente: '{existing['fact_value']}' â†’ '{value}'")
-
-                    # Desativar versÃ£o antiga
-                    cursor.execute("""
-                        UPDATE user_facts SET is_current = 0 WHERE id = ?
-                    """, (existing['id'],))
-
-                    # Criar nova versÃ£o
-                    cursor.execute("""
-                        INSERT INTO user_facts
-                        (user_id, fact_category, fact_key, fact_value,
-                         source_conversation_id, version)
-                        SELECT user_id, fact_category, fact_key, ?, ?, version + 1
-                        FROM user_facts WHERE id = ?
-                    """, (value, conversation_id, existing['id']))
-                else:
-                    logger.info(f"   â„¹ï¸  Fato jÃ¡ existe com mesmo valor, pulando")
+                if existing["fact_value"] != value:
+                    cursor.execute("UPDATE user_facts SET is_current = 0 WHERE id = ?", (existing["id"],))
+                    columns = "user_id, fact_category, fact_key, fact_value, source_conversation_id, version"
+                    values = "user_id, fact_category, fact_key, ?, ?, version + 1"
+                    if relation_id and self._table_has_column("user_facts", "relation_id"):
+                        columns = "user_id, relation_id, fact_category, fact_key, fact_value, source_conversation_id, version"
+                        values = "user_id, ?, fact_category, fact_key, ?, ?, version + 1"
+                        params = [relation_id, value, conversation_id]
+                    else:
+                        params = [value, conversation_id]
+                    cursor.execute(
+                        f"INSERT INTO user_facts ({columns}) SELECT {values} FROM user_facts WHERE id = ?",
+                        (*params, existing["id"]),
+                    )
             else:
-                logger.info(f"   âœ¨ Criando novo fato")
-                # Criar fato novo
-                cursor.execute("""
-                    INSERT INTO user_facts
-                    (user_id, fact_category, fact_key, fact_value, source_conversation_id)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (user_id, category, key, value, conversation_id))
-
+                if relation_id and self._table_has_column("user_facts", "relation_id"):
+                    cursor.execute(
+                        "INSERT INTO user_facts (user_id, relation_id, fact_category, fact_key, fact_value, source_conversation_id) VALUES (?, ?, ?, ?, ?, ?)",
+                        (user_id, relation_id, category, key, value, conversation_id),
+                    )
+                else:
+                    cursor.execute(
+                        "INSERT INTO user_facts (user_id, fact_category, fact_key, fact_value, source_conversation_id) VALUES (?, ?, ?, ?, ?)",
+                        (user_id, category, key, value, conversation_id),
+                    )
             self.conn.commit()
-            logger.info(f"   âœ… Fato salvo com sucesso")
 
     # ========================================
     # EXTRAÃ‡ÃƒO DE FATOS V2 (com LLM)
     # ========================================
 
     def extract_and_save_facts_v2(self, user_id: str, user_input: str,
-                                  conversation_id: int) -> List[Dict]:
+                                  conversation_id: int, relation_id: Optional[str] = None) -> List[Dict]:
         """
         Extrai fatos estruturados usando LLM + fallback regex.
         Detecta e processa correÃ§Ãµes ANTES de extrair fatos novos.
@@ -151,14 +172,15 @@ class FactExtractionDatabaseMixin:
         """
 
         extracted_facts = []
+        relation_id = self._relation_id_for_fact(user_id, relation_id, conversation_id)
 
         if not (hasattr(self, 'fact_extractor') and self.fact_extractor):
             logger.info("ðŸ”„ fact_extractor indisponÃ­vel, usando mÃ©todo legado...")
-            return self.extract_and_save_facts(user_id, user_input, conversation_id)
+            return self.extract_and_save_facts(user_id, user_input, conversation_id, relation_id)
 
         try:
             # ETAPA 1: Buscar fatos existentes para contexto de correÃ§Ã£o
-            existing_facts = self._get_current_facts(user_id)
+            existing_facts = self._get_current_facts(user_id, relation_id=relation_id)
             logger.info(f"ðŸ“‹ {len(existing_facts)} fatos existentes carregados para contexto")
 
             # ETAPA 2: Extrair fatos, detectar correÃ§Ãµes e lacunas de conhecimento
@@ -176,7 +198,7 @@ class FactExtractionDatabaseMixin:
 
             # ETAPA 3: Processar correÃ§Ãµes detectadas
             for correction in corrections:
-                self._apply_correction(user_id, correction, conversation_id)
+                self._apply_correction(user_id, correction, conversation_id, relation_id=relation_id)
                 extracted_facts.append({
                     'category': correction.category,
                     'type': correction.fact_type,
@@ -197,7 +219,8 @@ class FactExtractionDatabaseMixin:
                     confidence=fact.confidence,
                     extraction_method='llm',
                     context=fact.context,
-                    conversation_id=conversation_id
+                    conversation_id=conversation_id,
+                    relation_id=relation_id
                 )
                 extracted_facts.append({
                     'category': fact.category,
@@ -221,57 +244,80 @@ class FactExtractionDatabaseMixin:
         # Fallback se nada foi extraÃ­do
         if not extracted_facts:
             logger.info("ðŸ”„ LLM nÃ£o extraiu fatos, usando mÃ©todo legado...")
-            extracted_facts = self.extract_and_save_facts(user_id, user_input, conversation_id)
+            extracted_facts = self.extract_and_save_facts(user_id, user_input, conversation_id, relation_id)
 
         return extracted_facts
 
-    def _get_current_facts(self, user_id: str) -> List[Dict]:
-        """Retorna todos os fatos atuais do usuÃ¡rio (is_current=1)."""
+    def _get_current_facts(self, user_id: str, relation_id: Optional[str] = None) -> List[Dict]:
+        """Return current V2 facts inside the resolved relation scope."""
+        relation_id = self._relation_id_for_fact(user_id, relation_id)
+        scope_sql, scope_params = self._relation_scope("user_facts_v2", relation_id)
         with self._lock:
             cursor = self.conn.cursor()
-            cursor.execute("""
-                SELECT fact_category, fact_type, fact_attribute, fact_value, confidence
-                FROM user_facts_v2
-                WHERE user_id = ? AND is_current = 1
-                ORDER BY fact_type, fact_attribute
-            """, (user_id,))
-            rows = cursor.fetchall()
-            return [
-                {
-                    'category': r[0],
-                    'fact_type': r[1],
-                    'attribute': r[2],
-                    'fact_value': r[3],
-                    'confidence': r[4]
-                }
-                for r in rows
-            ]
+            cursor.execute(
+                f"""SELECT fact_category, fact_type, fact_attribute, fact_value, confidence
+                    FROM user_facts_v2
+                    WHERE user_id = ? AND is_current = 1{scope_sql}
+                    ORDER BY fact_type, fact_attribute""",
+                (user_id, *scope_params),
+            )
+            return [{
+                'category': r[0], 'fact_type': r[1], 'attribute': r[2],
+                'fact_value': r[3], 'confidence': r[4]
+            } for r in cursor.fetchall()]
 
-    def _apply_correction(self, user_id: str, correction, conversation_id: int):
+    def _apply_correction(self, user_id: str, correction, conversation_id: int, relation_id: Optional[str] = None):
         """
-        Aplica uma correÃ§Ã£o detectada:
-        1. Versiona o fato antigo no SQLite
-        2. Mantem mem0/Qdrant como fonte semantica futura via novas trocas
+        Aplica uma correção detectada:
+        1. Desativa a versão antiga no SQLite
+        2. Insere a versão corrigida com is_current = 1
 
         Args:
-            correction: CorrectionIntent com os detalhes da correÃ§Ã£o
+            correction: CorrectionIntent com os detalhes da correção
         """
-        from correction_detector import generate_correction_feedback
+        try:
+            from correction_detector import generate_correction_feedback
+        except ImportError:
+            generate_correction_feedback = None
 
-        # NÃ£o aplicar correÃ§Ãµes de baixa confianÃ§a para evitar falsos positivos
         if correction.confidence < 0.5:
             logger.info(
-                f"âš ï¸ CorreÃ§Ã£o ignorada (confianÃ§a muito baixa={correction.confidence:.2f}): "
-                f"{correction.fact_type}.{correction.attribute} â†’ '{correction.new_value}'"
+                f"⚠️ Correção ignorada (confiança muito baixa={correction.confidence:.2f}): "
+                f"{correction.fact_type}.{correction.attribute} → '{correction.new_value}'"
             )
             return
 
         logger.info(
-            f"ðŸ”§ Aplicando correÃ§Ã£o: {correction.fact_type}.{correction.attribute} "
-            f"'{correction.old_value}' â†’ '{correction.new_value}' (confianÃ§a={correction.confidence:.2f})"
+            f"🔧 Aplicando correção: {correction.fact_type}.{correction.attribute} "
+            f"'{correction.old_value}' → '{correction.new_value}' (confiança={correction.confidence:.2f})"
         )
 
-        # 1. Salvar nova versÃ£o (versionamento automÃ¡tico em _save_fact_v2)
+        relation_id = self._relation_id_for_fact(user_id, relation_id, conversation_id)
+        scope_sql, scope_params = self._relation_scope("user_facts_v2", relation_id)
+        with self._lock:
+            cursor = self.conn.cursor()
+            # Se a correção explicitar o valor antigo, desativar esse valor antigo pontualmente
+            if correction.old_value:
+                cursor.execute(f"""
+                    UPDATE user_facts_v2
+                    SET is_current = 0, updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = ?
+                      AND is_current = 1
+                      AND (fact_value LIKE ? OR (fact_type = ? AND fact_attribute = ?)){scope_sql}
+                """, (user_id, f"%{correction.old_value}%", correction.fact_type, correction.attribute, *scope_params))
+            else:
+                cursor.execute(f"""
+                    UPDATE user_facts_v2
+                    SET is_current = 0, updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = ?
+                      AND fact_category = ?
+                      AND fact_type = ?
+                      AND fact_attribute = ?
+                      AND is_current = 1{scope_sql}
+                """, (user_id, correction.category, correction.fact_type, correction.attribute, *scope_params))
+            self.conn.commit()
+
+        # 1. Salvar nova versão corrigida
         self._save_fact_v2(
             user_id=user_id,
             category=correction.category,
@@ -281,28 +327,28 @@ class FactExtractionDatabaseMixin:
             confidence=correction.confidence,
             extraction_method='correction',
             context=correction.context[:500] if correction.context else None,
-            conversation_id=conversation_id
+            conversation_id=conversation_id,
+            relation_id=relation_id
         )
-        logger.info(f"   âœ… SQLite atualizado")
+        logger.info("   ✅ SQLite atualizado com a correção")
 
-        # 2. Log feedback (para debug/monitoramento)
         feedback = generate_correction_feedback(correction)
         if feedback:
-            logger.info(f"   ðŸ’¬ Feedback de correÃ§Ã£o ambÃ­gua: {feedback}")
+            logger.info(f"   💬 Feedback de correção ambígua: {feedback}")
 
-    def _find_current_fact(self, user_id: str, fact_type: str, attribute: str) -> Optional[Dict]:
-        """Busca o fato atual (is_current=1) de um tipo/atributo especÃ­fico."""
+    def _find_current_fact(self, user_id: str, fact_type: str, attribute: str, relation_id: Optional[str] = None) -> Optional[Dict]:
+        """Busca o fato atual (is_current=1) de um tipo/atributo específico."""
+        relation_id = self._relation_id_for_fact(user_id, relation_id)
+        scope_sql, scope_params = self._relation_scope("user_facts_v2", relation_id)
         with self._lock:
             cursor = self.conn.cursor()
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT id, fact_category, fact_type, fact_attribute, fact_value
                 FROM user_facts_v2
-                WHERE user_id = ?
-                  AND fact_type = ?
-                  AND fact_attribute = ?
-                  AND is_current = 1
+                WHERE user_id = ? AND fact_type = ? AND fact_attribute = ?
+                  AND is_current = 1{scope_sql}
                 LIMIT 1
-            """, (user_id, fact_type, attribute))
+            """, (user_id, fact_type, attribute, *scope_params))
             row = cursor.fetchone()
             if row:
                 return {
@@ -322,95 +368,62 @@ class FactExtractionDatabaseMixin:
     def _save_fact_v2(self, user_id: str, category: str, fact_type: str,
                      attribute: str, value: str, confidence: float = 1.0,
                      extraction_method: str = 'llm', context: str = None,
-                     conversation_id: int = None):
-        """
-        Salva ou atualiza fato na tabela user_facts_v2
-
-        FEATURES:
-        - Suporta mÃºltiplas pessoas da mesma categoria
-        - Versionamento adequado
-        - Metadados de confianÃ§a e mÃ©todo
-        """
-
-        logger.info(
-            "ðŸ“ [FACTS V2] Salvando categoria=%s tipo=%s atributo=%s",
-            category,
-            fact_type,
-            attribute,
-        )
-
+                     conversation_id: int = None, relation_id: Optional[str] = None):
+        """Save/version a structured fact inside one relation scope."""
+        relation_id = self._relation_id_for_fact(user_id, relation_id, conversation_id)
+        scope_sql, scope_params = self._relation_scope("user_facts_v2", relation_id)
+        multi_entity_types = {
+            "filho", "filha", "filhos", "irmao", "irmão", "irma", "irmã",
+            "amigo", "amiga", "colega", "hobby", "hobbie", "projeto",
+            "livro", "viagem", "curso", "desafio", "conquista", "evento"
+        }
         with self._lock:
             cursor = self.conn.cursor()
-
-            # Verificar se fato jÃ¡ existe
-            cursor.execute("""
-                SELECT id, fact_value, version
-                FROM user_facts_v2
-                WHERE user_id = ?
-                  AND fact_category = ?
-                  AND fact_type = ?
-                  AND fact_attribute = ?
-                  AND is_current = 1
-            """, (user_id, category, fact_type, attribute))
-
+            cursor.execute(f"""
+                SELECT id, version FROM user_facts_v2
+                WHERE user_id = ? AND fact_category = ? AND fact_type = ?
+                  AND fact_attribute = ? AND LOWER(fact_value) = LOWER(?)
+                  AND is_current = 1{scope_sql}
+            """, (user_id, category, fact_type, attribute, value, *scope_params))
+            if cursor.fetchone():
+                return
+            cursor.execute(f"""
+                SELECT id, fact_value, version FROM user_facts_v2
+                WHERE user_id = ? AND fact_category = ? AND fact_type = ?
+                  AND fact_attribute = ? AND is_current = 1{scope_sql}
+            """, (user_id, category, fact_type, attribute, *scope_params))
             existing = cursor.fetchone()
-
-            if existing:
-                existing_id = existing[0]
-                existing_value = existing[1]
-                existing_version = existing[2]
-
-                # Se valor mudou, criar nova versÃ£o
-                if existing_value != value:
-                    logger.info(f"   âœï¸  Atualizando: '{existing_value}' â†’ '{value}'")
-
-                    # Marcar versÃ£o antiga como nÃ£o-atual
-                    cursor.execute("""
-                        UPDATE user_facts_v2
-                        SET is_current = 0, updated_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (existing_id,))
-
-                    # Criar nova versÃ£o
-                    cursor.execute("""
-                        INSERT INTO user_facts_v2
-                        (user_id, fact_category, fact_type, fact_attribute, fact_value,
-                         confidence, extraction_method, context, source_conversation_id,
-                         version, is_current)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                    """, (
-                        user_id, category, fact_type, attribute, value,
-                        confidence, extraction_method, context, conversation_id,
-                        existing_version + 1
-                    ))
-
-                    new_id = cursor.lastrowid
-
-                    # Marcar que a versÃ£o antiga foi substituÃ­da
-                    cursor.execute("""
-                        UPDATE user_facts_v2
-                        SET replaced_by = ?
-                        WHERE id = ?
-                    """, (new_id, existing_id))
-
-                    logger.info(f"   âœ… Nova versÃ£o criada (v{existing_version + 1})")
+            is_multi_entity = fact_type.lower() in multi_entity_types
+            has_relation = bool(relation_id and self._table_has_column("user_facts_v2", "relation_id"))
+            if existing and not (is_multi_entity and extraction_method != 'correction'):
+                existing_id, existing_value, existing_version = existing
+                cursor.execute("UPDATE user_facts_v2 SET is_current = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (existing_id,))
+                if has_relation:
+                    cursor.execute("""INSERT INTO user_facts_v2
+                        (user_id, relation_id, fact_category, fact_type, fact_attribute, fact_value,
+                         confidence, extraction_method, context, source_conversation_id, version, is_current)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+                        (user_id, relation_id, category, fact_type, attribute, value, confidence, extraction_method, context, conversation_id, existing_version + 1))
                 else:
-                    logger.info(f"   â„¹ï¸  Fato jÃ¡ existe com mesmo valor")
+                    cursor.execute("""INSERT INTO user_facts_v2
+                        (user_id, fact_category, fact_type, fact_attribute, fact_value,
+                         confidence, extraction_method, context, source_conversation_id, version, is_current)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+                        (user_id, category, fact_type, attribute, value, confidence, extraction_method, context, conversation_id, existing_version + 1))
+                new_id = cursor.lastrowid
+                cursor.execute("UPDATE user_facts_v2 SET replaced_by = ? WHERE id = ?", (new_id, existing_id))
             else:
-                # Criar fato novo
-                logger.info(f"   âœ¨ Criando novo fato")
-                cursor.execute("""
-                    INSERT INTO user_facts_v2
-                    (user_id, fact_category, fact_type, fact_attribute, fact_value,
-                     confidence, extraction_method, context, source_conversation_id,
-                     version, is_current)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)
-                """, (
-                    user_id, category, fact_type, attribute, value,
-                    confidence, extraction_method, context, conversation_id
-                ))
-
-                logger.info(f"   âœ… Fato salvo com sucesso")
-
+                if has_relation:
+                    cursor.execute("""INSERT INTO user_facts_v2
+                        (user_id, relation_id, fact_category, fact_type, fact_attribute, fact_value,
+                         confidence, extraction_method, context, source_conversation_id, version, is_current)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)""",
+                        (user_id, relation_id, category, fact_type, attribute, value, confidence, extraction_method, context, conversation_id))
+                else:
+                    cursor.execute("""INSERT INTO user_facts_v2
+                        (user_id, fact_category, fact_type, fact_attribute, fact_value,
+                         confidence, extraction_method, context, source_conversation_id, version, is_current)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1)""",
+                        (user_id, category, fact_type, attribute, value, confidence, extraction_method, context, conversation_id))
             self.conn.commit()
 

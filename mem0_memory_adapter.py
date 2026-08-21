@@ -143,15 +143,30 @@ class Mem0MemoryAdapter:
         from mem0 import Memory
         config = _build_mem0_config()
         self.mem = Memory.from_config(config)
+        self._relation_resolver = None
         logger.info("✅ [MEM0] Adaptador inicializado (Qdrant Cloud)")
 
-    def get_context(self, user_id: str, query: str, limit: int = 10) -> str:
+    def set_relation_resolver(self, resolver) -> None:
+        """Attach the database relation resolver without coupling mem0 to SQLite."""
+        self._relation_resolver = resolver
+
+    def _memory_user_id(self, user_id: str, relation_id=None) -> str:
+        resolved = relation_id
+        if not resolved and self._relation_resolver:
+            try:
+                resolved = self._relation_resolver(str(user_id))
+            except Exception:
+                resolved = None
+        return f"relation:{resolved}" if resolved else str(user_id)
+
+    def get_context(self, user_id: str, query: str, limit: int = 10, relation_id=None) -> str:
         """
         Retorna contexto formatado para injeção no system prompt.
         Substitui build_rich_context().
         """
         try:
-            results = self.mem.search(query=query, user_id=user_id, limit=limit)
+            scoped_user_id = self._memory_user_id(user_id, relation_id)
+            results = self.mem.search(query=query, user_id=scoped_user_id, limit=limit)
             memories = results.get("results", []) if isinstance(results, dict) else results
 
             if not memories:
@@ -171,7 +186,7 @@ class Mem0MemoryAdapter:
             logger.warning(f"⚠️ [MEM0] Erro ao recuperar contexto: {e}")
             return ""
 
-    def add_exchange(self, user_id: str, user_input: str, ai_response: str) -> None:
+    def add_exchange(self, user_id: str, user_input: str, ai_response: str, relation_id=None) -> None:
         """
         Persiste um par (usuário, assistente) no mem0.
         mem0 extrai fatos automaticamente via LLM.
@@ -181,7 +196,7 @@ class Mem0MemoryAdapter:
                 {"role": "user", "content": user_input},
                 {"role": "assistant", "content": ai_response},
             ]
-            result = self.mem.add(messages=messages, user_id=user_id)
+            result = self.mem.add(messages=messages, user_id=self._memory_user_id(user_id, relation_id))
 
             n_added = 0
             if isinstance(result, dict):
@@ -211,7 +226,7 @@ class Mem0MemoryAdapter:
     def get_all_memories(self, user_id: str) -> list:
         """Retorna todas as memórias do usuário em formato estruturado."""
         try:
-            all_memories = self.mem.get_all(user_id=user_id)
+            all_memories = self.mem.get_all(user_id=self._memory_user_id(user_id))
             memories = all_memories.get("results", []) if isinstance(all_memories, dict) else all_memories
 
             normalized = []
@@ -244,7 +259,7 @@ class Mem0MemoryAdapter:
         Chamado por HybridDatabaseManager.delete_user_completely().
         """
         try:
-            self.mem.delete_all(user_id=user_id)
+            self.mem.delete_all(user_id=self._memory_user_id(user_id))
             logger.info(f"✅ [MEM0] Todas as memórias deletadas para user={user_id[:8]}")
             return True
         except Exception as e:

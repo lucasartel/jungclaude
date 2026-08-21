@@ -97,6 +97,13 @@ class HybridDatabaseManager(
         try:
             from mem0_memory_adapter import create_mem0_adapter
             self.mem0 = create_mem0_adapter()
+            if self.mem0 and hasattr(self.mem0, "set_relation_resolver"):
+                self.mem0.set_relation_resolver(
+                    lambda user_id: self.resolve_relation_id(
+                        agent_instance=getattr(self, "agent_instance", None),
+                        participant_user_id=str(user_id),
+                    )
+                )
         except Exception as e:
             self.mem0 = None
             logger.warning(f"âš ï¸ [MEM0] Erro ao inicializar: {e}")
