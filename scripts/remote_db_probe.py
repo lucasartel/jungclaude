@@ -610,6 +610,57 @@ def query_relational_state(cursor: sqlite3.Cursor, args: argparse.Namespace) -> 
     }
 
 
+
+def query_relations(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, Any]:
+    """Read the relation registry without exposing unrelated participant data."""
+    if not table_exists(cursor, "agent_relations"):
+        return {
+            "probe": "relations",
+            "available": False,
+            "agent_instance": args.agent_instance,
+            "total": 0,
+            "rows": [],
+        }
+
+    where = ["agent_instance = ?"]
+    params: List[Any] = [args.agent_instance]
+
+    cursor.execute(
+        f"""
+        SELECT relation_id, agent_instance, org_id, participant_user_id,
+               relation_type, role, status, consent_status, consented_at,
+               revoked_at, scope_json, cadence_baseline_hours,
+               last_interaction_at, metadata_json, created_at, updated_at
+        FROM agent_relations
+        WHERE {' AND '.join(where)}
+        ORDER BY updated_at DESC, relation_id DESC
+        LIMIT ?
+        """,
+        (*params, args.limit),
+    )
+    rows = rows_to_dicts(cursor.fetchall())
+    for row in rows:
+        row["scope"] = json_or_empty(row.pop("scope_json", None), {})
+        row["metadata"] = json_or_empty(row.pop("metadata_json", None), {})
+
+    count_where = "agent_instance = ?"
+    count_params: List[Any] = [args.agent_instance]
+    return {
+        "probe": "relations",
+        "available": True,
+        "agent_instance": args.agent_instance,
+        "scope": "instance_relations",
+        "total": count_rows(cursor, "agent_relations", count_where, count_params),
+        "status_counts": grouped_counts(
+            cursor, "agent_relations", "status", where=count_where, params=count_params
+        ),
+        "consent_counts": grouped_counts(
+            cursor, "agent_relations", "consent_status", where=count_where, params=count_params
+        ),
+        "rows": rows,
+    }
+
+
 def query_pressure(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, Any]:
     cursor.execute(
         """
@@ -1772,6 +1823,7 @@ PROBES: Dict[str, Callable[[sqlite3.Cursor, argparse.Namespace], Dict[str, Any]]
     "phase_pulses": query_phase_pulses,
     "pressure": query_pressure,
     "relational_state": query_relational_state,
+    "relations": query_relations,
     "rumination": query_rumination,
     "tables": query_tables,
     "tom": query_tom,

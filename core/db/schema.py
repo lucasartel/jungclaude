@@ -1142,6 +1142,9 @@ class SchemaDatabaseMixin:
         if hasattr(self, "_init_relational_state_schema"):
             self._init_relational_state_schema()
 
+        if hasattr(self, "_init_relations_schema"):
+            self._init_relations_schema()
+
         if hasattr(self, "_init_action_proposals_schema"):
             self._init_action_proposals_schema()
 
