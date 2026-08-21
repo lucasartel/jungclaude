@@ -16,6 +16,7 @@
     {% set legacy_href = '/admin/master/dashboard' if is_master_admin else '/admin/org/dashboard' if is_org_admin else '/admin' %}
     {% set users_href = '/admin/users' if is_master_admin else '/admin/org/users' if is_org_admin else '/admin/users' %}
     {% set operation_href = '/admin/sync-check' if is_master_admin else dashboard_href %}
+    {% set relations_path = path.startswith('/admin/relations') %}
     {% set wellness_path = path.startswith('/admin/wellness') or path.startswith('/admin/irt') or (path.startswith('/admin/user/') and ('psychometrics' in path or 'analysis' in path)) %}
     <header class="admin-topbar-v2">
         <div class="admin-topbar-inner-v2">
@@ -34,6 +35,9 @@
                 </a>
                 <a href="{{ dashboard_href }}" class="admin-nav-link-v2{% if path == '/admin/org/dashboard' %} is-active{% endif %}">
                     Legacy
+                </a>
+                <a href="/admin/relations" class="admin-nav-link-v2{% if relations_path %} is-active{% endif %}">
+                    Relations
                 </a>
                 {% else %}
                 <a href="/admin" class="admin-nav-link-v2{% if path == '/admin' %} is-active{% endif %}">
@@ -69,8 +73,8 @@
                 <a href="/admin/jung-mind" class="admin-nav-link-v2{% if path == '/admin/jung-mind' %} is-active{% endif %}">
                     Maps
                 </a>
-                <a href="/admin/wellness" class="admin-nav-link-v2{% if wellness_path %} is-active{% endif %}">
-                    Wellness
+                <a href="/admin/relations" class="admin-nav-link-v2{% if relations_path %} is-active{% endif %}">
+                    Relations
                 </a>
                 <a href="{{ legacy_href }}" class="admin-nav-link-v2{% if path == '/admin/master/dashboard' or path.startswith('/admin/instance') %} is-active{% endif %}">
                     Legacy

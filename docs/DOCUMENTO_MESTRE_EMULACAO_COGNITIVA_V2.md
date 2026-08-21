@@ -1,6 +1,6 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 3.1 - Vinculo Relacional nas Conversas - Agosto 2026**
+**Versao 3.2 - Cockpit de Relations - Agosto 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
@@ -437,6 +437,8 @@ A partir de 18/08/2026, o roadmap passa a ter duas trilhas coordenadas. A trilha
 
 **Segundo corte implementado em 21/08/2026**: conversas passaram a aceitar `relation_id` de forma aditiva. Quando o participante ja possui uma relacao registrada para a instancia, o vinculo e resolvido automaticamente no salvamento; leituras e contagens podem filtrar por relacao. Historico antigo, usuarios sem relacao e esquemas de teste legados continuam validos. O estado relacional, a memoria semantica, a ruminacao e a vontade ainda nao foram migrados para esse escopo.
 
+**Terceiro corte implementado em 21/08/2026**: o cockpit administrativo ganhou a area `Relations`, com leitura multi-tenant das relacoes da instancia, cadastro explicito de vinculos, atualizacao de estado/consentimento e indicadores de interacoes por relacao. O antigo `/admin/wellness` permanece como redirecionamento de compatibilidade; Wellness deixa de ser a area principal e continua disponivel apenas como recurso legado de compreensao do admin. O cockpit nao carrega texto de conversas nem memoria bruta. A conexao de memoria, ruminacao e vontade ao vinculo relacional continua sendo o proximo corte cognitivo.
+
 **Modelo alvo**:
 
 1. **Identidade do participante**: identidade canonica, identificadores por plataforma, consentimento, escopo de visibilidade e estado de acesso.
@@ -604,6 +606,7 @@ Em 19/08/2026 foi auditado o caminho completo `scores -> pressao -> pulso -> aca
 | Versao 2.9 - Correcao e Auditoria Preliminar da Vontade | 19/08/2026 | Corrige descarga indevida em falhas de pulso, registra 440 testes e abre o backlog estrutural da futura fase da vontade |
 | Versao 3.0 - Primeiro Corte do Dominio Relations | 21/08/2026 | Cria o registro persistente de relacoes por instancia/organizacao, com consentimento, escopo, ciclo de vida, isolamento e probe read-only; memoria e vontade ainda aguardam cortes posteriores |
 | Versao 3.1 - Vinculo Relacional nas Conversas | 21/08/2026 | Adiciona `relation_id` de forma retrocompativel as conversas, com resolucao automatica para relacoes existentes e filtros por relacao |
+| Versao 3.2 - Cockpit de Relations | 21/08/2026 | Substitui Wellness como area principal, adiciona cadastro/gestao de relacoes multi-tenant e preserva o endpoint legado por redirecionamento |
 
 ---
 
