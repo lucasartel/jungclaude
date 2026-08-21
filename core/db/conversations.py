@@ -153,14 +153,15 @@ class ConversationDatabaseMixin:
             logger.info("âš ï¸ extract_and_save_facts_v2 nÃ£o encontrado, usando mÃ©todo antigo...")
             self.extract_and_save_facts(user_id, user_input, conversation_id)
 
-        # 7. HOOK: Sistema de RuminaÃ§Ã£o (sÃ³ para admin)
+        # 7. HOOK: Sistema de Ruminação no escopo do admin ou de uma relação registrada
         try:
             from instance_config import ADMIN_USER_ID
-            if user_id == ADMIN_USER_ID and platform == "telegram":
+            if platform == "telegram" and (user_id == ADMIN_USER_ID or relation_id):
                 from jung_rumination import RuminationEngine
                 rumination = RuminationEngine(self)
                 rumination.ingest({
                     "user_id": user_id,
+                    "relation_id": relation_id,
                     "user_input": user_input,
                     "ai_response": ai_response,
                     "conversation_id": conversation_id,

@@ -58,6 +58,7 @@ class RuminationEngine:
             CREATE TABLE IF NOT EXISTS rumination_fragments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT NOT NULL,
+                relation_id TEXT,
                 fragment_type TEXT NOT NULL,
                 content TEXT NOT NULL,
                 context TEXT,
@@ -80,6 +81,7 @@ class RuminationEngine:
             CREATE TABLE IF NOT EXISTS rumination_tensions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT NOT NULL,
+                relation_id TEXT,
                 tension_type TEXT NOT NULL,
                 pole_a_content TEXT NOT NULL,
                 pole_a_type TEXT,
@@ -110,6 +112,7 @@ class RuminationEngine:
             CREATE TABLE IF NOT EXISTS rumination_insights (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT NOT NULL,
+                relation_id TEXT,
                 source_tension_id INTEGER,
                 connected_tension_ids TEXT,
                 insight_type TEXT DEFAULT 'símbolo',
@@ -134,6 +137,7 @@ class RuminationEngine:
             CREATE TABLE IF NOT EXISTS rumination_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT NOT NULL,
+                relation_id TEXT,
                 phase TEXT NOT NULL,
                 operation TEXT,
                 input_summary TEXT,
@@ -146,10 +150,20 @@ class RuminationEngine:
             )
         """)
 
+        # Relation scope is additive so existing rumination rows remain readable.
+        for table in ("rumination_fragments", "rumination_tensions", "rumination_insights", "rumination_log"):
+            try:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN relation_id TEXT")
+            except sqlite3.OperationalError:
+                pass
+
         # Índices para performance
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_fragments_user ON rumination_fragments(user_id, processed)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_tensions_user_status ON rumination_tensions(user_id, status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_insights_user_status ON rumination_insights(user_id, status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_rumination_fragments_relation ON rumination_fragments(relation_id, user_id, processed)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_rumination_tensions_relation ON rumination_tensions(relation_id, user_id, status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_rumination_insights_relation ON rumination_insights(relation_id, user_id, status)")
 
         try:
             cursor.execute("ALTER TABLE rumination_fragments ADD COLUMN detection_attempts INTEGER DEFAULT 0")
@@ -180,6 +194,47 @@ class RuminationEngine:
         self.db.conn.commit()
         logger.info("✅ Tabelas de ruminação criadas/verificadas")
 
+    def _resolve_relation_id(self, user_id: str, relation_id: Optional[str] = None) -> Optional[str]:
+        if relation_id:
+            return str(relation_id)
+        resolver = getattr(self.db, "resolve_relation_id", None)
+        if callable(resolver):
+            try:
+                return resolver(participant_user_id=str(user_id))
+            except Exception:
+                return None
+        return None
+
+    def _relation_scope(self, table: str, user_id: str, relation_id: Optional[str] = None):
+        resolved = self._resolve_relation_id(user_id, relation_id)
+        try:
+            columns = {row[1] for row in self.db.conn.execute(f"PRAGMA table_info({table})")}
+        except Exception:
+            columns = set()
+        if resolved and "relation_id" in columns:
+            return resolved, " AND relation_id = ?", [resolved]
+        return resolved, "", []
+
+    def _relation_allowed(self, user_id: str, relation_id: Optional[str]) -> bool:
+        # Keep legacy admin rumination available while requiring an explicit
+        # registered relation for non-admin participants.
+        if user_id == self.admin_user_id:
+            return True
+        if not relation_id:
+            return False
+
+        relation_reader = getattr(self.db, "get_agent_relation", None)
+        if not callable(relation_reader):
+            return True
+        try:
+            relation = relation_reader(str(relation_id))
+            return bool(
+                relation
+                and str(relation.get("participant_user_id")) == str(user_id)
+            )
+        except Exception:
+            return False
+
     # ========================================
     # FASE 1: INGESTÃO
     # ========================================
@@ -203,9 +258,9 @@ class RuminationEngine:
             Lista de IDs de fragmentos criados
         """
         user_id = conversation_data['user_id']
+        relation_id = self._resolve_relation_id(user_id, conversation_data.get("relation_id"))
 
-        # Verificar se é admin
-        if user_id != self.admin_user_id:
+        if not self._relation_allowed(user_id, relation_id):
             return []
 
         # Verificar se conversa tem tensão mínima
@@ -257,13 +312,14 @@ class RuminationEngine:
 
                 cursor.execute("""
                     INSERT INTO rumination_fragments (
-                        user_id, fragment_type, content, context,
+                        user_id, relation_id, fragment_type, content, context,
                         source_conversation_id, source_quote,
                         source_kind, source_table, source_id, source_metadata_json,
                         emotional_weight, tension_level
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     user_id,
+                    relation_id,
                     frag['type'],
                     frag['content'],
                     frag.get('context', ''),
@@ -288,6 +344,7 @@ class RuminationEngine:
             self._log_operation(
                 "ingestão",
                 user_id,
+                relation_id=relation_id,
                 input_summary=f"{len(user_input)} chars",
                 output_summary=f"{len(fragment_ids)} fragmentos",
                 affected_fragment_ids=fragment_ids
@@ -295,7 +352,7 @@ class RuminationEngine:
 
             # Disparar detecção de tensões se houver fragmentos novos
             if fragment_ids:
-                self.detect_tensions(user_id)
+                self.detect_tensions(user_id, relation_id=relation_id)
 
             return fragment_ids
 
@@ -307,7 +364,7 @@ class RuminationEngine:
     # FASE 2: DETECÇÃO DE TENSÕES
     # ========================================
 
-    def detect_tensions(self, user_id: str) -> List[int]:
+    def detect_tensions(self, user_id: str, relation_id: Optional[str] = None) -> List[int]:
         """
         Analisa fragmentos buscando tensões entre eles.
 
@@ -317,24 +374,28 @@ class RuminationEngine:
         Returns:
             Lista de IDs de tensões criadas
         """
-        if user_id != self.admin_user_id:
+        relation_id = self._resolve_relation_id(user_id, relation_id)
+        if not self._relation_allowed(user_id, relation_id):
             return []
 
         logger.info(f"⚡ Detectando tensões para {user_id}")
 
         cursor = self.db.conn.cursor()
+        _resolved_relation, relation_clause, relation_params = self._relation_scope(
+            "rumination_fragments", user_id, relation_id
+        )
 
         # Buscar fragmentos não processados
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT id, fragment_type, content, source_quote, emotional_weight,
                    COALESCE(detection_attempts, 0) AS detection_attempts
             FROM rumination_fragments
-            WHERE user_id = ?
+            WHERE user_id = ?{relation_clause}
               AND processed = 0
               AND COALESCE(detection_attempts, 0) < ?
             ORDER BY created_at DESC
             LIMIT 12
-        """, (user_id, MAX_DETECTION_ATTEMPTS_WITHOUT_TENSION))
+        """, (user_id, *relation_params, MAX_DETECTION_ATTEMPTS_WITHOUT_TENSION))
 
         recent_fragments = cursor.fetchall()
 
@@ -343,13 +404,13 @@ class RuminationEngine:
             return []
 
         # Buscar fragmentos históricos relevantes
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT id, fragment_type, content, source_quote, emotional_weight
             FROM rumination_fragments
-            WHERE user_id = ? AND processed = 1
+            WHERE user_id = ?{relation_clause} AND processed = 1
             ORDER BY created_at DESC
             LIMIT 20
-        """, (user_id,))
+        """, (user_id, *relation_params))
 
         historical_fragments = cursor.fetchall()
 
@@ -394,14 +455,15 @@ class RuminationEngine:
 
                 cursor.execute("""
                     INSERT INTO rumination_tensions (
-                        user_id, tension_type,
+                        user_id, relation_id, tension_type,
                         pole_a_content, pole_a_fragment_ids,
                         pole_b_content, pole_b_fragment_ids,
                         tension_description, intensity,
                         evidence_count, last_evidence_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     user_id,
+                    relation_id,
                     tens['type'],
                     tens['pole_a']['content'],
                     json.dumps(tens['pole_a']['fragment_ids']),
@@ -648,34 +710,46 @@ class RuminationEngine:
 
         return "\n".join(lines)
 
-    def _log_operation(self, phase: str, user_id: str, **kwargs):
-        """Registra operação no log"""
+    def _log_operation(self, phase: str, user_id: str, relation_id: Optional[str] = None, **kwargs):
+        """Persist operation metadata in the participant relation scope when available."""
         if not LOG_ALL_PHASES:
             return
-
         cursor = self.db.conn.cursor()
-        cursor.execute("""
-            INSERT INTO rumination_log (
-                user_id, phase, operation, input_summary, output_summary,
-                affected_fragment_ids, affected_tension_ids, affected_insight_ids
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            user_id,
-            phase,
-            kwargs.get('operation', ''),
-            kwargs.get('input_summary', ''),
-            kwargs.get('output_summary', ''),
-            json.dumps(kwargs.get('affected_fragment_ids', [])),
-            json.dumps(kwargs.get('affected_tension_ids', [])),
-            json.dumps(kwargs.get('affected_insight_ids', []))
-        ))
+        resolved = self._resolve_relation_id(user_id, relation_id)
+        columns = {row[1] for row in cursor.execute("PRAGMA table_info(rumination_log)")}
+        if "relation_id" in columns:
+            cursor.execute("""
+                INSERT INTO rumination_log (
+                    user_id, relation_id, phase, operation, input_summary, output_summary,
+                    affected_fragment_ids, affected_tension_ids, affected_insight_ids
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                user_id, resolved, phase, kwargs.get("operation", ""),
+                kwargs.get("input_summary", ""), kwargs.get("output_summary", ""),
+                json.dumps(kwargs.get("affected_fragment_ids", [])),
+                json.dumps(kwargs.get("affected_tension_ids", [])),
+                json.dumps(kwargs.get("affected_insight_ids", [])),
+            ))
+        else:
+            cursor.execute("""
+                INSERT INTO rumination_log (
+                    user_id, phase, operation, input_summary, output_summary,
+                    affected_fragment_ids, affected_tension_ids, affected_insight_ids
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                user_id, phase, kwargs.get("operation", ""),
+                kwargs.get("input_summary", ""), kwargs.get("output_summary", ""),
+                json.dumps(kwargs.get("affected_fragment_ids", [])),
+                json.dumps(kwargs.get("affected_tension_ids", [])),
+                json.dumps(kwargs.get("affected_insight_ids", [])),
+            ))
         self.db.conn.commit()
 
     # ========================================
     # FASE 3: DIGESTÃO (Revisita)
     # ========================================
 
-    def digest(self, user_id: str = None) -> Dict:
+    def digest(self, user_id: str = None, relation_id: Optional[str] = None) -> Dict:
         """
         Job de digestão - revisita tensões abertas, atualiza maturidade.
 
@@ -688,19 +762,23 @@ class RuminationEngine:
         if user_id is None:
             user_id = self.admin_user_id
 
-        if user_id != self.admin_user_id:
+        relation_id = self._resolve_relation_id(user_id, relation_id)
+        if not self._relation_allowed(user_id, relation_id):
             return {}
 
         logger.info(f"🔄 Iniciando digestão para {user_id}")
 
         cursor = self.db.conn.cursor()
+        _resolved_relation, relation_clause, relation_params = self._relation_scope(
+            "rumination_tensions", user_id, relation_id
+        )
 
         # Buscar tensões abertas ou amadurecendo
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT * FROM rumination_tensions
-            WHERE user_id = ? AND status IN ('open', 'maturing')
+            WHERE user_id = ?{relation_clause} AND status IN ('open', 'maturing')
             ORDER BY first_detected_at ASC
-        """, (user_id,))
+        """, (user_id, *relation_params))
 
         open_tensions = cursor.fetchall()
 
@@ -720,12 +798,15 @@ class RuminationEngine:
             # 1. Buscar novas evidências desde última revisita
             last_revisit = tension.get('last_revisited_at') or tension['first_detected_at']
 
-            cursor.execute("""
+            _resolved_relation, fragment_clause, fragment_params = self._relation_scope(
+                "rumination_fragments", user_id, relation_id
+            )
+            cursor.execute(f"""
                 SELECT id FROM rumination_fragments
-                WHERE user_id = ? AND created_at > ?
+                WHERE user_id = ?{fragment_clause} AND created_at > ?
                 ORDER BY created_at DESC
                 LIMIT 20
-            """, (user_id, last_revisit))
+            """, (user_id, *fragment_params, last_revisit))
 
             new_fragments = cursor.fetchall()
 
@@ -739,7 +820,7 @@ class RuminationEngine:
                 tension['evidence_count'] += new_evidence_count
                 tension['last_evidence_at'] = datetime.now().isoformat()
 
-            related_tension_ids = self._find_related_tensions(tension)
+            related_tension_ids = self._find_related_tensions(tension, relation_id=relation_id)
             if related_tension_ids:
                 tension["connected_tension_ids"] = json.dumps(related_tension_ids)
                 tension["connection_count"] = max(
@@ -826,7 +907,7 @@ class RuminationEngine:
 
         logger.info(f"   ✅ Digestão completa: {stats}")
 
-        pruned_ready = self._prune_ready_queue(user_id)
+        pruned_ready = self._prune_ready_queue(user_id, relation_id=relation_id)
         if pruned_ready:
             stats["pruned_ready"] = pruned_ready
 
@@ -834,11 +915,12 @@ class RuminationEngine:
         self._log_operation(
             "digestão",
             user_id,
-            output_summary=f"{stats['tensions_processed']} tensões processadas"
+            output_summary=f"{stats['tensions_processed']} tensões processadas",
+            relation_id=relation_id,
         )
 
         # Verificar sínteses prontas
-        self.check_and_synthesize(user_id)
+        self.check_and_synthesize(user_id, relation_id=relation_id)
 
         return stats
 
@@ -871,7 +953,7 @@ class RuminationEngine:
             freshness_bonus
         )
 
-    def _prune_ready_queue(self, user_id: str) -> int:
+    def _prune_ready_queue(self, user_id: str, relation_id: Optional[str] = None) -> int:
         """
         Reduz backlog de tensões prontas demais.
 
@@ -879,13 +961,17 @@ class RuminationEngine:
         - manter as mais prioritárias na fila;
         - arquivar tensões antigas, pouco intensas e com baixa prioridade relativa.
         """
+        relation_id = self._resolve_relation_id(user_id, relation_id)
+        _resolved_relation, relation_clause, relation_params = self._relation_scope(
+            "rumination_tensions", user_id, relation_id
+        )
         cursor = self.db.conn.cursor()
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT *
             FROM rumination_tensions
-            WHERE user_id = ? AND status = 'ready_for_synthesis'
+            WHERE user_id = ?{relation_clause} AND status = 'ready_for_synthesis'
             ORDER BY first_detected_at ASC
-        """, (user_id,))
+        """, (user_id, *relation_params))
 
         ready_rows = [dict(row) for row in cursor.fetchall()]
         if len(ready_rows) <= MAX_READY_TENSIONS:
@@ -1010,24 +1096,28 @@ class RuminationEngine:
         except Exception:
             return []
 
-    def _find_related_tensions(self, tension: Dict, limit: int = 5) -> List[int]:
+    def _find_related_tensions(self, tension: Dict, limit: int = 5, relation_id: Optional[str] = None) -> List[int]:
         anchor_terms = self._tension_anchor_terms(tension)
         if not anchor_terms:
             return []
 
+        relation_id = self._resolve_relation_id(tension["user_id"], relation_id or tension.get("relation_id"))
+        _resolved_relation, relation_clause, relation_params = self._relation_scope(
+            "rumination_tensions", tension["user_id"], relation_id
+        )
         cursor = self.db.conn.cursor()
         cursor.execute(
-            """
+            f"""
             SELECT id, tension_type, pole_a_content, pole_b_content, tension_description,
                    intensity, maturity_score
             FROM rumination_tensions
-            WHERE user_id = ?
+            WHERE user_id = ?{relation_clause}
               AND id != ?
               AND status IN ('open', 'maturing', 'ready_for_synthesis')
             ORDER BY first_detected_at DESC
             LIMIT 80
             """,
-            (tension["user_id"], tension["id"]),
+            (tension["user_id"], *relation_params, tension["id"]),
         )
 
         scored = []
@@ -1083,9 +1173,13 @@ class RuminationEngine:
 
         if pole_fragment_ids:
             id_ph = ','.join(['?' for _ in pole_fragment_ids])
+            relation_id = self._resolve_relation_id(tension["user_id"], tension.get("relation_id"))
+            _resolved_relation, relation_clause, relation_params = self._relation_scope(
+                "rumination_fragments", tension["user_id"], relation_id
+            )
             cursor.execute(
-                f"SELECT DISTINCT fragment_type FROM rumination_fragments WHERE id IN ({id_ph})",
-                pole_fragment_ids,
+                f"SELECT DISTINCT fragment_type FROM rumination_fragments WHERE id IN ({id_ph}){relation_clause}",
+                [*pole_fragment_ids, *relation_params],
             )
             relevant_types = {row[0] for row in cursor.fetchall() if row[0]}
 
@@ -1101,13 +1195,17 @@ class RuminationEngine:
 
         # Contar fragmentos recentes cujos tipos são relevantes para esta tensão
         id_placeholders = ','.join(['?' for _ in recent_ids])
+        relation_id = self._resolve_relation_id(tension["user_id"], tension.get("relation_id"))
+        _resolved_relation, relation_clause, relation_params = self._relation_scope(
+            "rumination_fragments", tension["user_id"], relation_id
+        )
         cursor.execute(
             f"""
             SELECT id, fragment_type, content, context, source_quote
             FROM rumination_fragments
-            WHERE id IN ({id_placeholders})
+            WHERE id IN ({id_placeholders}){relation_clause}
             """,
-            recent_ids,
+            [*recent_ids, *relation_params],
         )
         rows = cursor.fetchall()
         anchor_terms = self._tension_anchor_terms(tension)
@@ -1142,7 +1240,7 @@ class RuminationEngine:
     # FASE 4: SÍNTESE
     # ========================================
 
-    def check_and_synthesize(self, user_id: str = None) -> List[int]:
+    def check_and_synthesize(self, user_id: str = None, relation_id: Optional[str] = None) -> List[int]:
         """
         Verifica tensões prontas e gera sínteses.
 
@@ -1155,23 +1253,27 @@ class RuminationEngine:
         if user_id is None:
             user_id = self.admin_user_id
 
-        if user_id != self.admin_user_id:
+        relation_id = self._resolve_relation_id(user_id, relation_id)
+        if not self._relation_allowed(user_id, relation_id):
             return []
 
         logger.info(f"💎 Verificando sínteses para {user_id}")
 
         cursor = self.db.conn.cursor()
+        _resolved_relation, relation_clause, relation_params = self._relation_scope(
+            "rumination_tensions", user_id, relation_id
+        )
 
         # Podar fila antes de sintetizar para priorizar tensões mais vivas
-        self._prune_ready_queue(user_id)
+        self._prune_ready_queue(user_id, relation_id=relation_id)
 
         # Buscar tensões prontas para síntese
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT * FROM rumination_tensions
-            WHERE user_id = ? AND status = 'ready_for_synthesis'
+            WHERE user_id = ?{relation_clause} AND status = 'ready_for_synthesis'
             ORDER BY maturity_score DESC, intensity DESC, evidence_count DESC, first_detected_at ASC
             LIMIT ?
-        """, (user_id, MAX_SYNTHESIS_PER_DIGEST))
+        """, (user_id, *relation_params, MAX_SYNTHESIS_PER_DIGEST))
 
         ready_tensions = cursor.fetchall()
 
@@ -1185,7 +1287,7 @@ class RuminationEngine:
             tension = dict(tension_row)
 
             # Gerar síntese
-            insight_id = self._synthesize_tension(tension)
+            insight_id = self._synthesize_tension(tension, relation_id=relation_id)
 
             if insight_id:
                 insight_ids.append(insight_id)
@@ -1204,7 +1306,7 @@ class RuminationEngine:
 
         return insight_ids
 
-    def _synthesize_tension(self, tension: Dict) -> Optional[int]:
+    def _synthesize_tension(self, tension: Dict, relation_id: Optional[str] = None) -> Optional[int]:
         """
         Gera símbolo/insight a partir de tensão madura.
 
@@ -1215,13 +1317,14 @@ class RuminationEngine:
             ID do insight criado ou None
         """
         user_id = tension['user_id']
+        relation_id = self._resolve_relation_id(user_id, relation_id or tension.get("relation_id"))
 
         # Buscar dados do usuário
         user = self.db.get_user(user_id)
         user_name = user.get('user_name', 'Admin')
 
         # Buscar conversas recentes para contexto
-        recent_convs = self.db.get_user_conversations(user_id, limit=5)
+        recent_convs = self.db.get_user_conversations(user_id, limit=5, relation_id=relation_id)
         recent_text = "\n\n".join([
             f"Usuário: {c['user_input'][:200]}..."
             for c in recent_convs
@@ -1265,7 +1368,7 @@ class RuminationEngine:
             # Validar novidade
             internal_thought = internal_thought.strip()
 
-            if not self._validate_novelty(internal_thought, user_id):
+            if not self._validate_novelty(internal_thought, user_id, relation_id=relation_id):
                 logger.info("   ⏭️  Insight rejeitado por falta de novidade")
                 cursor = self.db.conn.cursor()
                 cursor.execute("""
@@ -1281,13 +1384,14 @@ class RuminationEngine:
             cursor = self.db.conn.cursor()
             cursor.execute("""
                 INSERT INTO rumination_insights (
-                    user_id, source_tension_id,
+                    user_id, relation_id, source_tension_id,
                     symbol_content, question_content, full_message,
                     depth_score, novelty_score, maturation_days,
                     status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ready')
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready')
             """, (
                 user_id,
+                relation_id,
                 tension['id'],
                 result.get('core_image', ''),
                 result.get('internal_question', ''),
@@ -1306,6 +1410,7 @@ class RuminationEngine:
             self._log_operation(
                 "síntese",
                 user_id,
+                relation_id=relation_id,
                 input_summary=f"tensão {tension['id']}",
                 output_summary=f"insight {insight_id}",
                 affected_insight_ids=[insight_id]
@@ -1317,7 +1422,7 @@ class RuminationEngine:
             logger.error(f"❌ Erro na síntese: {e}")
             return None
 
-    def _validate_novelty(self, new_message: str, user_id: str) -> bool:
+    def _validate_novelty(self, new_message: str, user_id: str, relation_id: Optional[str] = None) -> bool:
         """
         Valida se insight é novo o suficiente.
 
@@ -1328,17 +1433,21 @@ class RuminationEngine:
         Returns:
             True se é novel, False se é repetitivo
         """
+        relation_id = self._resolve_relation_id(user_id, relation_id)
+        _resolved_relation, relation_clause, relation_params = self._relation_scope(
+            "rumination_insights", user_id, relation_id
+        )
         cursor = self.db.conn.cursor()
 
         # Buscar insights dos últimos 14 dias
         two_weeks_ago = (datetime.now() - timedelta(days=14)).isoformat()
 
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT full_message FROM rumination_insights
-            WHERE user_id = ? AND crystallized_at > ?
+            WHERE user_id = ?{relation_clause} AND crystallized_at > ?
             ORDER BY crystallized_at DESC
             LIMIT 5
-        """, (user_id, two_weeks_ago))
+        """, (user_id, *relation_params, two_weeks_ago))
 
         previous = cursor.fetchall()
 
@@ -1385,7 +1494,7 @@ class RuminationEngine:
     # FASE 5: ENTREGA
     # ========================================
 
-    def check_and_deliver(self, user_id: str = None) -> Optional[int]:
+    def check_and_deliver(self, user_id: str = None, relation_id: Optional[str] = None) -> Optional[int]:
         """
         Verifica condições e entrega insight se apropriado.
 
@@ -1398,21 +1507,25 @@ class RuminationEngine:
         if user_id is None:
             user_id = self.admin_user_id
 
-        if user_id != self.admin_user_id:
+        relation_id = self._resolve_relation_id(user_id, relation_id)
+        if not self._relation_allowed(user_id, relation_id):
             return None
 
         # Verificar se deve entregar
-        if not self._should_deliver(user_id):
+        if not self._should_deliver(user_id, relation_id=relation_id):
             return None
 
         # Buscar insight pronto
         cursor = self.db.conn.cursor()
-        cursor.execute("""
+        _resolved_relation, relation_clause, relation_params = self._relation_scope(
+            "rumination_insights", user_id, relation_id
+        )
+        cursor.execute(f"""
             SELECT * FROM rumination_insights
-            WHERE user_id = ? AND status = 'ready'
+            WHERE user_id = ?{relation_clause} AND status = 'ready'
             ORDER BY depth_score DESC, crystallized_at ASC
             LIMIT 1
-        """, (user_id,))
+        """, (user_id, *relation_params))
 
         insight_row = cursor.fetchone()
 
@@ -1422,7 +1535,7 @@ class RuminationEngine:
         insight = dict(insight_row)
 
         # Entregar
-        return self._deliver_insight(insight)
+        return self._deliver_insight(insight, relation_id=relation_id)
 
     def _parse_delivery_datetime(self, value) -> Optional[datetime]:
         if not value:
@@ -1434,7 +1547,7 @@ class RuminationEngine:
         except Exception:
             return None
 
-    def _should_deliver(self, user_id: str) -> bool:
+    def _should_deliver(self, user_id: str, relation_id: Optional[str] = None) -> bool:
         """Verifica se deve entregar insight agora"""
         user = self.db.get_user(user_id)
 
@@ -1449,13 +1562,17 @@ class RuminationEngine:
                 return False
 
         # 2. Cooldown desde última entrega?
+        relation_id = self._resolve_relation_id(user_id, relation_id)
+        _resolved_relation, relation_clause, relation_params = self._relation_scope(
+            "rumination_insights", user_id, relation_id
+        )
         cursor = self.db.conn.cursor()
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT delivered_at FROM rumination_insights
-            WHERE user_id = ? AND status = 'delivered'
+            WHERE user_id = ?{relation_clause} AND status = 'delivered'
             ORDER BY delivered_at DESC
             LIMIT 1
-        """, (user_id,))
+        """, (user_id, *relation_params))
 
         last_delivery = cursor.fetchone()
 
@@ -1468,15 +1585,15 @@ class RuminationEngine:
                 return False
 
         # 3. Há insight pronto?
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT id FROM rumination_insights
-            WHERE user_id = ? AND status = 'ready'
+            WHERE user_id = ?{relation_clause} AND status = 'ready'
             LIMIT 1
-        """, (user_id,))
+        """, (user_id, *relation_params))
 
         return cursor.fetchone() is not None
 
-    def _deliver_insight(self, insight: Dict) -> Optional[int]:
+    def _deliver_insight(self, insight: Dict, relation_id: Optional[str] = None) -> Optional[int]:
         """
         Entrega insight ao usuário via Telegram.
 
@@ -1487,6 +1604,7 @@ class RuminationEngine:
             ID do insight entregue
         """
         user_id = insight['user_id']
+        user = self.db.get_user(user_id) or {}
         message = insight['full_message']
 
         logger.info(f"📤 Entregando insight {insight['id']} para {user_id}")
@@ -1538,7 +1656,8 @@ class RuminationEngine:
                 keywords=[
                     f"tensão:{insight.get('source_tension_id')}",
                     f"maturação:{insight.get('maturation_days')}dias"
-                ]
+                ],
+                relation_id=relation_id or insight.get("relation_id"),
             )
 
             self.db.conn.commit()
@@ -1549,6 +1668,7 @@ class RuminationEngine:
             self._log_operation(
                 "entrega",
                 user_id,
+                relation_id=relation_id or insight.get("relation_id"),
                 output_summary=f"insight {insight['id']} entregue",
                 affected_insight_ids=[insight['id']]
             )
@@ -1618,43 +1738,35 @@ class RuminationEngine:
     # MÉTODOS PÚBLICOS AUXILIARES
     # ========================================
 
-    def get_stats(self, user_id: str = None) -> Dict:
-        """Retorna estatísticas do sistema de ruminação"""
+    def get_stats(self, user_id: str = None, relation_id: Optional[str] = None) -> Dict:
+        """Return rumination statistics for one participant relation."""
         if user_id is None:
             user_id = self.admin_user_id
-
-        cursor = self.db.conn.cursor()
-
+        relation_id = self._resolve_relation_id(user_id, relation_id)
         stats = {}
-
-        # Fragmentos
-        cursor.execute("SELECT COUNT(*) FROM rumination_fragments WHERE user_id = ?", (user_id,))
-        stats['fragments_total'] = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM rumination_fragments WHERE user_id = ? AND processed = 0", (user_id,))
-        stats['fragments_unprocessed'] = cursor.fetchone()[0]
-
-        # Tensões
-        cursor.execute("SELECT COUNT(*) FROM rumination_tensions WHERE user_id = ?", (user_id,))
-        stats['tensions_total'] = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM rumination_tensions WHERE user_id = ? AND status = 'open'", (user_id,))
-        stats['tensions_open'] = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM rumination_tensions WHERE user_id = ? AND status = 'maturing'", (user_id,))
-        stats['tensions_maturing'] = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM rumination_tensions WHERE user_id = ? AND status = 'ready_for_synthesis'", (user_id,))
-        stats['tensions_ready'] = cursor.fetchone()[0]
-
-        # Insights
-        cursor.execute("SELECT COUNT(*) FROM rumination_insights WHERE user_id = ?", (user_id,))
-        stats['insights_total'] = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM rumination_insights WHERE user_id = ? AND status = 'ready'", (user_id,))
-        stats['insights_ready'] = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM rumination_insights WHERE user_id = ? AND status = 'delivered'", (user_id,))
-        stats['insights_delivered'] = cursor.fetchone()[0]
-
+        conn = self.db.conn
+        for table, key in (("rumination_fragments", "fragments"), ("rumination_tensions", "tensions"), ("rumination_insights", "insights")):
+            _resolved_relation, relation_clause, relation_params = self._relation_scope(table, user_id, relation_id)
+            count = conn.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE user_id = ?{relation_clause}",
+                (user_id, *relation_params),
+            ).fetchone()[0]
+            stats[f"{key}_total"] = count
+            if table == "rumination_fragments":
+                stats["fragments_unprocessed"] = conn.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE user_id = ?{relation_clause} AND processed = 0",
+                    (user_id, *relation_params),
+                ).fetchone()[0]
+            elif table == "rumination_tensions":
+                for status, output in (("open", "tensions_open"), ("maturing", "tensions_maturing"), ("ready_for_synthesis", "tensions_ready")):
+                    stats[output] = conn.execute(
+                        f"SELECT COUNT(*) FROM {table} WHERE user_id = ?{relation_clause} AND status = ?",
+                        (user_id, *relation_params, status),
+                    ).fetchone()[0]
+            else:
+                for status, output in (("ready", "insights_ready"), ("delivered", "insights_delivered")):
+                    stats[output] = conn.execute(
+                        f"SELECT COUNT(*) FROM {table} WHERE user_id = ?{relation_clause} AND status = ?",
+                        (user_id, *relation_params, status),
+                    ).fetchone()[0]
         return stats

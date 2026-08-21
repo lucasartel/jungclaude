@@ -1166,6 +1166,21 @@ class SchemaDatabaseMixin:
                     f"CREATE INDEX IF NOT EXISTS idx_{table}_relation ON {table}(relation_id, user_id)"
                 )
 
+        # Relation scope is additive for rumination, whose tables are also
+        # created lazily by RuminationEngine in older databases.
+        for table in ("rumination_fragments", "rumination_tensions", "rumination_insights", "rumination_log"):
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
+            if not cursor.fetchone():
+                continue
+            try:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN relation_id TEXT")
+            except sqlite3.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    logger.warning("Could not add %s.relation_id: %s", table, exc)
+            cursor.execute(
+                f"CREATE INDEX IF NOT EXISTS idx_{table}_relation ON {table}(relation_id, user_id)"
+            )
+
         if hasattr(self, "_init_action_proposals_schema"):
             self._init_action_proposals_schema()
 
