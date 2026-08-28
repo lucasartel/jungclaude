@@ -84,9 +84,9 @@ if ADMIN_PLATFORM.lower() == "telegram" and ADMIN_PLATFORM_ID:
         TELEGRAM_ADMIN_IDS.append(platform_admin_id)
 
 PROACTIVE_ENABLED = env_flag("PROACTIVE_ENABLED", default=True)
-# Keeps the dream and hobby circuits alive while allowing image-provider calls
-# to be paused for cost control.
-IMAGE_GENERATION_ENABLED = env_flag("IMAGE_GENERATION_ENABLED", default=True)
+# Textual dream and hobby circuits remain active, but paid image-provider calls
+# stay opt-in so a missing environment variable cannot create surprise costs.
+IMAGE_GENERATION_ENABLED = env_flag("IMAGE_GENERATION_ENABLED", default=False)
 
 
 def instance_summary() -> dict:
