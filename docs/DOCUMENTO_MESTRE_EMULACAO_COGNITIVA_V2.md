@@ -1,6 +1,6 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 3.4 - Ruminação relacional - Agosto 2026**
+**Versao 3.5 - Catalogo de conectores orientado pela vontade - Agosto 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
@@ -472,6 +472,31 @@ A primeira entrega comercial deve definir o `Will Expression Contract v1`, com v
 
 A estrategia inicial recomendada e validar agentes de software e companions B2B, por exigirem menos infraestrutura que Unity, Unreal ou robotica e por aproveitarem o que ja existe no Telegram e no cockpit. Games e robotica permanecem como verticais posteriores da mesma API.
 
+### 10.2.1 Catalogo de conectores orientado pela vontade
+
+O modulo WILL devera possuir um catalogo de possiveis conexoes organizado pelas tres vontades fundamentais do agente: `saber`, `expressar` e `relacionar`. Esse catalogo sera uma capacidade futura da plataforma e nao uma autorizacao automatica para agir fora dela.
+
+**Organizacao inicial do catalogo**:
+
+1. **Saber**: fontes de pesquisa, busca e consulta, bases documentais, repositórios de conhecimento, navegacao, ferramentas academicas e outros recursos que ampliem a percepcao ou a investigacao do agente.
+2. **Expressar**: canais de publicacao, mensagens, arte, imagem, texto, audio, video, sites, blogs, documentos e outros meios pelos quais uma intencao possa produzir uma expressao externa.
+3. **Relacionar**: canais de conversa e presenca relacional, como Telegram, Discord, e-mail, comunidades, suporte, plataformas sociais e outros meios de interacao com pessoas ou entidades.
+
+Cada conector devera declarar, no minimo, seu provedor, protocolo, capacidades, vontade(s) atendida(s), acoes disponiveis, escopos de leitura e escrita, credenciais, organizacao e instancia autorizadas, relacoes alcançaveis, exigencias de consentimento, custo, limites de uso, idempotencia, auditoria, politica de aprovacao e semantica de falha. Um mesmo conector podera atender mais de uma vontade, mas suas capacidades deverao permanecer explicitamente separadas para evitar que um canal relacional seja tratado como fonte de saber ou meio de expressao sem governanca propria.
+
+**MCP como mecanismo preferencial**: por se tratar de um agente, a plataforma devera priorizar conectores expostos por MCP quando houver um servidor ou adaptador adequado. MCP sera a interface preferencial para descoberta de ferramentas, parametros, resultados e erros, mantendo o nucleo cognitivo desacoplado do provedor. APIs diretas, webhooks ou SDKs continuarao permitidos como adaptadores quando nao houver MCP disponivel ou quando uma integracao exigir propriedades especificas, sem transformar o fornecedor em dependencia estrutural do WILL.
+
+O fluxo devera manter quatro camadas distintas:
+
+1. **Vontade interna**: scores, pressao, conflito, dominancia e evidencias que indicam uma orientacao do agente.
+2. **Intencao de expressao**: proposta estruturada de objetivo e acao, registrada como `will_expression`.
+3. **Catalogo de capacidade**: conector compatível, escopo, requisitos, custo e politica aplicaveis.
+4. **Execucao governada**: aprovacao ou bloqueio, chamada ao conector, resultado, recibo, efeito observado e eventual falha ou compensacao.
+
+Nenhuma pontuacao de vontade devera, sozinha, disparar uma acao externa. A escolha do conector devera ser explicita, rastreavel e compativel com a politica da organizacao, da instancia e da relacao. O conector nao tera acesso direto ao banco, aos prompts ou aos estados internos; recebera apenas o contrato minimo autorizado e devolvera um resultado que possa alimentar a memoria, a identidade, a ruminacao e os proximos ciclos como evidencia.
+
+**Demanda futura de produto**: construir o registro persistente de conectores, a descoberta por vontade, os adaptadores MCP e nao-MCP, a tela de governanca no cockpit, o dry-run, os gates de consentimento/aprovacao, o controle de custos e os probes de execucao. Essa frente devera ser desenvolvida depois que a multiplicidade relacional e a arquitetura multi-instancia estiverem suficientemente validadas, pois cada conector precisara ser escopado por organizacao, instancia, participante e finalidade.
+
 ### 10.3 Arquitetura multi-instancia
 
 A plataforma comercial nao sera apenas multi-tenant na administracao. Cada organizacao podera criar e operar uma ou varias instancias cognitivas independentes:
@@ -613,6 +638,7 @@ Em 19/08/2026 foi auditado o caminho completo `scores -> pressao -> pulso -> aca
 | Versao 3.2 - Cockpit de Relations | 21/08/2026 | Substitui Wellness como area principal, adiciona cadastro/gestao de relacoes multi-tenant e preserva o endpoint legado por redirecionamento |
 | Versao 3.3 - Escopo cognitivo por Relation | 21/08/2026 | Propaga `relation_id` para estado relacional, fatos, fallback SQLite e namespace mem0, com reancoragem legada e testes de isolamento |
 | Versao 3.4 - Ruminação relacional | 21/08/2026 | Isola fragmentos, tensões, insights e entrega da ruminação por Relation, habilita ingestão de participantes registrados e adiciona testes de não mistura |
+| Versao 3.5 - Catalogo de conectores orientado pela vontade | 28/08/2026 | Registra o catalogo futuro de conexoes por saber, expressar e relacionar, a preferencia por MCP e os gates de descoberta, aprovacao, escopo e execucao |
 
 ---
 
