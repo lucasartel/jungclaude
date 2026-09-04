@@ -2633,23 +2633,56 @@ class ConsciousnessLoopManager:
                 "scheduled_at": pulse.get("scheduled_at"),
                 "attempt": pulse.get("attempts"),
             }
-        self._read_working_memory_inbox(phase, result)
+        satisfaction = self._claim_will_phase_satisfaction(
+            phase=phase,
+            pulse=pulse,
+            execution_mode=execution_mode,
+            cycle_id=cycle_id,
+        )
+        if satisfaction:
+            result["status"] = "satisfied_by_will"
+            result["warnings"] = [warning for warning in result["warnings"] if warning != "placeholder_execution"]
+            result["output_summary"] = (
+                f"Fase {phase.label} satisfeita por uma expressao confirmada da vontade "
+                f"de {satisfaction.get('will_name') or 'origem nao nomeada'}."
+            )
+            result["metrics"].update(
+                {
+                    "satisfied_by_will": 1,
+                    "phase_execution_suppressed": 1,
+                    "will_expression_id": satisfaction.get("expression_id"),
+                    "will_phase_satisfaction_id": satisfaction.get("id"),
+                    "satisfaction_quality": satisfaction.get("quality"),
+                }
+            )
+            result["raw_result"]["will_phase_satisfaction"] = {
+                "satisfaction_id": satisfaction.get("id"),
+                "expression_id": satisfaction.get("expression_id"),
+                "will_name": satisfaction.get("will_name"),
+                "capability_key": satisfaction.get("capability_key"),
+                "source_ref": satisfaction.get("source_ref"),
+                "result_code": satisfaction.get("result_code"),
+                "quality": satisfaction.get("quality"),
+                "consumed_by_phase_pulse_id": satisfaction.get("consumed_by_phase_pulse_id"),
+            }
+        else:
+            self._read_working_memory_inbox(phase, result)
         try:
-            if phase.key == "dream":
+            if not satisfaction and phase.key == "dream":
                 result = self._run_dream_phase(result)
-            elif phase.key == "identity":
+            elif not satisfaction and phase.key == "identity":
                 result = self._run_identity_phase(result)
-            elif phase.key == "rumination_intro":
+            elif not satisfaction and phase.key == "rumination_intro":
                 result = self._run_rumination_phase(result, "intro")
-            elif phase.key == "world":
+            elif not satisfaction and phase.key == "world":
                 result = self._run_world_phase(result)
-            elif phase.key == "work":
+            elif not satisfaction and phase.key == "work":
                 result = self._run_work_phase(result)
-            elif phase.key == "hobby":
+            elif not satisfaction and phase.key == "hobby":
                 result = self._run_hobby_phase(result)
-            elif phase.key == "rumination_extro":
+            elif not satisfaction and phase.key == "rumination_extro":
                 result = self._run_rumination_phase(result, "extro")
-            elif phase.key == "will":
+            elif not satisfaction and phase.key == "will":
                 result = self._run_will_phase(result)
         except Exception as exc:
             logger.exception(
@@ -2775,6 +2808,35 @@ class ConsciousnessLoopManager:
             return result
         except Exception as exc:
             logger.warning("LOOP DIARY failed cycle_id=%s error=%s", cycle_id, exc)
+            return None
+
+    def _claim_will_phase_satisfaction(
+        self,
+        *,
+        phase: LoopPhase,
+        pulse: Optional[Dict[str, Any]],
+        execution_mode: str,
+        cycle_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Claim one confirmed WILL result for an eligible automatic pulse."""
+        if not pulse or execution_mode == "manual":
+            return None
+        try:
+            from engines.will_phase_arbitration import WillPhaseArbitration
+
+            return WillPhaseArbitration(self.db).claim_for_phase(
+                agent_instance=self.agent_instance,
+                cycle_id=cycle_id,
+                phase=phase.key,
+                phase_pulse_id=int(pulse.get("id") or 0),
+            )
+        except Exception as exc:
+            logger.warning(
+                "LOOP WILL phase arbitration failed cycle_id=%s phase=%s error=%s",
+                cycle_id,
+                phase.key,
+                exc,
+            )
             return None
 
     def sync_loop(self, trigger_source: str = "scheduled_trigger", notify_admin: bool = False) -> Dict:

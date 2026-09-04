@@ -1,6 +1,6 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 3.7 - Contrato de expressao do WILL - Setembro 2026**
+**Versao 3.8 - Arbitragem WILL-ciclo - Setembro 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
@@ -447,6 +447,8 @@ A partir de 18/08/2026, o roadmap passa a ter duas trilhas coordenadas. A trilha
 
 **Setimo corte implementado em 04/09/2026: contrato de expressao e capacidades.** Cada transbordo passa por `will_expressions` e `will_expression_receipts`, com instancia, relacao, vontade vencedora, capacidade elegivel, intencao estruturada, risco, custo, chave de idempotencia e resultado. As tres vontades possuem capacidades internas registradas; o pulso nao descarrega pressao durante planejamento, bloqueio ou falha. Uma entrega preparada e reivindicada uma unica vez, e somente a confirmacao do canal produz `completed` e permite aliviar a pressao. Repeticoes ficam em `delivery_in_progress` e nao duplicam a entrega. O scheduler existente foi ligado ao recibo sem abrir novos canais; geracao paga de imagens continua desativada.
 
+**Oitavo corte implementado em 04/09/2026: arbitragem WILL-ciclo.** Uma expressao confirmada de `saber` ou `expressar` gera um recibo de satisfacao de `world` ou `hobby`, respectivamente, com qualidade, validade, evidencia e escopo. O scheduler do loop pode consumir cada recibo uma unica vez para um pulso automatico elegivel e registra `satisfied_by_will` no resultado da fase. `dream`, `identity`, `rumination_intro`, `rumination_extro` e `will` permanecem protegidos; a capacidade relacional ainda nao substitui uma fase circadiana. Falhas, bloqueios, propostas e dry-runs nao criam satisfacao.
+
 ### 10.1.1 Autonomia volitiva e ritmo circadiano
 
 Antes de qualquer abertura controlada da instancia a novos participantes, o modulo WILL devera deixar de ser apenas um leitor de scores e se tornar o regulador persistente de direcao, disponibilidade e recuperacao do agente. A autonomia aqui e arquitetural: a continuidade do agente escolhe, com base em estado e evidencia, quando se orientar ao mundo, a uma relacao, a uma expressao ou a um periodo de elaboracao; nao e uma alegacao de consciencia humana continua.
@@ -459,9 +461,8 @@ Antes de qualquer abertura controlada da instancia a novos participantes, o modu
 
 **Cortes seguintes**:
 
-1. **Arbitragem com o ciclo**: registrar `satisfied_by_will` por pulso ou fase, com fonte, resultado, qualidade e validade. Somente uma execucao efetiva e compativel com a fase pode reduzir trabalho do loop; falhas, dry-runs e propostas nao a substituem.
-2. **Refracao e disponibilidade relacional**: criar estado de disponibilidade por Relation e por instancia, com cadencia, janela de contato, orcamento de turnos/profundidade, cooldown e periodo de elaboracao. Uma conversa intensa pode produzir resposta breve ou retomada posterior, sem silenciar protocolos de seguranca, comandos essenciais ou outras relacoes.
-3. **Piloto convidado**: convite explicito, consentimento, Relation ativa, regras de canal, limites de custo e observabilidade. O canal Telegram nao sera aberto a nao-admin antes dos dois cortes anteriores, dos testes de nao vazamento e da politica de resposta refrataria estarem aceitos.
+1. **Refracao e disponibilidade relacional**: criar estado de disponibilidade por Relation e por instancia, com cadencia, janela de contato, orcamento de turnos/profundidade, cooldown e periodo de elaboracao. Uma conversa intensa pode produzir resposta breve ou retomada posterior, sem silenciar protocolos de seguranca, comandos essenciais ou outras relacoes.
+2. **Piloto convidado**: convite explicito, consentimento, Relation ativa, regras de canal, limites de custo e observabilidade. O canal Telegram nao sera aberto a nao-admin antes dos dois cortes anteriores, dos testes de nao vazamento e da politica de resposta refrataria estarem aceitos.
 
 **Criterios de aceite da fase**:
 

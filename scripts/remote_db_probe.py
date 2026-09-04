@@ -676,6 +676,55 @@ def query_expressions(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[
     }
 
 
+def query_phase_satisfaction(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, Any]:
+    """Read phase arbitration receipts without exposing expression payloads."""
+    if not table_exists(cursor, "will_phase_satisfactions"):
+        return {
+            "probe": "phase_satisfaction",
+            "available": False,
+            "agent_instance": getattr(args, "agent_instance", DEFAULT_AGENT_INSTANCE),
+            "rows": [],
+        }
+
+    scope_where, scope_params = _will_scope_filter(cursor, "will_phase_satisfactions", args)
+    rows = fetch_recent(
+        cursor,
+        "will_phase_satisfactions",
+        [
+            "id",
+            "agent_instance",
+            "relation_id",
+            "scope_kind",
+            "cycle_id",
+            "phase",
+            "expression_id",
+            "will_name",
+            "capability_key",
+            "status",
+            "quality",
+            "source_ref",
+            "result_code",
+            "valid_until",
+            "consumed_by_phase_pulse_id",
+            "consumed_at",
+            "created_at",
+            "updated_at",
+        ],
+        where="1 = 1" + scope_where,
+        params=scope_params,
+        order_by="updated_at DESC, id DESC",
+        limit=args.limit,
+    )
+    return {
+        "probe": "phase_satisfaction",
+        "available": True,
+        "agent_instance": getattr(args, "agent_instance", DEFAULT_AGENT_INSTANCE),
+        "relation_id": getattr(args, "relation_id", None),
+        "scope_kind": getattr(args, "scope_kind", "global"),
+        "rows": rows,
+    }
+
+
 def query_relational_state(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, Any]:
     if not table_exists(cursor, "relational_state"):
         return {
@@ -1965,6 +2014,7 @@ PROBES: Dict[str, Callable[[sqlite3.Cursor, argparse.Namespace], Dict[str, Any]]
     "loop": query_loop,
     "meta": query_meta,
     "phase_pulses": query_phase_pulses,
+    "phase_satisfaction": query_phase_satisfaction,
     "pressure": query_pressure,
     "relational_state": query_relational_state,
     "relations": query_relations,

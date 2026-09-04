@@ -1059,12 +1059,16 @@ ESTADO QUALITATIVO:
             scope_kind=scope_kind,
         )
         if expression_id is not None:
-            self._expression_engine().finalize_delivery(
+            expression = self._expression_engine().finalize_delivery(
                 expression_id,
                 success=success,
                 summary=action_summary,
                 evidence={"event_id": event_id, "cycle_id": cycle_id},
             )
+            if expression and expression.get("status") == "completed":
+                from engines.will_phase_arbitration import WillPhaseArbitration
+
+                WillPhaseArbitration(self.db).record_expression_completion(expression)
         if success:
             refreshed = self._apply_success_release(state, winner, action_summary)
             self._update_event(event_id, status="completed", action_summary=self._truncate(action_summary, 240))
