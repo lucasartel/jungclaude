@@ -13,6 +13,13 @@ import sqlite3
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
+from engines.will_scope import (
+    GLOBAL_SCOPE,
+    scope_context,
+    scope_where_clause,
+    scoped_insert_columns,
+    table_columns,
+)
 from instance_settings import get_setting_value
 from llm_providers import get_llm_response
 from instance_config import ADMIN_USER_ID
@@ -70,14 +77,30 @@ def _row_to_pressure_state(row: Any) -> Optional[Dict[str, Any]]:
     return data
 
 
-def load_latest_pressure_state(db_manager, user_id: str, cycle_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def load_latest_pressure_state(
+    db_manager,
+    user_id: str,
+    cycle_id: Optional[str] = None,
+    *,
+    relation_id: Optional[str] = None,
+    agent_instance: Optional[str] = None,
+    scope_kind: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     cursor = db_manager.conn.cursor()
+    scope = scope_context(
+        db_manager,
+        agent_instance=agent_instance,
+        relation_id=relation_id,
+        scope_kind=scope_kind,
+    )
     query = """
         SELECT *
         FROM agent_will_pressure_state
         WHERE user_id = ?
     """
-    params: List[Any] = [user_id]
+    scope_sql, scope_params = scope_where_clause(cursor, "agent_will_pressure_state", scope)
+    query += scope_sql
+    params: List[Any] = [user_id, *scope_params]
     if cycle_id:
         query += " AND cycle_id = ?"
         params.append(cycle_id)
@@ -94,6 +117,10 @@ def load_latest_pressure_state_from_sqlite(
     user_id: str,
     cycle_id: Optional[str] = None,
     db_path: Optional[str] = None,
+    *,
+    relation_id: Optional[str] = None,
+    agent_instance: Optional[str] = None,
+    scope_kind: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     path = db_path or _resolve_sqlite_path()
     if not os.path.exists(path):
@@ -103,12 +130,20 @@ def load_latest_pressure_state_from_sqlite(
     conn.row_factory = sqlite3.Row
     try:
         cursor = conn.cursor()
+        scope = scope_context(
+            None,
+            agent_instance=agent_instance,
+            relation_id=relation_id,
+            scope_kind=scope_kind,
+        )
         query = """
             SELECT *
             FROM agent_will_pressure_state
             WHERE user_id = ?
         """
-        params: List[Any] = [user_id]
+        scope_sql, scope_params = scope_where_clause(cursor, "agent_will_pressure_state", scope)
+        query += scope_sql
+        params: List[Any] = [user_id, *scope_params]
         if cycle_id:
             query += " AND cycle_id = ?"
             params.append(cycle_id)
@@ -125,10 +160,18 @@ def load_latest_pressure_state_from_sqlite(
 class WillPressureEngine:
     def __init__(self, db_manager, threshold: Optional[float] = None):
         self.db = db_manager
+        self.agent_instance = getattr(db_manager, "agent_instance", None) or os.getenv("AGENT_INSTANCE", "jung_v1")
         resolved_threshold = threshold
         if resolved_threshold is None:
             resolved_threshold = get_setting_value("will_pressure_threshold", db_manager)
         self.threshold = float(resolved_threshold)
+
+    def _scope_instance(self) -> str:
+        return (
+            getattr(self, "agent_instance", None)
+            or getattr(self.db, "agent_instance", None)
+            or os.getenv("AGENT_INSTANCE", "jung_v1")
+        )
 
     def _refractory_hours(self) -> float:
         return float(get_setting_value("will_refractory_hours", self.db) or REFRACTORY_HOURS)
@@ -201,19 +244,31 @@ class WillPressureEngine:
             "last_backlog_bucket": 0,
         }
 
-    def _get_or_create_state(self, user_id: str, cycle_id: Optional[str] = None) -> Dict[str, Any]:
+    def _get_or_create_state(
+        self,
+        user_id: str,
+        cycle_id: Optional[str] = None,
+        *,
+        relation_id: Optional[str] = None,
+        agent_instance: Optional[str] = None,
+        scope_kind: Optional[str] = None,
+    ) -> Dict[str, Any]:
         resolved_cycle_id = self._ensure_cycle_id(user_id, cycle_id)
         cursor = self.db.conn.cursor()
-        cursor.execute(
-            """
+        scope = scope_context(
+            self.db,
+            agent_instance=agent_instance or self._scope_instance(),
+            relation_id=relation_id,
+            scope_kind=scope_kind,
+        )
+        query = """
             SELECT *
             FROM agent_will_pressure_state
             WHERE user_id = ? AND cycle_id = ?
-            ORDER BY id DESC
-            LIMIT 1
-            """,
-            (user_id, resolved_cycle_id),
-        )
+        """
+        scope_sql, scope_params = scope_where_clause(cursor, "agent_will_pressure_state", scope)
+        query += scope_sql + " ORDER BY id DESC LIMIT 1"
+        cursor.execute(query, (user_id, resolved_cycle_id, *scope_params))
         row = cursor.fetchone()
         if row:
             state = _row_to_pressure_state(row)
@@ -221,14 +276,26 @@ class WillPressureEngine:
             return state
 
         markers = self._default_markers()
+        columns, values = scoped_insert_columns(
+            cursor,
+            "agent_will_pressure_state",
+            (
+                "user_id",
+                "cycle_id",
+                "saber_pressure",
+                "relacionar_pressure",
+                "expressar_pressure",
+                "dominant_pressure",
+                "threshold_crossed",
+                "source_markers_json",
+            ),
+            (user_id, resolved_cycle_id, 0, 0, 0, None, 0, json.dumps(markers, ensure_ascii=False)),
+            scope,
+        )
+        placeholders = ", ".join("?" for _ in columns)
         cursor.execute(
-            """
-            INSERT INTO agent_will_pressure_state (
-                user_id, cycle_id, saber_pressure, relacionar_pressure, expressar_pressure,
-                dominant_pressure, threshold_crossed, source_markers_json
-            ) VALUES (?, ?, 0, 0, 0, NULL, 0, ?)
-            """,
-            (user_id, resolved_cycle_id, json.dumps(markers, ensure_ascii=False)),
+            f"INSERT INTO agent_will_pressure_state ({', '.join(columns)}) VALUES ({placeholders})",
+            tuple(values),
         )
         self.db.conn.commit()
         cursor.execute("SELECT * FROM agent_will_pressure_state WHERE id = ?", (cursor.lastrowid,))
@@ -266,16 +333,26 @@ class WillPressureEngine:
         action_attempted: Optional[str],
         action_summary: str,
         status: str,
+        scope: Optional[Dict[str, Optional[str]]] = None,
     ) -> int:
         cursor = self.db.conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO agent_will_pulse_events (
-                user_id, cycle_id, trigger_source,
-                saber_pressure, relacionar_pressure, expressar_pressure,
-                winning_will, decision_reason, action_attempted, action_summary, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+        resolved_scope = scope or scope_context(self.db, agent_instance=self._scope_instance())
+        columns, values = scoped_insert_columns(
+            cursor,
+            "agent_will_pulse_events",
+            (
+                "user_id",
+                "cycle_id",
+                "trigger_source",
+                "saber_pressure",
+                "relacionar_pressure",
+                "expressar_pressure",
+                "winning_will",
+                "decision_reason",
+                "action_attempted",
+                "action_summary",
+                "status",
+            ),
             (
                 user_id,
                 cycle_id,
@@ -289,6 +366,12 @@ class WillPressureEngine:
                 action_summary,
                 status,
             ),
+            resolved_scope,
+        )
+        placeholders = ", ".join("?" for _ in columns)
+        cursor.execute(
+            f"INSERT INTO agent_will_pulse_events ({', '.join(columns)}) VALUES ({placeholders})",
+            tuple(values),
         )
         self.db.conn.commit()
         return cursor.lastrowid
@@ -330,33 +413,45 @@ class WillPressureEngine:
         winner = max(PRESSURE_ORDER, key=lambda key: (pressures[key], key))
         return winner if pressures[winner] > 0 else None
 
-    def _latest_conversation(self, user_id: str) -> Optional[Dict[str, Any]]:
+    def _latest_conversation(
+        self,
+        user_id: str,
+        relation_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
         cursor = self.db.conn.cursor()
-        cursor.execute(
-            """
+        query = """
             SELECT id, user_input, ai_response, tension_level, affective_charge, existential_depth, timestamp, platform
             FROM conversations
             WHERE user_id = ? AND platform != 'proactive'
-            ORDER BY timestamp DESC, id DESC
-            LIMIT 1
-            """,
-            (user_id,),
-        )
+        """
+        params: List[Any] = [user_id]
+        if relation_id and "relation_id" in table_columns(cursor, "conversations"):
+            query += " AND relation_id = ?"
+            params.append(relation_id)
+        query += " ORDER BY timestamp DESC, id DESC LIMIT 1"
+        cursor.execute(query, tuple(params))
         row = cursor.fetchone()
         return dict(row) if row else None
 
-    def _recent_real_conversation_count(self, user_id: str, hours: int = 12) -> int:
+    def _recent_real_conversation_count(
+        self,
+        user_id: str,
+        hours: int = 12,
+        relation_id: Optional[str] = None,
+    ) -> int:
         cursor = self.db.conn.cursor()
-        cursor.execute(
-            """
+        query = """
             SELECT COUNT(*)
             FROM conversations
             WHERE user_id = ?
               AND platform != 'proactive'
               AND datetime(timestamp) >= datetime('now', ?)
-            """,
-            (user_id, f"-{hours} hours"),
-        )
+        """
+        params: List[Any] = [user_id, f"-{hours} hours"]
+        if relation_id and "relation_id" in table_columns(cursor, "conversations"):
+            query += " AND relation_id = ?"
+            params.append(relation_id)
+        cursor.execute(query, tuple(params))
         return int(cursor.fetchone()[0] or 0)
 
     def _calculate_accumulation(
@@ -364,6 +459,7 @@ class WillPressureEngine:
         user_id: str,
         cycle_id: str,
         state: Dict[str, Any],
+        relation_id: Optional[str] = None,
     ) -> Tuple[Dict[str, float], Dict[str, Any], List[str], List[str]]:
         cursor = self.db.conn.cursor()
         markers = {**self._default_markers(), **(state.get("source_markers") or {})}
@@ -396,7 +492,7 @@ class WillPressureEngine:
             markers["last_contradictory_tension_id"] = latest_tension_id
             reasons.append("saber subiu porque surgiu tensao contraditoria ainda sem sintese")
 
-        latest_conversation = self._latest_conversation(user_id)
+        latest_conversation = self._latest_conversation(user_id, relation_id=relation_id)
         latest_conversation_id = int((latest_conversation or {}).get("id") or 0)
         try:
             active_gaps = self.db.get_active_knowledge_gaps(user_id, limit=1)
@@ -520,7 +616,7 @@ class WillPressureEngine:
                 markers["last_abrupt_conversation_id"] = latest_conversation_id
                 reasons.append("relacionar subiu porque a ultima conversa teve alta carga e fim abrupto")
 
-        recent_count = self._recent_real_conversation_count(user_id, hours=12)
+        recent_count = self._recent_real_conversation_count(user_id, hours=12, relation_id=relation_id)
         if silence_hours <= 3.0:
             reductions["relacionar"] += 8.0
         if recent_count >= 4:
@@ -547,10 +643,31 @@ class WillPressureEngine:
         self,
         user_id: str = ADMIN_USER_ID,
         cycle_id: Optional[str] = None,
+        *,
+        relation_id: Optional[str] = None,
+        agent_instance: Optional[str] = None,
+        scope_kind: Optional[str] = None,
     ) -> Dict[str, Any]:
-        state = self._get_or_create_state(user_id=user_id, cycle_id=cycle_id)
+        scope = scope_context(
+            self.db,
+            agent_instance=agent_instance or self._scope_instance(),
+            relation_id=relation_id,
+            scope_kind=scope_kind,
+        )
+        state = self._get_or_create_state(
+            user_id=user_id,
+            cycle_id=cycle_id,
+            relation_id=scope.get("relation_id"),
+            agent_instance=scope.get("agent_instance"),
+            scope_kind=scope.get("scope_kind"),
+        )
         resolved_cycle_id = state["cycle_id"]
-        pressures, markers, reasons, delta_summary = self._calculate_accumulation(user_id, resolved_cycle_id, state)
+        pressures, markers, reasons, delta_summary = self._calculate_accumulation(
+            user_id,
+            resolved_cycle_id,
+            state,
+            relation_id=scope.get("relation_id"),
+        )
         dominant = self._dominant_pressure(pressures)
         refreshed = self._update_state(
             state["id"],
@@ -563,6 +680,7 @@ class WillPressureEngine:
         )
         refreshed["accumulation_reasons"] = reasons
         refreshed["delta_summary"] = delta_summary
+        refreshed["will_scope"] = scope
         return refreshed
 
     def _choose_winning_will(
@@ -874,8 +992,18 @@ ESTADO QUALITATIVO:
         winner: str,
         success: bool,
         action_summary: str,
+        *,
+        relation_id: Optional[str] = None,
+        agent_instance: Optional[str] = None,
+        scope_kind: Optional[str] = None,
     ) -> Dict[str, Any]:
-        state = self._get_or_create_state(user_id=user_id, cycle_id=cycle_id)
+        state = self._get_or_create_state(
+            user_id=user_id,
+            cycle_id=cycle_id,
+            relation_id=relation_id,
+            agent_instance=agent_instance or self._scope_instance(),
+            scope_kind=scope_kind,
+        )
         if success:
             refreshed = self._apply_success_release(state, winner, action_summary)
             self._update_event(event_id, status="completed", action_summary=self._truncate(action_summary, 240))
@@ -889,17 +1017,42 @@ ESTADO QUALITATIVO:
         user_id: str = ADMIN_USER_ID,
         trigger_source: str = "will_pulse",
         proactive_system=None,
+        *,
+        relation_id: Optional[str] = None,
+        agent_instance: Optional[str] = None,
+        scope_kind: Optional[str] = None,
     ) -> Dict[str, Any]:
         from will_engine import load_latest_will_state
 
-        pressure_state = self.recalculate_pressure(user_id=user_id)
+        scope = scope_context(
+            self.db,
+            agent_instance=agent_instance or self._scope_instance(),
+            relation_id=relation_id,
+            scope_kind=scope_kind,
+        )
+        if relation_id or agent_instance or scope_kind:
+            pressure_state = self.recalculate_pressure(
+                user_id=user_id,
+                relation_id=scope.get("relation_id"),
+                agent_instance=scope.get("agent_instance"),
+                scope_kind=scope.get("scope_kind"),
+            )
+        else:
+            pressure_state = self.recalculate_pressure(user_id=user_id)
         cycle_id = pressure_state["cycle_id"]
         pressures = {
             "saber": float(pressure_state.get("saber_pressure") or 0.0),
             "relacionar": float(pressure_state.get("relacionar_pressure") or 0.0),
             "expressar": float(pressure_state.get("expressar_pressure") or 0.0),
         }
-        will_state = load_latest_will_state(self.db, user_id=user_id, cycle_id=cycle_id) or {}
+        will_state = load_latest_will_state(
+            self.db,
+            user_id=user_id,
+            cycle_id=cycle_id,
+            relation_id=scope.get("relation_id"),
+            agent_instance=scope.get("agent_instance"),
+            scope_kind=scope.get("scope_kind"),
+        ) or {}
 
         if not any(value >= self.threshold for value in pressures.values()):
             event_id = self._register_event(
@@ -912,6 +1065,7 @@ ESTADO QUALITATIVO:
                 action_attempted=None,
                 action_summary="pulso sem acao",
                 status="no_action",
+                scope=scope,
             )
             return {"status": "no_action", "event_id": event_id, "pressure_state": pressure_state}
 
@@ -927,6 +1081,7 @@ ESTADO QUALITATIVO:
                 action_attempted=None,
                 action_summary="pulso sem vencedora",
                 status="no_action",
+                scope=scope,
             )
             return {"status": "no_action", "event_id": event_id, "pressure_state": pressure_state}
 
@@ -941,6 +1096,7 @@ ESTADO QUALITATIVO:
                 action_attempted=f"{winner}_release",
                 action_summary="acao bloqueada por refratariedade ativa",
                 status="refractory_blocked",
+                scope=scope,
             )
             return {"status": "refractory_blocked", "event_id": event_id, "pressure_state": pressure_state, "winner": winner}
 
@@ -962,6 +1118,7 @@ ESTADO QUALITATIVO:
                 action_attempted="proactive_relational_message",
                 action_summary=relational.get("action_summary") or "",
                 status="triggered" if success and relational.get("pending_delivery") else "failed",
+                scope=scope,
             )
             if not success or not relational.get("pending_delivery"):
                 skipped = bool(relational.get("skipped"))
@@ -997,6 +1154,7 @@ ESTADO QUALITATIVO:
             action_attempted=f"{winner}_release",
             action_summary=execution.get("action_summary") or "",
             status="triggered" if success and pending_delivery else "failed",
+            scope=scope,
         )
         if not success or not pending_delivery:
             refreshed = self._apply_failed_release(

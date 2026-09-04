@@ -1153,6 +1153,9 @@ class SchemaDatabaseMixin:
         if hasattr(self, "_init_relations_schema"):
             self._init_relations_schema()
 
+        if hasattr(self, "_init_will_scope_schema"):
+            self._init_will_scope_schema()
+
         # Relation scope is additive for both generations of structured facts.
         for table in ("user_facts", "user_facts_v2"):
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))

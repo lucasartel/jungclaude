@@ -19,6 +19,14 @@ import sqlite3
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from engines.will_scope import (
+    GLOBAL_SCOPE,
+    RELATION_SCOPE,
+    scope_context,
+    scope_where_clause,
+    scoped_insert_columns,
+    table_columns,
+)
 from llm_providers import get_llm_response
 
 try:
@@ -101,13 +109,21 @@ def _aggregate_message_signals(
     user_id: str,
     cycle_id: Optional[str] = None,
     limit: int = 10,
+    *,
+    scope: Optional[Dict[str, Optional[str]]] = None,
 ) -> Dict[str, Any]:
     query = """
         SELECT saber_delta, relacionar_delta, expressar_delta, dominant_signal, signal_summary, created_at
         FROM agent_will_message_signals
         WHERE user_id = ?
     """
-    params: List[Any] = [user_id]
+    scope_sql, scope_params = scope_where_clause(
+        cursor,
+        "agent_will_message_signals",
+        scope or {"agent_instance": AGENT_INSTANCE, "relation_id": None, "scope_kind": GLOBAL_SCOPE},
+    )
+    query += scope_sql
+    params: List[Any] = [user_id, *scope_params]
     if cycle_id:
         query += " AND cycle_id = ?"
         params.append(cycle_id)
@@ -155,6 +171,88 @@ def _aggregate_message_signals(
         "constrained_will": constrained,
         "summary": _build_message_signal_summary(dominant, secondary, constrained),
         "latest_created_at": rows[0]["created_at"],
+    }
+
+
+def _aggregate_relation_message_signals(
+    cursor: sqlite3.Cursor,
+    *,
+    agent_instance: str,
+    cycle_id: Optional[str] = None,
+    per_relation_limit: int = 10,
+) -> Dict[str, Any]:
+    """Summarize relation signals without carrying conversation text into global WILL."""
+    columns = table_columns(cursor, "agent_will_message_signals")
+    required = {"agent_instance", "relation_id", "scope_kind"}
+    if not required.issubset(columns):
+        return {
+            "relation_count": 0,
+            "source_relation_ids": [],
+            "scores": {"saber": 0.34, "relacionar": 0.33, "expressar": 0.33},
+            "summary": "",
+        }
+
+    query = """
+        SELECT relation_id, saber_delta, relacionar_delta, expressar_delta, created_at
+        FROM agent_will_message_signals
+        WHERE agent_instance = ?
+          AND scope_kind = ?
+          AND relation_id IS NOT NULL
+    """
+    params: List[Any] = [agent_instance, RELATION_SCOPE]
+    if cycle_id:
+        query += " AND cycle_id = ?"
+        params.append(cycle_id)
+    query += " ORDER BY created_at DESC, id DESC"
+    try:
+        cursor.execute(query, tuple(params))
+    except Exception:
+        return {
+            "relation_count": 0,
+            "source_relation_ids": [],
+            "scores": {"saber": 0.34, "relacionar": 0.33, "expressar": 0.33},
+            "summary": "",
+        }
+
+    grouped: Dict[str, List[Any]] = {}
+    for row in cursor.fetchall():
+        relation_id = str(row["relation_id"] or "")
+        if not relation_id:
+            continue
+        entries = grouped.setdefault(relation_id, [])
+        if len(entries) < per_relation_limit:
+            entries.append(row)
+
+    if not grouped:
+        return {
+            "relation_count": 0,
+            "source_relation_ids": [],
+            "scores": {"saber": 0.34, "relacionar": 0.33, "expressar": 0.33},
+            "summary": "",
+        }
+
+    relation_means = []
+    for rows in grouped.values():
+        relation_means.append(
+            {
+                will_name: sum(float(row[f"{will_name}_delta"] or 0.0) for row in rows) / len(rows)
+                for will_name in WILL_ORDER
+            }
+        )
+    averaged = {
+        will_name: sum(item[will_name] for item in relation_means) / len(relation_means)
+        for will_name in WILL_ORDER
+    }
+    scores = _normalize_scores_generic(averaged)
+    ranked = _rank_wills_generic(scores)
+    return {
+        "relation_count": len(grouped),
+        "source_relation_ids": sorted(grouped),
+        "scores": scores,
+        "summary": (
+            f"Campo relacional agregado de {len(grouped)} relacoes; "
+            f"direcao predominante: {_humanize_will_name(ranked[0])}."
+        ),
     }
 
 
@@ -275,6 +373,10 @@ def load_latest_will_state_from_sqlite(
     user_id: str,
     cycle_id: Optional[str] = None,
     db_path: Optional[str] = None,
+    *,
+    relation_id: Optional[str] = None,
+    agent_instance: Optional[str] = None,
+    scope_kind: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     path = db_path or _resolve_sqlite_path()
     if not os.path.exists(path):
@@ -284,12 +386,20 @@ def load_latest_will_state_from_sqlite(
     conn.row_factory = sqlite3.Row
     try:
         cursor = conn.cursor()
+        scope = scope_context(
+            None,
+            agent_instance=agent_instance,
+            relation_id=relation_id,
+            scope_kind=scope_kind,
+        )
         query = """
             SELECT *
             FROM agent_will_states
             WHERE user_id = ?
         """
-        params: List[Any] = [user_id]
+        scope_sql, scope_params = scope_where_clause(cursor, "agent_will_states", scope)
+        query += scope_sql
+        params: List[Any] = [user_id, *scope_params]
         if cycle_id:
             query += " AND cycle_id = ?"
             params.append(cycle_id)
@@ -297,12 +407,25 @@ def load_latest_will_state_from_sqlite(
         cursor.execute(query, tuple(params))
         row = cursor.fetchone()
         state = _row_to_will_state(row) if row else None
-        message_summary = _aggregate_message_signals(cursor, user_id=user_id, cycle_id=cycle_id, limit=10)
+        message_summary = _aggregate_message_signals(
+            cursor,
+            user_id=user_id,
+            cycle_id=cycle_id,
+            limit=10,
+            scope=scope,
+        )
         blended = _blend_state_with_message_signals(state, message_summary)
         try:
             from will_pressure import load_latest_pressure_state_from_sqlite
 
-            pressure_state = load_latest_pressure_state_from_sqlite(user_id=user_id, cycle_id=cycle_id, db_path=path)
+            pressure_state = load_latest_pressure_state_from_sqlite(
+                user_id=user_id,
+                cycle_id=cycle_id,
+                db_path=path,
+                relation_id=scope.get("relation_id"),
+                agent_instance=scope.get("agent_instance"),
+                scope_kind=scope.get("scope_kind"),
+            )
         except Exception:
             pressure_state = None
         return _merge_pressure_state(blended, pressure_state)
@@ -313,14 +436,30 @@ def load_latest_will_state_from_sqlite(
         conn.close()
 
 
-def load_latest_will_state(db_manager, user_id: str, cycle_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def load_latest_will_state(
+    db_manager,
+    user_id: str,
+    cycle_id: Optional[str] = None,
+    *,
+    relation_id: Optional[str] = None,
+    agent_instance: Optional[str] = None,
+    scope_kind: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     cursor = db_manager.conn.cursor()
+    scope = scope_context(
+        db_manager,
+        agent_instance=agent_instance,
+        relation_id=relation_id,
+        scope_kind=scope_kind,
+    )
     query = """
         SELECT *
         FROM agent_will_states
         WHERE user_id = ?
     """
-    params: List[Any] = [user_id]
+    scope_sql, scope_params = scope_where_clause(cursor, "agent_will_states", scope)
+    query += scope_sql
+    params: List[Any] = [user_id, *scope_params]
     if cycle_id:
         query += " AND cycle_id = ?"
         params.append(cycle_id)
@@ -328,12 +467,25 @@ def load_latest_will_state(db_manager, user_id: str, cycle_id: Optional[str] = N
     cursor.execute(query, tuple(params))
     row = cursor.fetchone()
     state = _row_to_will_state(row) if row else None
-    message_summary = _aggregate_message_signals(cursor, user_id=user_id, cycle_id=cycle_id, limit=10)
+    message_summary = _aggregate_message_signals(
+        cursor,
+        user_id=user_id,
+        cycle_id=cycle_id,
+        limit=10,
+        scope=scope,
+    )
     blended = _blend_state_with_message_signals(state, message_summary)
     try:
         from will_pressure import load_latest_pressure_state
 
-        pressure_state = load_latest_pressure_state(db_manager, user_id=user_id, cycle_id=cycle_id)
+        pressure_state = load_latest_pressure_state(
+            db_manager,
+            user_id=user_id,
+            cycle_id=cycle_id,
+            relation_id=scope.get("relation_id"),
+            agent_instance=scope.get("agent_instance"),
+            scope_kind=scope.get("scope_kind"),
+        )
     except Exception:
         pressure_state = None
     return _merge_pressure_state(blended, pressure_state)
@@ -342,7 +494,7 @@ def load_latest_will_state(db_manager, user_id: str, cycle_id: Optional[str] = N
 class WillEngine:
     def __init__(self, db_manager):
         self.db = db_manager
-        self.agent_instance = AGENT_INSTANCE
+        self.agent_instance = getattr(db_manager, "agent_instance", None) or AGENT_INSTANCE
 
     def _truncate(self, text: str, limit: int = 220) -> str:
         cleaned = " ".join((text or "").strip().split())
@@ -374,18 +526,25 @@ class WillEngine:
                 return {}
         return {}
 
-    def _recent_conversations(self, user_id: str, limit: int = 5) -> List[Dict[str, str]]:
+    def _recent_conversations(
+        self,
+        user_id: str,
+        limit: int = 5,
+        relation_id: Optional[str] = None,
+    ) -> List[Dict[str, str]]:
         cursor = self.db.conn.cursor()
-        cursor.execute(
-            """
+        query = """
             SELECT user_input, ai_response, timestamp
             FROM conversations
             WHERE user_id = ?
-            ORDER BY timestamp DESC
-            LIMIT ?
-            """,
-            (user_id, limit),
-        )
+        """
+        params: List[Any] = [user_id]
+        if relation_id and "relation_id" in table_columns(cursor, "conversations"):
+            query += " AND relation_id = ?"
+            params.append(relation_id)
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+        cursor.execute(query, tuple(params))
         items = []
         for row in cursor.fetchall():
             items.append(
@@ -412,35 +571,49 @@ class WillEngine:
         row = cursor.fetchone()
         return dict(row) if row else None
 
-    def _recent_rumination(self, user_id: str, limit: int = 3) -> List[Dict[str, Any]]:
+    def _recent_rumination(
+        self,
+        user_id: str,
+        limit: int = 3,
+        relation_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         cursor = self.db.conn.cursor()
-        cursor.execute(
-            """
+        query = """
             SELECT id, symbol_content, question_content, full_message, crystallized_at
             FROM rumination_insights
             WHERE user_id = ?
-            ORDER BY id DESC
-            LIMIT ?
-            """,
-            (user_id, limit),
-        )
+        """
+        params: List[Any] = [user_id]
+        if relation_id and "relation_id" in table_columns(cursor, "rumination_insights"):
+            query += " AND relation_id = ?"
+            params.append(relation_id)
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+        cursor.execute(query, tuple(params))
         return [dict(row) for row in cursor.fetchall()]
 
-    def _active_rumination_tensions(self, user_id: str, limit: int = 4) -> List[Dict[str, Any]]:
+    def _active_rumination_tensions(
+        self,
+        user_id: str,
+        limit: int = 4,
+        relation_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         cursor = self.db.conn.cursor()
         try:
-            cursor.execute(
-                """
+            query = """
                 SELECT id, tension_type, pole_a_content, pole_b_content,
                        tension_description, intensity, maturity_score, status
                 FROM rumination_tensions
                 WHERE user_id = ?
                   AND status IN ('open', 'maturing', 'ready_for_synthesis')
-                ORDER BY maturity_score DESC, intensity DESC, id DESC
-                LIMIT ?
-                """,
-                (user_id, limit),
-            )
+            """
+            params: List[Any] = [user_id]
+            if relation_id and "relation_id" in table_columns(cursor, "rumination_tensions"):
+                query += " AND relation_id = ?"
+                params.append(relation_id)
+            query += " ORDER BY maturity_score DESC, intensity DESC, id DESC LIMIT ?"
+            params.append(limit)
+            cursor.execute(query, tuple(params))
             return [dict(row) for row in cursor.fetchall()]
         except Exception as exc:
             logger.debug("WillEngine: sem tensoes ruminativas ativas: %s", exc)
@@ -496,11 +669,16 @@ class WillEngine:
             logger.debug("WillEngine: sem estado de mundo adicional: %s", exc)
             return {}
 
-    def _latest_relational_state(self, user_id: str) -> Optional[Dict[str, Any]]:
+    def _latest_relational_state(
+        self,
+        user_id: str,
+        relation_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
         try:
             return self.db.get_latest_relational_state(
                 agent_instance=self.agent_instance,
                 user_id=user_id,
+                relation_id=relation_id,
             )
         except Exception as exc:
             logger.debug("WillEngine: sem estado relacional adicional: %s", exc)
@@ -514,20 +692,53 @@ class WillEngine:
         current_state: Optional[Dict[str, Any]] = None,
         world_state: Optional[Dict[str, Any]] = None,
         current_user_message: Optional[str] = None,
+        relation_id: Optional[str] = None,
+        agent_instance: Optional[str] = None,
+        scope_kind: Optional[str] = None,
     ) -> Dict[str, Any]:
+        scope = scope_context(
+            self.db,
+            agent_instance=agent_instance or self.agent_instance,
+            relation_id=relation_id,
+            scope_kind=scope_kind,
+        )
+        scoped_relation_id = scope.get("relation_id")
         dream = self._latest_dream(user_id)
-        rumination = self._recent_rumination(user_id)
-        active_tensions = self._active_rumination_tensions(user_id)
+        rumination = (
+            self._recent_rumination(user_id, relation_id=scoped_relation_id)
+            if scoped_relation_id
+            else self._recent_rumination(user_id)
+        )
+        active_tensions = (
+            self._active_rumination_tensions(user_id, relation_id=scoped_relation_id)
+            if scoped_relation_id
+            else self._active_rumination_tensions(user_id)
+        )
         meta = self._latest_meta_consciousness(user_id)
         hobby = self._latest_hobby(user_id)
         world = self._latest_world_state(world_state)
-        relational = self._latest_relational_state(user_id)
-        conversations = self._recent_conversations(user_id)
+        relational = (
+            self._latest_relational_state(user_id, relation_id=scoped_relation_id)
+            if scoped_relation_id
+            else self._latest_relational_state(user_id)
+        )
+        conversations = (
+            self._recent_conversations(user_id, relation_id=scoped_relation_id)
+            if scoped_relation_id
+            else self._recent_conversations(user_id)
+        )
         pressure_state = None
         try:
             from will_pressure import load_latest_pressure_state
 
-            pressure_state = load_latest_pressure_state(self.db, user_id=user_id, cycle_id=cycle_id)
+            pressure_state = load_latest_pressure_state(
+                self.db,
+                user_id=user_id,
+                cycle_id=cycle_id,
+                relation_id=scoped_relation_id,
+                agent_instance=scope.get("agent_instance"),
+                scope_kind=scope.get("scope_kind"),
+            )
         except Exception as exc:
             logger.debug("WillEngine: sem estado de pressao adicional: %s", exc)
         message_signal_summary = _aggregate_message_signals(
@@ -535,9 +746,20 @@ class WillEngine:
             user_id=user_id,
             cycle_id=cycle_id,
             limit=12,
+            scope=scope,
+        )
+        global_relation_signal_summary = (
+            _aggregate_relation_message_signals(
+                self.db.conn.cursor(),
+                agent_instance=str(scope.get("agent_instance") or self.agent_instance),
+                cycle_id=cycle_id,
+            )
+            if scope.get("scope_kind") == GLOBAL_SCOPE
+            else None
         )
 
         return {
+            "will_scope": scope,
             "cycle_id": cycle_id,
             "source_phase": source_phase,
             "current_user_message": self._truncate(current_user_message or "", 220),
@@ -592,6 +814,7 @@ class WillEngine:
             "hobby": hobby,
             "pressure_state": pressure_state,
             "message_signal_summary": message_signal_summary,
+            "global_relation_signal_summary": global_relation_signal_summary,
             "recent_conversations": conversations,
             "relational_state": (
                 {
@@ -619,6 +842,11 @@ class WillEngine:
                 "has_pressure_state": 1 if pressure_state else 0,
                 "has_relational_state": 1 if relational else 0,
                 "message_signal_count": message_signal_summary.get("count", 0),
+                "global_relation_signal_count": (
+                    global_relation_signal_summary.get("relation_count", 0)
+                    if global_relation_signal_summary
+                    else 0
+                ),
             },
         }
 
@@ -785,9 +1013,17 @@ class WillEngine:
         cycle_id: Optional[str] = None,
         phase: Optional[str] = None,
         source: str = "conversation",
+        relation_id: Optional[str] = None,
+        agent_instance: Optional[str] = None,
     ) -> Optional[int]:
         signal = self.analyze_message_signal(user_input, ai_response)
         cursor = self.db.conn.cursor()
+        scope = scope_context(
+            self.db,
+            agent_instance=agent_instance or self.agent_instance,
+            relation_id=relation_id,
+            resolve_participant_user_id=user_id,
+        )
 
         resolved_cycle_id = cycle_id
         resolved_phase = phase
@@ -812,21 +1048,21 @@ class WillEngine:
         if not resolved_phase:
             resolved_phase = "conversation"
 
-        cursor.execute(
-            """
-            INSERT INTO agent_will_message_signals (
-                user_id,
-                conversation_id,
-                cycle_id,
-                phase,
-                source,
-                saber_delta,
-                relacionar_delta,
-                expressar_delta,
-                dominant_signal,
-                signal_summary
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+        columns, values = scoped_insert_columns(
+            cursor,
+            "agent_will_message_signals",
+            (
+                "user_id",
+                "conversation_id",
+                "cycle_id",
+                "phase",
+                "source",
+                "saber_delta",
+                "relacionar_delta",
+                "expressar_delta",
+                "dominant_signal",
+                "signal_summary",
+            ),
             (
                 user_id,
                 conversation_id,
@@ -839,6 +1075,12 @@ class WillEngine:
                 signal["dominant_signal"],
                 signal["signal_summary"],
             ),
+            scope,
+        )
+        placeholders = ", ".join("?" for _ in columns)
+        cursor.execute(
+            f"INSERT INTO agent_will_message_signals ({', '.join(columns)}) VALUES ({placeholders})",
+            tuple(values),
         )
         self.db.conn.commit()
         return cursor.lastrowid
@@ -917,18 +1159,30 @@ Material do ciclo:
         status: str,
         state: Dict[str, Any],
         source_summary: Dict[str, Any],
+        scope: Dict[str, Optional[str]],
     ) -> int:
         cursor = self.db.conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO agent_will_states (
-                user_id, cycle_id, phase, trigger_source, status,
-                saber_score, relacionar_score, expressar_score,
-                dominant_will, secondary_will, constrained_will,
-                will_conflict, attention_bias_note, daily_text,
-                source_summary_json, agent_stance
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+        columns, values = scoped_insert_columns(
+            cursor,
+            "agent_will_states",
+            (
+                "user_id",
+                "cycle_id",
+                "phase",
+                "trigger_source",
+                "status",
+                "saber_score",
+                "relacionar_score",
+                "expressar_score",
+                "dominant_will",
+                "secondary_will",
+                "constrained_will",
+                "will_conflict",
+                "attention_bias_note",
+                "daily_text",
+                "source_summary_json",
+                "agent_stance",
+            ),
             (
                 user_id,
                 cycle_id,
@@ -947,6 +1201,12 @@ Material do ciclo:
                 json.dumps(source_summary or {}, ensure_ascii=False),
                 state.get("agent_stance"),
             ),
+            scope,
+        )
+        placeholders = ", ".join("?" for _ in columns)
+        cursor.execute(
+            f"INSERT INTO agent_will_states ({', '.join(columns)}) VALUES ({placeholders})",
+            tuple(values),
         )
         self.db.conn.commit()
         return cursor.lastrowid
@@ -960,9 +1220,18 @@ Material do ciclo:
         current_state: Optional[Dict[str, Any]] = None,
         world_state: Optional[Dict[str, Any]] = None,
         current_user_message: Optional[str] = None,
+        relation_id: Optional[str] = None,
+        agent_instance: Optional[str] = None,
+        scope_kind: Optional[str] = None,
     ) -> Dict[str, Any]:
         if not cycle_id:
             cycle_id = datetime.utcnow().strftime("%Y-%m-%d")
+        scope = scope_context(
+            self.db,
+            agent_instance=agent_instance or self.agent_instance,
+            relation_id=relation_id,
+            scope_kind=scope_kind,
+        )
 
         payload = self._build_source_payload(
             user_id=user_id,
@@ -971,6 +1240,9 @@ Material do ciclo:
             current_state=current_state,
             world_state=world_state,
             current_user_message=current_user_message,
+            relation_id=scope.get("relation_id"),
+            agent_instance=scope.get("agent_instance"),
+            scope_kind=scope.get("scope_kind"),
         )
 
         status = "generated"
@@ -1001,12 +1273,35 @@ Material do ciclo:
             status=status,
             state=state,
             source_summary=payload.get("source_summary") or {},
+            scope=scope,
         )
-        saved = load_latest_will_state(self.db, user_id=user_id, cycle_id=cycle_id) or {}
+        saved = load_latest_will_state(
+            self.db,
+            user_id=user_id,
+            cycle_id=cycle_id,
+            relation_id=scope.get("relation_id"),
+            agent_instance=scope.get("agent_instance"),
+            scope_kind=scope.get("scope_kind"),
+        ) or {}
         saved.update(state)
         saved["id"] = saved.get("id") or state_id
         saved["source_summary"] = payload.get("source_summary") or {}
+        saved["will_scope"] = scope
         return saved
 
-    def get_latest_state(self, user_id: str, cycle_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        return load_latest_will_state(self.db, user_id=user_id, cycle_id=cycle_id)
+    def get_latest_state(
+        self,
+        user_id: str,
+        cycle_id: Optional[str] = None,
+        *,
+        relation_id: Optional[str] = None,
+        scope_kind: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        return load_latest_will_state(
+            self.db,
+            user_id=user_id,
+            cycle_id=cycle_id,
+            relation_id=relation_id,
+            agent_instance=self.agent_instance,
+            scope_kind=scope_kind,
+        )

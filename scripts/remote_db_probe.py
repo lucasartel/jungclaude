@@ -65,6 +65,34 @@ def table_columns(cursor: sqlite3.Cursor, table: str) -> List[str]:
     return [row["name"] for row in cursor.fetchall()]
 
 
+def _will_scope_filter(
+    cursor: sqlite3.Cursor,
+    table: str,
+    args: argparse.Namespace,
+) -> tuple[str, List[Any]]:
+    """Build a read-only WILL scope filter without widening relation access."""
+    columns = set(table_columns(cursor, table))
+    scope_kind = getattr(args, "scope_kind", "global")
+    relation_id = getattr(args, "relation_id", None)
+    if scope_kind == "relation" and not relation_id:
+        return " AND 1 = 0", []
+
+    clauses: List[str] = []
+    params: List[Any] = []
+    if "agent_instance" in columns:
+        clauses.append("agent_instance = ?")
+        params.append(getattr(args, "agent_instance", DEFAULT_AGENT_INSTANCE))
+    if "scope_kind" in columns:
+        clauses.append("scope_kind = ?")
+        params.append(scope_kind)
+    if relation_id:
+        if "relation_id" not in columns:
+            return " AND 1 = 0", []
+        clauses.append("relation_id = ?")
+        params.append(relation_id)
+    return (" AND " + " AND ".join(clauses), params) if clauses else ("", [])
+
+
 def count_rows(cursor: sqlite3.Cursor, table: str, where: str = "", params: Sequence[Any] = ()) -> int:
     if not table_exists(cursor, table):
         return 0
@@ -514,6 +542,11 @@ def query_goals(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, A
 def query_will(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, Any]:
     columns = table_columns(cursor, "agent_will_states")
     agent_stance_select = "agent_stance," if "agent_stance" in columns else "NULL AS agent_stance,"
+    scope_select = ", ".join(
+        column if column in columns else f"NULL AS {column}"
+        for column in ("agent_instance", "relation_id", "scope_kind")
+    )
+    scope_where, scope_params = _will_scope_filter(cursor, "agent_will_states", args)
     cursor.execute(
         f"""
         SELECT
@@ -533,14 +566,16 @@ def query_will(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, An
             daily_text,
             source_summary_json,
             {agent_stance_select}
+            {scope_select},
             created_at,
             updated_at
         FROM agent_will_states
         WHERE user_id = ?
+        {scope_where}
         ORDER BY created_at DESC, id DESC
         LIMIT ?
         """,
-        (args.user_id, args.limit),
+        (args.user_id, *scope_params, args.limit),
     )
     rows = rows_to_dicts(cursor.fetchall())
     for row in rows:
@@ -552,6 +587,9 @@ def query_will(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, An
     return {
         "probe": "will",
         "user_id": args.user_id,
+        "agent_instance": getattr(args, "agent_instance", DEFAULT_AGENT_INSTANCE),
+        "relation_id": getattr(args, "relation_id", None),
+        "scope_kind": getattr(args, "scope_kind", "global"),
         "rows": rows,
     }
 
@@ -662,8 +700,16 @@ def query_relations(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[st
 
 
 def query_pressure(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, Any]:
+    state_columns = table_columns(cursor, "agent_will_pressure_state")
+    state_scope_select = ", ".join(
+        column if column in state_columns else f"NULL AS {column}"
+        for column in ("agent_instance", "relation_id", "scope_kind")
+    )
+    state_scope_where, state_scope_params = _will_scope_filter(
+        cursor, "agent_will_pressure_state", args
+    )
     cursor.execute(
-        """
+        f"""
         SELECT
             id,
             cycle_id,
@@ -680,14 +726,16 @@ def query_pressure(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str
             last_action_status,
             last_action_summary,
             source_markers_json,
+            {state_scope_select},
             created_at,
             updated_at
         FROM agent_will_pressure_state
         WHERE user_id = ?
+        {state_scope_where}
         ORDER BY updated_at DESC, id DESC
         LIMIT 1
         """,
-        (args.user_id,),
+        (args.user_id, *state_scope_params),
     )
     row = cursor.fetchone()
     latest = dict(row) if row else None
@@ -698,8 +746,16 @@ def query_pressure(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str
         except Exception:
             latest["source_markers"] = {}
 
+    event_columns = table_columns(cursor, "agent_will_pulse_events")
+    event_scope_select = ", ".join(
+        column if column in event_columns else f"NULL AS {column}"
+        for column in ("agent_instance", "relation_id", "scope_kind")
+    )
+    event_scope_where, event_scope_params = _will_scope_filter(
+        cursor, "agent_will_pulse_events", args
+    )
     cursor.execute(
-        """
+        f"""
         SELECT
             id,
             cycle_id,
@@ -712,18 +768,23 @@ def query_pressure(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str
             action_attempted,
             action_summary,
             status,
+            {event_scope_select},
             created_at,
             updated_at
         FROM agent_will_pulse_events
         WHERE user_id = ?
+        {event_scope_where}
         ORDER BY created_at DESC, id DESC
         LIMIT ?
         """,
-        (args.user_id, args.limit),
+        (args.user_id, *event_scope_params, args.limit),
     )
     return {
         "probe": "pressure",
         "user_id": args.user_id,
+        "agent_instance": getattr(args, "agent_instance", DEFAULT_AGENT_INSTANCE),
+        "relation_id": getattr(args, "relation_id", None),
+        "scope_kind": getattr(args, "scope_kind", "global"),
         "latest_state": latest,
         "events": rows_to_dicts(cursor.fetchall()),
     }
@@ -1841,6 +1902,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--world-cache-path", default=resolve_default_world_cache_path())
     parser.add_argument("--user-id", default=os.getenv("ADMIN_USER_ID", DEFAULT_ADMIN_USER_ID))
     parser.add_argument("--agent-instance", default=os.getenv("AGENT_INSTANCE", DEFAULT_AGENT_INSTANCE))
+    parser.add_argument("--relation-id", default=None)
+    parser.add_argument("--scope-kind", choices=("global", "relation"), default="global")
     parser.add_argument("--limit", type=int, default=5)
     parser.add_argument("--pretty", action="store_true")
     return parser

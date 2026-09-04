@@ -1,6 +1,6 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 3.5 - Catalogo de conectores orientado pela vontade - Agosto 2026**
+**Versao 3.6 - Fundacao relacional do WILL - Setembro 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
@@ -443,6 +443,34 @@ A partir de 18/08/2026, o roadmap passa a ter duas trilhas coordenadas. A trilha
 
 **Quinto corte implementado em 21/08/2026**: a ruminação passou a carregar `relation_id` em fragmentos, tensões, insights e log. Ingestão, detecção, digestão, conexão entre tensões, síntese, validação de novidade, entrega e estatísticas filtram o vínculo explícito; o hook de conversas aceita participantes não-admin apenas quando há Relation registrada, preservando o comportamento legado do admin. O schema central faz a migração aditiva e os testes demonstram que duas relações do mesmo participante não compartilham material ruminal. Pressão, vontade, Working Memory e o campo relacional agregado continuam como cortes seguintes; este corte não autoriza ainda a trilha comercial.
 
+**Sexto corte implementado em 03/09/2026: fundacao relacional do WILL e da pressao.** `agent_will_states`, sinais de conversa, estados de pressao e eventos de pulso passaram a carregar `agent_instance`, `relation_id` e `scope_kind` (`global` ou `relation`) por migracao aditiva. O estado legado foi preservado como global da instancia atual. Sinais de novas conversas podem receber a Relation registrada do participante; leituras, persistencia e probes podem selecionar o escopo explicito. A agregacao global de sinais considera cada relacao como uma fonte limitada e usa apenas medidas e referencias internas, nunca texto de conversa de outra pessoa. Este corte nao altera o scheduler, nao envia mensagens novas e nao abre o Telegram a participantes.
+
+### 10.1.1 Autonomia volitiva e ritmo circadiano
+
+Antes de qualquer abertura controlada da instancia a novos participantes, o modulo WILL devera deixar de ser apenas um leitor de scores e se tornar o regulador persistente de direcao, disponibilidade e recuperacao do agente. A autonomia aqui e arquitetural: a continuidade do agente escolhe, com base em estado e evidencia, quando se orientar ao mundo, a uma relacao, a uma expressao ou a um periodo de elaboracao; nao e uma alegacao de consciencia humana continua.
+
+**Principio de ritmo**: o ciclo circadiano continua como esqueleto metabolico. Sonho, identidade, ruminacao e fechamento volitivo permanecem protegidos como momentos de integracao. `world`, `work` e `hobby/expressar` poderao ser satisfeitos antecipadamente por um transbordo de vontade somente quando houver uma expressao concluida e um recibo de evidencia. O loop nunca podera marcar uma fase como concluida apenas porque uma pressao ficou alta.
+
+**Fluxo alvo**:
+
+`sinal e evidencia -> vontade contextual/global -> pressao -> will_expression -> capacidade elegivel -> gate e execucao -> recibo -> alivio ou frustracao -> integracao`
+
+**Cortes seguintes**:
+
+1. **Contrato de expressao e capacidades**: substituir os atalhos rigidos atuais de `saber -> mundo`, `expressar -> arte` e `relacionar -> mensagem` por intencoes estruturadas, capacidades elegiveis, custos, gates, idempotencia e recibos. Uma capacidade pausada ou indisponivel deve resultar em `blocked`, sem descarga falsa nem repeticao de falha como se fosse catarse.
+2. **Arbitragem com o ciclo**: registrar `satisfied_by_will` por pulso ou fase, com fonte, resultado, qualidade e validade. Somente uma execucao efetiva e compativel com a fase pode reduzir trabalho do loop; falhas, dry-runs e propostas nao a substituem.
+3. **Refracao e disponibilidade relacional**: criar estado de disponibilidade por Relation e por instancia, com cadencia, janela de contato, orcamento de turnos/profundidade, cooldown e periodo de elaboracao. Uma conversa intensa pode produzir resposta breve ou retomada posterior, sem silenciar protocolos de seguranca, comandos essenciais ou outras relacoes.
+4. **Piloto convidado**: convite explicito, consentimento, Relation ativa, regras de canal, limites de custo e observabilidade. O canal Telegram nao sera aberto a nao-admin antes de os tres cortes anteriores, dos testes de nao vazamento e da politica de resposta refrataria estarem aceitos.
+
+**Criterios de aceite da fase**:
+
+- uma vontade so perde pressao apos acao confirmada por recibo;
+- uma capacidade bloqueada permanece auditavel, sem gerar tentativas identicas indefinidas;
+- nenhuma fase circadiana e suprimida sem evidencia de satisfacao equivalente;
+- a proatividade nasce da vontade de relacionar e respeita consentimento, cadencia, escopo e disponibilidade;
+- uma Relation em refracao nao bloqueia as demais nem descarrega a pressao global por engano;
+- probes e testes demonstram escopo por instancia/relacao, agregacao sem texto bruto, idempotencia e ausencia de vazamento.
+
 **Modelo alvo**:
 
 1. **Identidade do participante**: identidade canonica, identificadores por plataforma, consentimento, escopo de visibilidade e estado de acesso.
@@ -639,6 +667,7 @@ Em 19/08/2026 foi auditado o caminho completo `scores -> pressao -> pulso -> aca
 | Versao 3.3 - Escopo cognitivo por Relation | 21/08/2026 | Propaga `relation_id` para estado relacional, fatos, fallback SQLite e namespace mem0, com reancoragem legada e testes de isolamento |
 | Versao 3.4 - Ruminação relacional | 21/08/2026 | Isola fragmentos, tensões, insights e entrega da ruminação por Relation, habilita ingestão de participantes registrados e adiciona testes de não mistura |
 | Versao 3.5 - Catalogo de conectores orientado pela vontade | 28/08/2026 | Registra o catalogo futuro de conexoes por saber, expressar e relacionar, a preferencia por MCP e os gates de descoberta, aprovacao, escopo e execucao |
+| Versao 3.6 - Fundacao relacional do WILL | 03/09/2026 | Registra o escopo por instancia/Relation para vontade e pressao, a agregacao global sem texto bruto e a sequencia de autonomia volitiva antes do piloto multiusuario |
 
 ---
 
