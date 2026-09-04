@@ -594,6 +594,88 @@ def query_will(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, An
     }
 
 
+def query_expressions(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, Any]:
+    """Read expression lifecycle metadata without exposing delivery payloads."""
+    if not table_exists(cursor, "will_expressions"):
+        return {
+            "probe": "expressions",
+            "available": False,
+            "agent_instance": getattr(args, "agent_instance", DEFAULT_AGENT_INSTANCE),
+            "user_id": args.user_id,
+            "rows": [],
+        }
+
+    scope_where, scope_params = _will_scope_filter(cursor, "will_expressions", args)
+    cursor.execute(
+        f"""
+        SELECT
+            id,
+            agent_instance,
+            relation_id,
+            scope_kind,
+            user_id,
+            cycle_id,
+            will_name,
+            capability_key,
+            gate_level,
+            cost_class,
+            status,
+            reason,
+            intent_json,
+            prepared_payload_json,
+            created_at,
+            updated_at
+        FROM will_expressions
+        WHERE user_id = ?
+        {scope_where}
+        ORDER BY updated_at DESC, id DESC
+        LIMIT ?
+        """,
+        (args.user_id, *scope_params, args.limit),
+    )
+    rows = rows_to_dicts(cursor.fetchall())
+    for row in rows:
+        intent = json_or_empty(row.pop("intent_json", None), {})
+        row.pop("prepared_payload_json", None)
+        row["intent"] = {
+            key: intent.get(key)
+            for key in (
+                "objective",
+                "action_proposed",
+                "decision_reason",
+                "risk",
+                "pressure_snapshot",
+                "will_snapshot",
+            )
+            if key in intent
+        }
+        row["has_prepared_delivery"] = bool(row.get("status") in {"prepared", "delivering", "completed"})
+        if table_exists(cursor, "will_expression_receipts"):
+            cursor.execute(
+                """
+                SELECT id, status, result_code, summary, created_at
+                FROM will_expression_receipts
+                WHERE expression_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (row["id"], args.limit),
+            )
+            row["receipts"] = rows_to_dicts(cursor.fetchall())
+        else:
+            row["receipts"] = []
+
+    return {
+        "probe": "expressions",
+        "available": True,
+        "agent_instance": getattr(args, "agent_instance", DEFAULT_AGENT_INSTANCE),
+        "user_id": args.user_id,
+        "relation_id": getattr(args, "relation_id", None),
+        "scope_kind": getattr(args, "scope_kind", "global"),
+        "rows": rows,
+    }
+
+
 def query_relational_state(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, Any]:
     if not table_exists(cursor, "relational_state"):
         return {
@@ -1874,6 +1956,7 @@ def query_tom(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, Any
 PROBES: Dict[str, Callable[[sqlite3.Cursor, argparse.Namespace], Dict[str, Any]]] = {
     "audio": query_audio,
     "dreams": query_dreams,
+    "expressions": query_expressions,
     "goals": query_goals,
     "graph": query_graph,
     "identity": query_identity,

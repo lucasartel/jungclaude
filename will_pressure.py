@@ -20,6 +20,7 @@ from engines.will_scope import (
     scoped_insert_columns,
     table_columns,
 )
+from engines.will_expression import WillExpressionEngine
 from instance_settings import get_setting_value
 from llm_providers import get_llm_response
 from instance_config import ADMIN_USER_ID
@@ -165,6 +166,12 @@ class WillPressureEngine:
         if resolved_threshold is None:
             resolved_threshold = get_setting_value("will_pressure_threshold", db_manager)
         self.threshold = float(resolved_threshold)
+    def _expression_engine(self) -> WillExpressionEngine:
+        engine = getattr(self, "_will_expression_engine", None)
+        if engine is None:
+            engine = WillExpressionEngine(self.db)
+            self._will_expression_engine = engine
+        return engine
 
     def _scope_instance(self) -> str:
         return (
@@ -984,6 +991,52 @@ ESTADO QUALITATIVO:
             "pending_delivery": payload,
         }
 
+    def _prepare_expression_release(
+        self,
+        *,
+        winner: str,
+        user_id: str,
+        cycle_id: str,
+        scope: Dict[str, Optional[str]],
+        pressure_state: Dict[str, Any],
+        will_state: Dict[str, Any],
+        proactive_system: Any,
+        decision_reason: str,
+    ) -> Dict[str, Any]:
+        executors = {
+            "saber": lambda _capability: self._execute_saber_release(user_id, cycle_id),
+            "expressar": lambda _capability: self._execute_expressar_release(user_id, cycle_id),
+            "relacionar": lambda _capability: self._prepare_relational_release(
+                user_id=user_id,
+                cycle_id=cycle_id,
+                proactive_system=proactive_system,
+                pressure_state=pressure_state,
+            ),
+        }
+        intent = {
+            "objective": f"dar forma operacional a vontade de {winner}",
+            "action_proposed": f"{winner}_release",
+            "decision_reason": decision_reason,
+            "pressure_snapshot": {
+                f"{will_name}_pressure": pressure_state.get(f"{will_name}_pressure")
+                for will_name in PRESSURE_ORDER
+            },
+            "will_snapshot": {
+                key: will_state.get(key)
+                for key in ("dominant_will", "secondary_will", "constrained_will", "will_conflict")
+            },
+            "risk": "external_delivery_requires_confirmation",
+        }
+        return self._expression_engine().prepare(
+            user_id=user_id,
+            cycle_id=cycle_id,
+            will_name=winner,
+            scope=scope,
+            intent=intent,
+            proactive_system=proactive_system,
+            prepare_capability=executors[winner],
+        )
+
     def finalize_pending_delivery(
         self,
         event_id: int,
@@ -996,6 +1049,7 @@ ESTADO QUALITATIVO:
         relation_id: Optional[str] = None,
         agent_instance: Optional[str] = None,
         scope_kind: Optional[str] = None,
+        expression_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         state = self._get_or_create_state(
             user_id=user_id,
@@ -1004,6 +1058,13 @@ ESTADO QUALITATIVO:
             agent_instance=agent_instance or self._scope_instance(),
             scope_kind=scope_kind,
         )
+        if expression_id is not None:
+            self._expression_engine().finalize_delivery(
+                expression_id,
+                success=success,
+                summary=action_summary,
+                evidence={"event_id": event_id, "cycle_id": cycle_id},
+            )
         if success:
             refreshed = self._apply_success_release(state, winner, action_summary)
             self._update_event(event_id, status="completed", action_summary=self._truncate(action_summary, 240))
@@ -1100,50 +1161,26 @@ ESTADO QUALITATIVO:
             )
             return {"status": "refractory_blocked", "event_id": event_id, "pressure_state": pressure_state, "winner": winner}
 
-        if winner == "relacionar":
-            relational = self._prepare_relational_release(
-                user_id=user_id,
-                cycle_id=cycle_id,
-                proactive_system=proactive_system,
-                pressure_state=pressure_state,
-            )
-            success = bool(relational.get("success"))
-            event_id = self._register_event(
-                user_id=user_id,
-                cycle_id=cycle_id,
-                pressures=pressures,
-                trigger_source=trigger_source,
-                winning_will=winner,
-                decision_reason=decision_reason,
-                action_attempted="proactive_relational_message",
-                action_summary=relational.get("action_summary") or "",
-                status="triggered" if success and relational.get("pending_delivery") else "failed",
-                scope=scope,
-            )
-            if not success or not relational.get("pending_delivery"):
-                skipped = bool(relational.get("skipped"))
-                status = "no_action" if skipped else "failed"
-                summary = relational.get("action_summary") or "Falha ao preparar mensagem relacional."
-                refreshed = self._apply_failed_release(
-                    pressure_state,
-                    winner,
-                    summary,
-                ) if not skipped else pressure_state
-                self._update_event(event_id, status=status, action_summary=summary)
-                return {"status": status, "event_id": event_id, "winner": winner, "pressure_state": refreshed}
-            return {
-                "status": "triggered",
-                "event_id": event_id,
-                "winner": winner,
-                "pressure_state": pressure_state,
-                "pending_delivery": relational["pending_delivery"],
-                "action_summary": relational.get("action_summary"),
-            }
-
-        executor = self._execute_saber_release if winner == "saber" else self._execute_expressar_release
-        execution = executor(user_id=user_id, cycle_id=cycle_id)
-        success = bool(execution.get("success"))
-        pending_delivery = execution.get("pending_delivery")
+        expression = self._prepare_expression_release(
+            winner=winner,
+            user_id=user_id,
+            cycle_id=cycle_id,
+            scope=scope,
+            pressure_state=pressure_state,
+            will_state=will_state,
+            proactive_system=proactive_system,
+            decision_reason=decision_reason,
+        )
+        pending_delivery = expression.get("pending_delivery")
+        expression_status = expression.get("status")
+        if expression_status == "prepared" and pending_delivery:
+            event_status = "triggered"
+        elif expression_status == "blocked":
+            event_status = "blocked"
+        elif expression_status == "delivery_in_progress":
+            event_status = "delivery_in_progress"
+        else:
+            event_status = "failed"
         event_id = self._register_event(
             user_id=user_id,
             cycle_id=cycle_id,
@@ -1151,36 +1188,29 @@ ESTADO QUALITATIVO:
             trigger_source=trigger_source,
             winning_will=winner,
             decision_reason=decision_reason,
-            action_attempted=f"{winner}_release",
-            action_summary=execution.get("action_summary") or "",
-            status="triggered" if success and pending_delivery else "failed",
+            action_attempted=("proactive_relational_message" if winner == "relacionar" else f"{winner}_release"),
+            action_summary=expression.get("action_summary") or "",
+            status=event_status,
             scope=scope,
         )
-        if not success or not pending_delivery:
-            refreshed = self._apply_failed_release(
-                pressure_state,
-                winner,
-                execution.get("action_summary") or f"catarse de {winner} falhou",
-            )
-            self._update_event(
-                event_id,
-                status="failed",
-                action_summary=execution.get("action_summary") or f"catarse de {winner} falhou",
-            )
+        if event_status != "triggered":
+            summary = expression.get("action_summary") or f"Expressao de {winner} nao foi preparada."
+            refreshed = self._apply_failed_release(pressure_state, winner, summary) if event_status == "failed" else pressure_state
             return {
-                "status": "failed",
+                "status": event_status,
                 "event_id": event_id,
                 "winner": winner,
                 "pressure_state": refreshed,
-                "action_summary": execution.get("action_summary"),
-                "payload": execution.get("payload"),
+                "action_summary": summary,
+                "expression": expression.get("expression"),
             }
         return {
             "status": "triggered",
             "event_id": event_id,
             "winner": winner,
             "pressure_state": pressure_state,
-            "action_summary": execution.get("action_summary"),
-            "payload": execution.get("payload"),
+            "action_summary": expression.get("action_summary"),
+            "payload": expression.get("payload"),
             "pending_delivery": pending_delivery,
+            "expression": expression.get("expression"),
         }

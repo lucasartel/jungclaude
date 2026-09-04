@@ -294,6 +294,7 @@ async def lifespan(app: FastAPI):
                             pulse.get("winner"),
                             True,
                             delivery.get("text"),
+                            expression_id=delivery.get("will_expression_id"),
                         )
                         logger.info("✅ [WILL PULSE] %s enviada ao admin.", delivery_label)
                     except Exception as send_exc:
@@ -306,6 +307,7 @@ async def lifespan(app: FastAPI):
                             pulse.get("winner"),
                             False,
                             failure_summary,
+                            expression_id=delivery.get("will_expression_id"),
                         )
                         logger.error("❌ [WILL PULSE] %s", failure_summary)
                 elif pulse.get("winner") == "relacionar" and not proactive_messages_enabled():
