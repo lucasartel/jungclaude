@@ -28,6 +28,7 @@ from core.db.relational_state import RelationalStateDatabaseMixin
 from core.db.relations import RelationsDatabaseMixin
 from core.db.schema import SchemaDatabaseMixin
 from engines.will_expression import WillExpressionDatabaseMixin
+from engines.will_phase_arbitration import WillPhaseArbitrationDatabaseMixin
 from engines.will_scope import WillScopeDatabaseMixin
 from core.db.semantic_memory import SemanticMemoryDatabaseMixin
 from core.db.users import UserDatabaseMixin
@@ -65,6 +66,7 @@ class HybridDatabaseManager(
     RelationsDatabaseMixin,
     WillScopeDatabaseMixin,
     WillExpressionDatabaseMixin,
+    WillPhaseArbitrationDatabaseMixin,
     ActionProposalDatabaseMixin,
     WorkTaskDatabaseMixin,
     PsychometricsDatabaseMixin,
