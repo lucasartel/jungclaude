@@ -1050,32 +1050,34 @@ ESTADO QUALITATIVO:
         agent_instance: Optional[str] = None,
         scope_kind: Optional[str] = None,
         expression_id: Optional[int] = None,
+        delivery_evidence: Optional[Dict[str, Any]] = None,
+        delivery_uncertain: bool = False,
     ) -> Dict[str, Any]:
-        state = self._get_or_create_state(
-            user_id=user_id,
-            cycle_id=cycle_id,
+        from engines.will_delivery_receipt import finalize
+
+        if expression_id is None:
+            raise ValueError("will_delivery_expression_required")
+        if success and delivery_uncertain:
+            raise ValueError("will_delivery_conflicting_outcome")
+        scope = scope_context(
+            self.db,
             relation_id=relation_id,
             agent_instance=agent_instance or self._scope_instance(),
             scope_kind=scope_kind,
         )
-        if expression_id is not None:
-            expression = self._expression_engine().finalize_delivery(
-                expression_id,
-                success=success,
-                summary=action_summary,
-                evidence={"event_id": event_id, "cycle_id": cycle_id},
-            )
-            if expression and expression.get("status") == "completed":
-                from engines.will_phase_arbitration import WillPhaseArbitration
-
-                WillPhaseArbitration(self.db).record_expression_completion(expression)
+        state = finalize(
+            self.db, expression_id=expression_id, event_id=event_id,
+            expected={**scope, "user_id": user_id, "cycle_id": cycle_id, "will_name": winner},
+            outcome="completed" if success else ("delivery_uncertain" if delivery_uncertain else "failed"),
+            summary=action_summary, evidence=dict(delivery_evidence or {}),
+            threshold=self.threshold, refractory_hours=self._refractory_hours(),
+        )
         if success:
-            refreshed = self._apply_success_release(state, winner, action_summary)
-            self._update_event(event_id, status="completed", action_summary=self._truncate(action_summary, 240))
-        else:
-            refreshed = self._apply_failed_release(state, winner, action_summary)
-            self._update_event(event_id, status="failed", action_summary=self._truncate(action_summary, 240))
-        return refreshed
+            from engines.will_phase_arbitration import WillPhaseArbitration
+
+            expression = self._expression_engine()._fetch(expression_id)
+            WillPhaseArbitration(self.db).record_expression_completion(expression)
+        return _row_to_pressure_state(state) or {}
 
     def run_pulse(
         self,
@@ -1183,6 +1185,8 @@ ESTADO QUALITATIVO:
             event_status = "blocked"
         elif expression_status == "delivery_in_progress":
             event_status = "delivery_in_progress"
+        elif expression.get("reused"):
+            event_status = "expression_reused"
         else:
             event_status = "failed"
         event_id = self._register_event(
@@ -1208,6 +1212,9 @@ ESTADO QUALITATIVO:
                 "action_summary": summary,
                 "expression": expression.get("expression"),
             }
+        from engines.will_delivery_receipt import bind_event
+
+        bind_event(self.db, expression["expression"]["id"], event_id)
         return {
             "status": "triggered",
             "event_id": event_id,

@@ -17,7 +17,7 @@ import sys
 import sqlite3
 import logging
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from admin_web.auth.middleware import require_master
 from admin_web.template_compat import patch_jinja2_template_response
@@ -127,10 +127,19 @@ def _describe_will_delivery(delivery: Dict, winner: str | None = None) -> str:
     return "entrega do Will"
 
 
-async def _send_will_delivery_via_telegram(bot, delivery: Dict) -> None:
+async def _send_will_delivery_via_telegram(bot, delivery: Dict, evidence: Optional[Dict] = None) -> Dict:
     chat_id = int(delivery["platform_id"])
     text = (delivery.get("text") or "").strip()
     image_url = delivery.get("image_url")
+    evidence = evidence if evidence is not None else {}
+    evidence.update({"transport": "telegram", "chat_id": chat_id, "message_ids": []})
+    if not text and not image_url:
+        raise ValueError("will_delivery_empty_payload")
+
+    def confirmed(message):
+        if getattr(message, "message_id", None) is None:
+            raise ValueError("will_delivery_missing_transport_receipt")
+        evidence["message_ids"].append(message.message_id)
 
     if image_url:
         caption = _truncate_telegram_text(text, 900) if text else None
@@ -143,19 +152,21 @@ async def _send_will_delivery_via_telegram(bot, delivery: Dict) -> None:
                 extension = content_type.split("/", 1)[1] or extension
             photo = BytesIO(base64.b64decode(encoded))
             photo.name = f"will-expression-art.{extension}"
-        await bot.send_photo(
+        message = await bot.send_photo(
             chat_id=chat_id,
             photo=photo,
             caption=caption,
         )
+        confirmed(message)
         if text and caption and caption != text:
             remaining = text[len(caption):].lstrip()
             for chunk in _chunk_telegram_text(remaining):
-                await bot.send_message(chat_id=chat_id, text=chunk)
-        return
+                confirmed(await bot.send_message(chat_id=chat_id, text=chunk))
+        return evidence
 
     for chunk in _chunk_telegram_text(text):
-        await bot.send_message(chat_id=chat_id, text=chunk)
+        confirmed(await bot.send_message(chat_id=chat_id, text=chunk))
+    return evidence
 
 
 @asynccontextmanager
@@ -277,15 +288,21 @@ async def lifespan(app: FastAPI):
                     user = bot_state.db.get_user(ADMIN_USER_ID) or {}
                     user_name = user.get("user_name", "Admin")
                     delivery_label = _describe_will_delivery(delivery, pulse.get("winner"))
+                    evidence = {}
+                    scope = delivery.get("will_scope") or {}
                     try:
-                        await _send_will_delivery_via_telegram(telegram_app.bot, delivery)
-                        if delivery.get("delivery_type") in {"pressure_relational", "relational_message"}:
-                            await asyncio.to_thread(
-                                bot_state.proactive.record_pressure_based_message,
-                                ADMIN_USER_ID,
-                                user_name,
-                                delivery,
-                            )
+                        await _send_will_delivery_via_telegram(telegram_app.bot, delivery, evidence)
+                    except Exception as send_exc:
+                        failure_summary = f"Entrega de {delivery_label} sem confirmacao integral: {send_exc}"
+                        await asyncio.to_thread(
+                            engine.finalize_pending_delivery,
+                            pulse["event_id"], ADMIN_USER_ID, delivery.get("cycle_id"),
+                            pulse.get("winner"), False, failure_summary,
+                            expression_id=delivery.get("will_expression_id"),
+                            delivery_evidence=evidence, delivery_uncertain=True, **scope,
+                        )
+                        logger.error("[WILL PULSE] %s; requer reconciliacao, sem reenvio automatico.", failure_summary)
+                    else:
                         await asyncio.to_thread(
                             engine.finalize_pending_delivery,
                             pulse["event_id"],
@@ -295,21 +312,14 @@ async def lifespan(app: FastAPI):
                             True,
                             delivery.get("text"),
                             expression_id=delivery.get("will_expression_id"),
+                            delivery_evidence=evidence, **scope,
                         )
+                        if delivery.get("delivery_type") in {"pressure_relational", "relational_message"}:
+                            await asyncio.to_thread(
+                                bot_state.proactive.record_pressure_based_message,
+                                ADMIN_USER_ID, user_name, delivery,
+                            )
                         logger.info("✅ [WILL PULSE] %s enviada ao admin.", delivery_label)
-                    except Exception as send_exc:
-                        failure_summary = f"Falha ao enviar {delivery_label}: {send_exc}"
-                        await asyncio.to_thread(
-                            engine.finalize_pending_delivery,
-                            pulse["event_id"],
-                            ADMIN_USER_ID,
-                            delivery.get("cycle_id"),
-                            pulse.get("winner"),
-                            False,
-                            failure_summary,
-                            expression_id=delivery.get("will_expression_id"),
-                        )
-                        logger.error("❌ [WILL PULSE] %s", failure_summary)
                 elif pulse.get("winner") == "relacionar" and not proactive_messages_enabled():
                     logger.info("⏸️ [WILL PULSE] Pressão relacional medida, mas envio externo bloqueado por PROACTIVE_ENABLED=false.")
             except Exception as e:

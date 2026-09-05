@@ -93,6 +93,11 @@ class WillExpressionDatabaseMixin:
             )
             """
         )
+        columns = {row[1] for row in cursor.execute("PRAGMA table_info(will_expressions)")}
+        for column, definition in (("delivery_event_id", "INTEGER"), ("pressure_effect_at", "TEXT")):
+            if column not in columns:
+                cursor.execute(f"ALTER TABLE will_expressions ADD COLUMN {column} {definition}")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_will_expression_delivery_event ON will_expressions(delivery_event_id) WHERE delivery_event_id IS NOT NULL")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_will_expressions_scope ON will_expressions(agent_instance, scope_kind, relation_id, updated_at DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_will_expression_receipts_expression ON will_expression_receipts(expression_id, created_at DESC)")
         self.conn.commit()

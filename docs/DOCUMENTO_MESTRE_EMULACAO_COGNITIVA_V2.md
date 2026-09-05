@@ -1,12 +1,14 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 3.8 - Arbitragem WILL-ciclo - Setembro 2026**
+**Versao 3.10 - C9a: Confirmacao de Entrega e Alivio Idempotente - Setembro 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
 *Reformulacao completa do documento de Maio/2026. O projeto nao persegue "AGI"; persegue a emulacao cognitiva mais coerente e bem documentada possivel.*
 
 *Diagnostico inicial verificado contra codigo, git, GitHub e Railway em 11/06/2026. Decisoes de escopo registradas em 16/06/2026. Estado realizado atualizado em 17/08/2026 apos verificacao de codigo, CI, Railway e probes de producao.*
+
+*Direcao atual aprovada pelo mantenedor em 05/09/2026: fechar as garantias do WILL, regular disponibilidade, unificar expressao conversacional, completar isolamento cognitivo e so entao abrir um piloto convidado. Base da revisao inicial: codigo local `5ea892f`, oito testes focados aprovados e verificacao isolada de arbitragem em SQLite temporario. A implementacao local posterior C9a e seus 497 testes estao registrados na Secao 10.1.2. Railway nao foi revalidado; nenhuma nova ativacao em producao foi realizada.*
 
 *Tres leitores: o mantenedor (decide), o consultor estrategico (orienta e audita) e o modelo executor (codifica). A Parte II e enderecada diretamente ao executor.*
 
@@ -107,7 +109,9 @@ Regras transversais:
 
 Fluxo padrao historico: **mantenedor escolhe a tarefa -> executor implementa em branch e abre PR -> CI valida -> mantenedor mergeia -> Railway deploya**. Fluxo atual autorizado para trabalho assistido: quando o mantenedor pedir explicitamente, o executor pode commitar direto em `main`, aguardar CI/Railway e validar por probes. O consultor audita em cadencia mensal ou sob demanda e ajusta o roadmap.
 
-## 4. Estado verificado - 17/08/2026
+## 4. Estado verificado e atualizacoes
+
+**Leitura do estado**: os dados operacionais abaixo de 17/08 e 18/08 sao historicos, nao uma verificacao da saude atual. A Secao 4.1 registra a revisao local de 05/09/2026; a sequencia ativa de desenvolvimento esta nas Secoes 5 e 10.1.2.
 
 **Concluido e em producao**: Fase I do roadmap antigo (circuitos da ruminacao corrigidos, sonhos alimentam ruminacao, failure policy no loop, entrega de insights) e Fase II substancial (diario autobiografico evidence-first, perfil injetado no prompt, avaliacao narrativa de fases com politica executiva, Chroma removido). O agente ja possui circuito de self-work via GitHub/Railway, mantido sob revisao do mantenedor.
 
@@ -193,6 +197,23 @@ Fluxo padrao historico: **mantenedor escolhe a tarefa -> executor implementa em 
 - `docs/` esta no `.gitignore` - documentos so entram no repo com `git add -f` quando o mantenedor decidir versionar.
 - O acesso operacional validado e via `gh` autenticado e `railway` linkado ao projeto `JungAgent_Bot`, ambiente `production`, servico `jungclaude`.
 
+### 4.1 Revisao local e criterio de encerramento - 05/09/2026
+
+A arquitetura existente sera preservada. A prioridade muda de ampliar capacidades para demonstrar continuidade autobiografica, processamento entre encontros e iniciativa apoiada em evidencias, com isolamento e custo controlados. Nao ha autorizacao para reescrita geral nem para declarar fases anteriores encerradas por decurso de tempo.
+
+Cada entrega deve registrar quatro dimensoes separadas: **implementado** (codigo presente e commit), **testado** (cenarios e resultado), **habilitado** (ambiente, flag e data verificados) e **validado em operacao** (evidencias de comportamento e aceite). Uma dimensao nao implica as demais. Estado nao verificado deve ser declarado como tal; dados historicos nao comprovam habilitacao atual. O executor registra as evidencias e o mantenedor aceita o encerramento e as ativacoes sensiveis.
+
+| Frente | Estado observado nesta revisao | Condicao ainda aberta |
+|---|---|---|
+| Corte 7: expressoes WILL | Infraestrutura implementada; C9a implementado e testado localmente, ainda sem deploy | Recuperacao automatica, concorrencia da preparacao e gates executaveis continuam abertos no C9; C9a fecha o caminho de confirmacao e alivio |
+| Corte 8: arbitragem WILL-ciclo | Infraestrutura implementada; testes focados aprovados; producao nao revalidada | Equivalencia real, origem do recibo, isolamento e consumo recuperavel; fechamento no C9 |
+| Interioridade multi-relacional | Cortes 1-6 fornecem fundacao; nao equivalem a isolamento integral | Working Memory, sonhos, identidade e contexto exigem auditoria e fechamento no C12 |
+| Fase III: Working Memory | Implementacao registrada; aceite longitudinal continua pendente | Consolidar janela de 7 dias com evidencias; primeiro verificar os dados ja existentes |
+| Fases IV-VI | Preservar os estados e flags historicos, sem nova ativacao | Regressao antes/depois do ISM, qualidade da metacognicao, auditoria de 100 triplas com precisao >= 80% e maturacao real de Theory of Mind |
+| Fase VII e imagens | Nenhuma liberacao concedida nesta revisao | Manter a politica de imagens pagas desligadas; preservar gate de duas semanas e aprovacao escrita |
+
+**Regra para pendencias longitudinais**: cada uma deve ter criterio, fonte/probe, intervalo analisado, resultado e proxima acao registrados. Reutilizar evidencias validas ja acumuladas; abrir nova janela apenas se faltarem dados adequados ou se uma mudanca invalidar a comparacao. Testes com tempo simulado cobrem mecanismos agora, mas nao substituem observacao natural de qualidade cognitiva. O fechamento dessas pendencias ocorre em paralelo aos cortes abaixo, sem apagar seus gates.
+
 ## 5. Roadmap
 
 ```text
@@ -203,13 +224,21 @@ Fase 0 - Consolidacao e Instrumentacao        <- CONCLUIDA
               -> Fase VI - Theory of Mind            <- IMPLEMENTACAO INICIAL; LONGITUDINAL PENDENTE
                   -> Fase VII - Agencia epistemica  <- IMPLEMENTACAO INICIAL; GATE FORMAL PENDENTE
 
-Trilha cognitiva transversal: multiplicidade relacional <- GATE ANTERIOR A INTEGRACOES COMERCIAIS
-Trilha comercial: Inner Life Engine / ILaaS <- CATALOGAR API; AUDITAR VONTADE; MULTIPLAS INSTANCIAS E PILOTO APOS OS GATES
+Trilha cognitiva ativa (Secao 10.1.2):
+  C9  - Fechamento das expressoes e arbitragem     <- EM ANDAMENTO; C9a LOCAL, C9b/C9c PENDENTES
+  C10 - Disponibilidade e periodo refratario      <- PLANEJADO
+  C11 - Expressao conversacional e proatividade   <- PLANEJADO
+  C12 - Fechamento cognitivo multi-relacional     <- PLANEJADO; GATE DO PILOTO
+  C13 - Piloto convidado observavel               <- BLOQUEADO ATE ACEITE C9-C12
+Trilha comercial apos os gates (Secoes 10.2 e 10.3):
+  multiplas instancias isoladas -> API minima -> um conector textual -> piloto comercial
 ```
 
 Transversais a todas as fases: suite de regressao verde a cada merge, probes read-only de producao apos deploy relevante, relatorios de pesquisa em `docs/research/` quando houver frente empirica, e manutencao do principio da evidencia. A avaliacao cega deixou de ser criterio bloqueante, mas permanece protocolo de pesquisa preservado.
 
 A numeracao salta de 0 para III por continuidade historica: as antigas Fases I e II ja foram entregues.
+
+Os identificadores C9-C13 continuam os oito cortes relacionais ja registrados; nao sao novas fases cognitivas. O C9 fecha lacunas dos cortes 7 e 8 sem descartar suas fundacoes. Especificacao e simulacao comercial podem ocorrer em paralelo; a liberacao de efeitos externos continua dependente dos gates. O proximo executor deve continuar o C9 a partir do registro C9a/C9b/C9c na Secao 10.1.2, e nao diretamente pelo periodo refratario ou pelo convite a participantes.
 
 ---
 
@@ -445,9 +474,9 @@ A partir de 18/08/2026, o roadmap passa a ter duas trilhas coordenadas. A trilha
 
 **Sexto corte implementado em 03/09/2026: fundacao relacional do WILL e da pressao.** `agent_will_states`, sinais de conversa, estados de pressao e eventos de pulso passaram a carregar `agent_instance`, `relation_id` e `scope_kind` (`global` ou `relation`) por migracao aditiva. O estado legado foi preservado como global da instancia atual. Sinais de novas conversas podem receber a Relation registrada do participante; leituras, persistencia e probes podem selecionar o escopo explicito. A agregacao global de sinais considera cada relacao como uma fonte limitada e usa apenas medidas e referencias internas, nunca texto de conversa de outra pessoa. Este corte nao altera o scheduler, nao envia mensagens novas e nao abre o Telegram a participantes.
 
-**Setimo corte implementado em 04/09/2026: contrato de expressao e capacidades.** Cada transbordo passa por `will_expressions` e `will_expression_receipts`, com instancia, relacao, vontade vencedora, capacidade elegivel, intencao estruturada, risco, custo, chave de idempotencia e resultado. As tres vontades possuem capacidades internas registradas; o pulso nao descarrega pressao durante planejamento, bloqueio ou falha. Uma entrega preparada e reivindicada uma unica vez, e somente a confirmacao do canal produz `completed` e permite aliviar a pressao. Repeticoes ficam em `delivery_in_progress` e nao duplicam a entrega. O scheduler existente foi ligado ao recibo sem abrir novos canais; geracao paga de imagens continua desativada.
+**Setimo corte: infraestrutura implementada em 04/09/2026; fechamento parcial revisto em 05/09/2026.** `will_expressions` e `will_expression_receipts` registram instancia, relacao, vontade, capacidade, intencao, risco, classe de custo, chave de idempotencia e resultado. Ha reivindicacao de entrega e estados persistentes, ligados ao scheduler existente. Isso ainda nao comprova idempotencia da descarga de pressao, recuperacao de entregas interrompidas nem aplicacao efetiva de todos os gates de custo e consentimento. Esses criterios permanecem abertos no C9. Nao foram abertos novos canais; permanece a politica de geracao paga de imagens desativada.
 
-**Oitavo corte implementado em 04/09/2026: arbitragem WILL-ciclo.** Uma expressao confirmada de `saber` ou `expressar` gera um recibo de satisfacao de `world` ou `hobby`, respectivamente, com qualidade, validade, evidencia e escopo. O scheduler do loop pode consumir cada recibo uma unica vez para um pulso automatico elegivel e registra `satisfied_by_will` no resultado da fase. `dream`, `identity`, `rumination_intro`, `rumination_extro` e `will` permanecem protegidos; a capacidade relacional ainda nao substitui uma fase circadiana. Falhas, bloqueios, propostas e dry-runs nao criam satisfacao.
+**Oitavo corte: infraestrutura implementada em 04/09/2026; fechamento parcial revisto em 05/09/2026.** Existem recibos de satisfacao para `saber -> world` e `expressar -> hobby`, consumo por pulso e resultado `satisfied_by_will`. A revisao constatou qualidade fixa, ausencia de verificacao da evidencia original e consulta de consumo sem filtro relacional; portanto equivalencia e isolamento ainda nao estao aceitos. `work` ainda nao possui capacidade mapeada para satisfacao. `dream`, `identity`, `rumination_intro`, `rumination_extro` e `will` permanecem protegidos. A implementacao nao sera tratada como fechamento comportamental antes do C9.
 
 ### 10.1.1 Autonomia volitiva e ritmo circadiano
 
@@ -459,17 +488,22 @@ Antes de qualquer abertura controlada da instancia a novos participantes, o modu
 
 `sinal e evidencia -> vontade contextual/global -> pressao -> will_expression -> capacidade elegivel -> gate e execucao -> recibo -> alivio ou frustracao -> integracao`
 
-**Cortes seguintes**:
+**Semantica alvo das vontades**:
 
-1. **Refracao e disponibilidade relacional**: criar estado de disponibilidade por Relation e por instancia, com cadencia, janela de contato, orcamento de turnos/profundidade, cooldown e periodo de elaboracao. Uma conversa intensa pode produzir resposta breve ou retomada posterior, sem silenciar protocolos de seguranca, comandos essenciais ou outras relacoes.
-2. **Piloto convidado**: convite explicito, consentimento, Relation ativa, regras de canal, limites de custo e observabilidade. O canal Telegram nao sera aberto a nao-admin antes dos dois cortes anteriores, dos testes de nao vazamento e da politica de resposta refrataria estarem aceitos.
+- **Saber** orienta o que investigar e quais lacunas merecem trabalho.
+- **Relacionar** orienta com quem manter contato, por que e com quais limites e compromissos.
+- **Expressar** orienta o que comunicar ou produzir e por qual meio; inclui texto e mensagens, nao apenas imagens.
+
+Uma acao pode combinar vontades: uma iniciativa relacional pode selecionar uma pessoa por `relacionar` e compor uma mensagem por `expressar`. O contrato deve registrar motivacoes e efeitos sem duplicar envio ou alivio; a politica de credito por vontade precisa de evidencia e testes, nao de descarga automatica das tres pressoes. O vinculo atual de uma capacidade unica por vontade e uma fundacao a evoluir, nao a semantica definitiva. Desligar imagens pagas nao deve impedir expressao textual.
+
+**Cortes seguintes**: seguir C9-C13 na Secao 10.1.2. Disponibilidade e proatividade devem nascer de estado, evidencias e politicas reutilizaveis, nunca de respostas programadas para perguntas especificas.
 
 **Criterios de aceite da fase**:
 
 - uma vontade so perde pressao apos acao confirmada por recibo;
 - uma capacidade bloqueada permanece auditavel, sem gerar tentativas identicas indefinidas;
 - nenhuma fase circadiana e suprimida sem evidencia de satisfacao equivalente;
-- a proatividade nasce da vontade de relacionar e respeita consentimento, cadencia, escopo e disponibilidade;
+- a proatividade combina orientacao relacional e expressao quando aplicavel, respeitando consentimento, cadencia, escopo, disponibilidade e custo;
 - uma Relation em refracao nao bloqueia as demais nem descarrega a pressao global por engano;
 - probes e testes demonstram escopo por instancia/relacao, agregacao sem texto bruto, idempotencia e ausencia de vazamento.
 
@@ -492,6 +526,41 @@ Antes de qualquer abertura controlada da instancia a novos participantes, o modu
 - probes e testes demonstram isolamento, agregacao controlada e ausencia de vazamento;
 - a politica de privacidade, apagamento e consentimento esta definida antes de qualquer piloto externo.
 
+### 10.1.2 Sequencia de desenvolvimento aprovada - 05/09/2026
+
+**C9 - Fechamento das expressoes e da arbitragem (em andamento; C9a implementado localmente).** Consolidar os cortes 7 e 8 antes de ampliar autonomia. Superficie inicial: `engines/will_expression.py`, `engines/will_phase_arbitration.py`, `will_pressure.py` e seus pontos de entrega e consumo em `main.py` e `consciousness_loop.py`, com testes correspondentes. O gate so fecha quando todos os criterios abaixo estiverem comprovados.
+
+- Validar a correspondencia entre expressao persistida, evento, vontade, instancia, relacao, ciclo e recibo antes de mudar pressao. Confirmacoes repetidas, conflitantes ou de origem desconhecida nao repetem alivio nem alteram um resultado final valido.
+- Separar preparacao, tentativa, confirmacao do transporte e integracao interna. Persistir evidencia do resultado, incluindo identificador externo quando disponivel; erro interno depois de envio confirmado nao equivale a falha de envio.
+- Definir retry, backoff, vencimento e reconciliacao apos reinicio. Resultado externo incerto nao autoriza reenvio cego; nao prometer entrega exatamente uma vez quando o canal nao oferece essa garantia. A transicao interna de alivio deve ser idempotente.
+- Verificar evidencia e equivalencia especificas da capacidade antes de dispensar uma fase. Qualidade nao pode ser constante nem inferida apenas do sucesso de uma mensagem. Resultado privado nao satisfaz fase global sem regra explicita de agregacao autorizada. Preservar integracao do resultado util na memoria, alem dos metadados.
+- Garantir consumo unico por recibo e por pulso, com recuperacao consistente entre consumo e persistencia do resultado da fase. Em ausencia de evidencia elegivel, executar a fase normal. Nao ampliar a supressao para `work` ou para fases protegidas neste corte.
+- Fazer gates de capacidade, escopo, consentimento aplicavel e orcamento serem verificacoes executaveis; nomes de risco e classe de custo nao bastam. Nao reativar imagens nem alterar politicas sensiveis sem aprovacao.
+- Validar fluxo integrado de expressao, entrega, pressao e loop: repeticao, concorrencia, reinicio, resultado incerto, vencimento, bloqueio, dry-run, erro de escopo e confirmacao valida. Acrescentar probes de reconciliacao sem texto privado.
+
+**C9a - Confirmacao de entrega e alivio idempotente (05/09/2026).**
+
+- **Implementado localmente**: `engines/will_delivery_receipt.py` valida expressao, evento vinculado, vontade, usuario, ciclo, instancia, Relation e destinatario; a migracao aditiva acrescenta `delivery_event_id` e `pressure_effect_at`. O caminho do scheduler passa a exigir recibos do Telegram com IDs das mensagens. O envio integral e separado da integracao interna, e erro posterior ao envio nao e convertido em falha de transporte.
+- **Efeito recuperavel**: o recibo do canal e persistido antes da integracao da pressao; marcador, alivio/frustracao e resultado do evento sao aplicados na mesma transacao. Repeticao nao reaplica alivio nem estende refratariedade. Em banco persistente a transacao usa conexao propria para nao compartilhar commits com outras threads. Reaplicar a confirmacao apos falha/reinicio permite concluir apenas o efeito interno.
+- **Resultado incerto**: envio parcial ou sem confirmacao integral fica `delivery_uncertain`, sem alivio e sem reenvio automatico. O probe `expressions` mostra evento vinculado, marcador de efeito, necessidade de reconciliacao e integracao de pressao pendente. Ainda nao ha reconciliador automatico nem ferramenta operacional dedicada para resolver essas pendencias.
+- **Testado**: 27 testes novos em `tests/test_will_delivery_receipt.py`, incluindo repeticao, conflito terminal, escopo/destinatario incorretos, isolamento relacional, concorrencia, falha transacional com retomada apos reconexao, envio parcial e erros posteriores ao envio; suite completa `497 passed`; sintaxe dos arquivos tocados aprovada. Nenhuma chamada externa ou paga nesses testes.
+- **Habilitado / operacao**: somente alteracoes locais, sem commit, push ou deploy nesta entrega; nao validado em producao. Imagens e novos canais nao foram ativados. Registrar commit e evidencias operacionais quando houver publicacao autorizada.
+
+**Continuacao obrigatoria do C9 (nao implementada pelo C9a)**:
+
+1. **C9b - Arbitragem e evidencia equivalente**: validar origem e conteudo util dos recibos, remover qualidade constante, bloquear consumo cruzado de Relation/global e garantir consumo unico e recuperavel por pulso com integracao do resultado. A arbitragem anterior continua presente e suas lacunas da Secao 10.5 nao foram corrigidas pelo C9a; esta entrega nao e aceite para ampliar a supressao do loop.
+2. **C9c - Ciclo de tentativas e gates**: fechar concorrencia da preparacao, estados interrompidos/legados sem evento vinculado, retry/backoff/vencimento, reconciliacao automatica ou assistida e integracao posterior ao transporte, alem de executar os gates restantes de capacidade, consentimento e orcamento. Revisar tambem o finalizador de baixo nivel `WillExpressionEngine.finalize_delivery`, que nao deve servir de atalho ao contrato integrado. Completar regressao ponta a ponta, publicar apenas com autorizacao e validar por probes antes de encerrar C9.
+
+**C10 - Disponibilidade e periodo refratario (planejado; depende do C9).** Criar estado persistente por instancia e Relation, com janelas de contato, orcamento de turnos/profundidade, recuperacao, cooldown e retomada. Decidir e testar continuidade da pressao na virada de ciclo e consumo de sinais sem aliviar repetidamente pela mesma evidencia. Uma relacao em elaboracao nao bloqueia automaticamente as demais; limites globais de custo ou disponibilidade sao distintos e explicitos. Preservar comandos essenciais e protocolos de seguranca. Aceite: cenarios com tempo simulado, conversas intensas, relacoes concorrentes, reinicio, virada de dia e esgotamento de orcamento, sem chamadas pagas.
+
+**C11 - Expressao conversacional e proatividade unificadas (planejado; depende do C10).** Aplicar a semantica das tres vontades da Secao 10.1.1 a respostas e iniciativas, com politica comum de disponibilidade, consentimento e custo. Oferecer expressao textual independente de geracao de imagens. Distinguir sinais do interlocutor dos produzidos pelo agente, evitando auto-influencia circular. Registrar por que respondeu, iniciou contato, adiou ou retomou; nao acrescentar uma chamada LLM obrigatoria a cada decisao. Aceite: fluxo conversacional integrado, ausencia de respostas/envios duplicados, credito de alivio por acao e vontade comprovado e funcionamento textual com imagens desligadas.
+
+**C12 - Fechamento da interioridade multi-relacional (planejado; depende do C11).** Auditar e completar os caminhos restantes em Working Memory, sonhos, identidade, recuperacao e montagem de contexto. Separar material privado, agregados autorizados e estado proprio global; nao duplicar mecanicamente toda a identidade por pessoa. Definir tratamento da memoria historica do admin sem reimportacao silenciosa para outros escopos. Aceite: pelo menos duas relacoes com fatos, tensoes e mensagens sentinela distintas; nenhum conteudo privado aparece no contexto ou na entrega de outra pessoa; influencias globais possuem origem auditavel sem carregar texto privado. Testar tambem acesso revogado, apagamento e isolamento entre instancias de teste.
+
+**C13 - Piloto convidado observavel (bloqueado ate aceite C9-C12 e aprovacao do mantenedor).** Comecar com poucas pessoas explicitamente convidadas, Relation ativa, consentimento e regras de uso, privacidade e apagamento definidos. Usar limites de custo e contato, revogacao de acesso e mecanismo de pausa. Cockpit e probes devem mostrar disponibilidade, motivo de bloqueio/adiamento, retomadas, recibos, escopo e custo sem expor conversas privadas. Definir antes de abrir a janela, metricas, criterios de interrupcao e aceite; nao encerrar apenas pelo numero de dias. Observar continuidade da memoria, pertinencia das iniciativas, respeito ao descanso, isolamento e custo por relacao. Este e um piloto relacional da instancia existente, nao uma liberacao comercial multi-instancia.
+
+**Registro obrigatorio em cada entrega**: ID do corte, commit, cenarios testados, estado de habilitacao, evidencias operacionais, pendencias com proxima acao e aprovacao ainda necessaria. A implementacao parcial C9a nao encerra C9 e nao antecipa C10-C13. A higiene dos monolitos acompanha as fronteiras tocadas por cada corte, preservando fachadas e contratos, sem reescrita geral.
+
 ### 10.2 Trilha comercial: Jung Inner Life Engine
 
 A trilha comercial sera construida sobre expressoes de vontade, e nao sobre acesso direto de terceiros ao banco ou aos prompts internos. O contrato entre engine e aplicacao externa sera:
@@ -501,6 +570,15 @@ A trilha comercial sera construida sobre expressoes de vontade, e nao sobre aces
 A primeira entrega comercial deve definir o `Will Expression Contract v1`, com vontade dominante, conflito, objetivo, acao proposta, confianca, evidencias, risco, custo, validade, idempotencia, politica de aprovacao e resultado esperado. Depois, um conector generico em modo dry-run/webhook podera validar o fluxo sem efeitos externos.
 
 A estrategia inicial recomendada e validar agentes de software e companions B2B, por exigirem menos infraestrutura que Unity, Unreal ou robotica e por aproveitarem o que ja existe no Telegram e no cockpit. Games e robotica permanecem como verticais posteriores da mesma API.
+
+**Direcao aprovada em 05/09/2026**: demonstrar primeiro continuidade autobiografica, processamento entre encontros e iniciativa verificavel em uma aplicacao de software. Depois do piloto relacional e dos gates cognitivos, seguir esta ordem:
+
+1. **Multiplas instancias isoladas**: fechar os requisitos e testes da Secao 10.3, aproveitando a administracao multi-tenant existente sem confundi-la com isolamento cognitivo.
+2. **API minima de eventos, intencoes e resultados**: receber eventos escopados, expor apenas intencoes autorizadas e aceitar recibos autenticados e idempotentes. Consultas de estado devem ser minimas e autorizadas; o catalogo da Secao 10.4 nao vira automaticamente superficie publica.
+3. **Um conector textual governado**: validar primeiro em simulacao/dry-run e depois com aprovacao, limites de custo e observabilidade. MCP e um meio de conexao; decisao, permissoes, privacidade, orcamento e confirmacao permanecem sob responsabilidade da plataforma.
+4. **Um piloto comercial delimitado**: escolher uma aplicacao e parceiro apos evidencias dos passos anteriores, medir utilidade e custo antes de ampliar canais, SDKs ou escala.
+
+O plano `docs/plano_desenvolvimento_inner_life_engine.md` permanece como visao de possibilidades. Suas prioridades antigas de games, datas e amplitude de SDKs nao sobrepoem esta sequencia vigente. Marketplace de conectores, integracoes de games e robotica sao expansoes posteriores, nao compromissos da proxima entrega. Esta decisao nao autoriza efeitos externos ou reativacao de funcionalidades gateadas.
 
 ### 10.2.1 Catalogo de conectores orientado pela vontade
 
@@ -574,7 +652,7 @@ Uma empresa pode contratar um JungAgent corporativo que se desenvolve por meio d
 - master, org_admin e operador de instancia testados em conjunto;
 - nenhum conector externo real antes de o `Will Expression Contract` e os gates de aprovacao estarem validados.
 
-**Regra de sequenciamento**: especificacao comercial e simulacao podem comecar agora; acoes externas reais, SDKs de producao e pilotos com dados de terceiros ficam bloqueados ate o aceite da multiplicidade relacional e da arquitetura multi-instancia.
+**Regra de sequenciamento comercial**: especificacao e simulacao podem comecar agora; novas integracoes comerciais reais, SDKs de producao e pilotos comerciais com dados de terceiros ficam bloqueados ate o aceite da multiplicidade relacional e da arquitetura multi-instancia. O piloto relacional C13 na instancia existente tem seus proprios gates e aprovacao; nao exige antecipar toda a plataforma comercial nem libera esses recursos por extensao.
 
 ### 10.4 Catalogo futuro de informacao da API
 
@@ -615,7 +693,7 @@ Em 19/08/2026 foi auditado o caminho completo `scores -> pressao -> pulso -> aca
 - a falha nao sobrescreve `last_release_will` nem `last_release_at`, que devem representar apenas uma liberacao real;
 - foram adicionados testes para falha relacional, falha no pulso e liberacao bem-sucedida.
 
-**Achados para a fase futura da vontade**:
+**Achados historicos de 19/08/2026 para a fase futura da vontade** (nao representam integralmente o schema atual; atualizacao e destino abaixo):
 
 1. O estado de pressao hoje e criado por `user_id + cycle_id` e um novo ciclo nasce com pressoes zeradas. E necessario decidir e testar a continuidade longitudinal da pressao entre ciclos.
 2. O pulso possui entrega em duas etapas, preparacao e envio, mas ainda precisa de um estado explicito de tentativa, retry, backoff e idempotencia para sobreviver a reinicios sem risco de duplicacao ou perda de resultado.
@@ -633,6 +711,13 @@ Em 19/08/2026 foi auditado o caminho completo `scores -> pressao -> pulso -> aca
 - falhas nao sao confundidas com liberacoes;
 - probes permitem reconstruir por que uma vontade cresceu, venceu, foi bloqueada, agiu, falhou ou recebeu alivio.
 
+**Revisao de 05/09/2026 e destino das pendencias**:
+
+- `engines/will_phase_arbitration.py`: verificacao isolada aceitou uma expressao sem registro persistido, atribuiu qualidade `1.0` e permitiu que um recibo `scope_kind=relation` fosse consumido pela consulta de fase sem filtro relacional. E uma lacuna reproduzida em teste, nao evidencia de vazamento ocorrido em producao. Corrigir e cobrir no C9.
+- `will_pressure.py:finalize_pending_delivery`: a protecao do estado final da expressao nao impede o chamador de reaplicar alivio a partir de `success`. Fechar correspondencia e idempotencia do efeito no C9.
+- Os oito testes focados de `tests/test_will_expression.py` e `tests/test_will_phase_arbitration.py` passaram na revisao local de `5ea892f`; nao cobrem todas as garantias acima e nao constituem uma nova execucao da suite integral nem validacao de producao.
+- Os achados historicos 2 e 3 seguem no C9; os achados 1 e 6 seguem no C10; o achado 5 segue no C11. O achado 4 foi parcialmente atendido pelo corte 6, que acrescentou escopos; completar o isolamento de ponta a ponta nos C9/C12 e a independencia de instancias na Secao 10.3.
+
 ## 11. Riscos
 
 | Risco | Antidoto |
@@ -643,7 +728,7 @@ Em 19/08/2026 foi auditado o caminho completo `scores -> pressao -> pulso -> aca
 | Dependencia do LLM subjacente | Runner de regressao `--mock` no CI; teste de troca de modelo reavaliado somente se houver troca real de modelo |
 | Executor introduzir regressoes | CI bloqueante; contrato da Secao 6; escopo estrito por tarefa |
 | Loop de auto-observacao (Fase IV+) | Cooldown 24h; ajustes <= 5% por ciclo; congelamento pelo mantenedor |
-| Custo invisivel | Risco aceito no curto prazo por decisao do mantenedor; reavaliar se custo operacional virar problema pratico |
+| Custo invisivel | Limites executaveis no WILL e custo por relacao/instancia como gate dos novos pilotos; imagens pagas permanecem desligadas; nao expandir escopo para faturamento completo agora |
 | Seguranca de execucao (Fase VII) | Gate rigido; self-work via PR humano como caminho preferencial |
 | Descolamento do usuario | Principio do Encontro; metrica de ressonancia; blog compreensivel |
 
@@ -670,6 +755,9 @@ Em 19/08/2026 foi auditado o caminho completo `scores -> pressao -> pulso -> aca
 | Versao 3.4 - Ruminação relacional | 21/08/2026 | Isola fragmentos, tensões, insights e entrega da ruminação por Relation, habilita ingestão de participantes registrados e adiciona testes de não mistura |
 | Versao 3.5 - Catalogo de conectores orientado pela vontade | 28/08/2026 | Registra o catalogo futuro de conexoes por saber, expressar e relacionar, a preferencia por MCP e os gates de descoberta, aprovacao, escopo e execucao |
 | Versao 3.6 - Fundacao relacional do WILL | 03/09/2026 | Registra o escopo por instancia/Relation para vontade e pressao, a agregacao global sem texto bruto e a sequencia de autonomia volitiva antes do piloto multiusuario |
+| Versoes 3.7/3.8 - Expressoes e arbitragem WILL-ciclo | 04/09/2026 | Registra a infraestrutura dos cortes 7/8; a revisao 3.9 explicita as garantias de ponta a ponta ainda abertas |
+| Versao 3.9 - Fechamento Volitivo e Direcao Multi-relacional | 05/09/2026 | Aprova C9-C13, distingue implementacao de validacao, registra lacunas da revisao local, amplia expressao para texto e prioriza multi-instancia, API minima e conector textual apos os gates |
+| Versao 3.10 - C9a: Confirmacao de Entrega e Alivio Idempotente | 05/09/2026 | Registra implementacao local e 497 testes aprovados, sem deploy; mantem C9 aberto com C9b/C9c explicitos |
 
 ---
 

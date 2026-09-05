@@ -606,10 +606,15 @@ def query_expressions(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[
         }
 
     scope_where, scope_params = _will_scope_filter(cursor, "will_expressions", args)
+    columns = table_columns(cursor, "will_expressions")
+    event_field = "delivery_event_id" if "delivery_event_id" in columns else "NULL AS delivery_event_id"
+    effect_field = "pressure_effect_at" if "pressure_effect_at" in columns else "NULL AS pressure_effect_at"
     cursor.execute(
         f"""
         SELECT
             id,
+            {event_field},
+            {effect_field},
             agent_instance,
             relation_id,
             scope_kind,
@@ -650,6 +655,12 @@ def query_expressions(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[
             if key in intent
         }
         row["has_prepared_delivery"] = bool(row.get("status") in {"prepared", "delivering", "completed"})
+        row["requires_reconciliation"] = row.get("status") == "delivery_uncertain"
+        row["pressure_integration_pending"] = (
+            row.get("status") in {"completed", "failed"}
+            and row.get("delivery_event_id") is not None
+            and not row.get("pressure_effect_at")
+        )
         if table_exists(cursor, "will_expression_receipts"):
             cursor.execute(
                 """
