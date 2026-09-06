@@ -259,6 +259,17 @@ class WillExpressionEngine:
             self._receipt(expression["id"], "failed", "delivery_not_prepared", "A capacidade nao produziu uma entrega valida; nenhuma descarga foi aplicada.", {"capability_key": capability_key})
             return {"status": "failed", "expression": expression, "action_summary": reason, "payload": prepared.get("payload")}
 
+        phase_evidence = prepared.get("phase_evidence")
+        if phase_evidence and resolved_scope.get("scope_kind") == GLOBAL_SCOPE and not resolved_scope.get("relation_id"):
+            from engines.will_phase_evidence import SCOPE_FIELDS, validate_evidence
+
+            if (len(_dump(phase_evidence).encode("utf-8")) <= 65536
+                    and validate_evidence(phase_evidence, capability_key, self._now())):
+                self._receipt(
+                    expression["id"], "capability_completed", "phase_evidence_v1",
+                    "Resultado cognitivo persistido; ainda nao confirma entrega ou equivalencia do pulso.",
+                    {"scope": {key: expression.get(key) for key in SCOPE_FIELDS}, "result": phase_evidence},
+                )
         expression = self._set_status(expression["id"], "prepared", prepared.get("action_summary") or "Expressao preparada para entrega.", delivery)
         self._receipt(expression["id"], "prepared", "delivery_prepared", "Expressao preparada; aguarda confirmacao do canal.", {"capability_key": capability_key, "gate_level": expression.get("gate_level")})
         claimed = self._claim_delivery(expression)

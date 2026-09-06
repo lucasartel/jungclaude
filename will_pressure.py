@@ -867,6 +867,7 @@ ESTADO QUALITATIVO:
         return refreshed
 
     def _execute_saber_release(self, user_id: str, cycle_id: str) -> Dict[str, Any]:
+        from engines.will_phase_evidence import world_evidence
         from will_engine import load_latest_will_state
         from world_consciousness import AREA_CONFIG, world_consciousness
 
@@ -904,6 +905,7 @@ ESTADO QUALITATIVO:
                 240,
             ),
             "pending_delivery": pending_delivery,
+            "phase_evidence": world_evidence(world_state, AREA_CONFIG.keys()),
             "payload": {
                 "world_state_snapshot": {
                     "knowledge_source_decision": knowledge_decision,

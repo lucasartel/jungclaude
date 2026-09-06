@@ -459,6 +459,12 @@ class ConsciousnessLoopManager:
         phase: LoopPhase,
         now: Optional[datetime] = None,
     ) -> Optional[Dict[str, Any]]:
+        if phase.key in {"world", "hobby"}:
+            from engines.will_phase_arbitration import WillPhaseArbitration
+
+            WillPhaseArbitration(self.db).recover_reservations(
+                agent_instance=self.agent_instance, cycle_id=cycle_id, phase=phase.key,
+            )
         policy = self._get_phase_retry_policy(phase.key)
         current = (now or self._now()).astimezone(LOOP_TIMEZONE)
         cursor = self.db.conn.cursor()
@@ -777,8 +783,9 @@ class ConsciousnessLoopManager:
         self.db.conn.commit()
         return cursor.lastrowid
 
-    def _save_phase_result(self, result: Dict) -> int:
-        cursor = self.db.conn.cursor()
+    def _save_phase_result(self, result: Dict, *, connection=None, commit: bool = True) -> int:
+        connection = connection if connection is not None else self.db.conn
+        cursor = connection.cursor()
         cursor.execute(
             """
             INSERT INTO consciousness_loop_phase_results (
@@ -827,7 +834,8 @@ class ConsciousnessLoopManager:
                 ),
             )
 
-        self.db.conn.commit()
+        if commit:
+            connection.commit()
         return phase_result_id
 
     def _update_phase_result_payloads(self, phase_result_id: int, result: Dict) -> None:
@@ -2639,15 +2647,24 @@ class ConsciousnessLoopManager:
             execution_mode=execution_mode,
             cycle_id=cycle_id,
         )
+        if satisfaction and satisfaction.get("already_committed"):
+            return satisfaction["stored_result"]
+        self._read_working_memory_inbox(phase, result)
         if satisfaction:
             result["status"] = "satisfied_by_will"
             result["warnings"] = [warning for warning in result["warnings"] if warning != "placeholder_execution"]
-            result["output_summary"] = (
-                f"Fase {phase.label} satisfeita por uma expressao confirmada da vontade "
-                f"de {satisfaction.get('will_name') or 'origem nao nomeada'}."
+            equivalent = satisfaction["result"]
+            result["output_summary"] = equivalent["output_summary"]
+            result["raw_result"]["world_state"] = equivalent["world_state"]
+            result["metrics"].update(equivalent["metrics"])
+            self._record_virtual_artifact(
+                result, artifact_type="world_state_snapshot",
+                artifact_id=satisfaction["evidence"]["source_receipt_id"],
+                artifact_table="will_expression_receipts", summary=equivalent["output_summary"],
             )
             result["metrics"].update(
                 {
+                    "phase_placeholder": 0,
                     "satisfied_by_will": 1,
                     "phase_execution_suppressed": 1,
                     "will_expression_id": satisfaction.get("expression_id"),
@@ -2663,10 +2680,9 @@ class ConsciousnessLoopManager:
                 "source_ref": satisfaction.get("source_ref"),
                 "result_code": satisfaction.get("result_code"),
                 "quality": satisfaction.get("quality"),
-                "consumed_by_phase_pulse_id": satisfaction.get("consumed_by_phase_pulse_id"),
+                "reserved_by_phase_pulse_id": satisfaction.get("reserved_by_phase_pulse_id"),
+                "consumed_by_phase_pulse_id": pulse["id"],
             }
-        else:
-            self._read_working_memory_inbox(phase, result)
         try:
             if not satisfaction and phase.key == "dream":
                 result = self._run_dream_phase(result)
@@ -2726,8 +2742,18 @@ class ConsciousnessLoopManager:
                     "Intervencao tecnica recomendada."
                 )
 
-        phase_result_id = self._save_phase_result(result)
-        self._finish_phase_pulse(pulse, result, phase_result_id)
+        if satisfaction:
+            from engines.will_phase_arbitration import WillPhaseArbitration
+
+            phase_result_id, created = WillPhaseArbitration(self.db).commit_for_phase(
+                satisfaction["id"], phase_pulse_id=pulse["id"],
+                save_result=lambda connection: self._save_phase_result(result, connection=connection, commit=False),
+            )
+            if not created:
+                return result
+        else:
+            phase_result_id = self._save_phase_result(result)
+            self._finish_phase_pulse(pulse, result, phase_result_id)
         payloads_changed = self._observe_phase_for_working_memory(phase_result_id, phase, result) is not None
         broadcast_id = self._broadcast_working_memory_to_next_phase(phase, result)
         if broadcast_id or result["metrics"].get("working_memory_broadcast_error"):
@@ -2785,9 +2811,9 @@ class ConsciousnessLoopManager:
 
         if notify_admin or should_alert_failure:
             self._notify_admin(result)
-            if result["phase"] == "world" and result["status"] != "failed":
+            if result["phase"] == "world" and result["status"] not in {"failed", "satisfied_by_will"}:
                 self._notify_admin_knowledge_journal(result)
-            if result["phase"] == "hobby" and result["status"] != "failed":
+            if result["phase"] == "hobby" and result["status"] not in {"failed", "satisfied_by_will"}:
                 self._notify_admin_hobby_art(result)
 
         return result
@@ -2819,7 +2845,7 @@ class ConsciousnessLoopManager:
         cycle_id: str,
     ) -> Optional[Dict[str, Any]]:
         """Claim one confirmed WILL result for an eligible automatic pulse."""
-        if not pulse or execution_mode == "manual":
+        if not pulse or execution_mode != "automatic":
             return None
         try:
             from engines.will_phase_arbitration import WillPhaseArbitration
@@ -2829,6 +2855,8 @@ class ConsciousnessLoopManager:
                 cycle_id=cycle_id,
                 phase=phase.key,
                 phase_pulse_id=int(pulse.get("id") or 0),
+                user_id=self.admin_user_id,
+                execution_mode=execution_mode,
             )
         except Exception as exc:
             logger.warning(
@@ -2837,7 +2865,7 @@ class ConsciousnessLoopManager:
                 phase.key,
                 exc,
             )
-            return None
+            raise
 
     def sync_loop(self, trigger_source: str = "scheduled_trigger", notify_admin: bool = False) -> Dict:
         self._ensure_phase_config()
