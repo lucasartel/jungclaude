@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from datetime import datetime
 from typing import Any, Callable, Dict, Optional
 
 from engines.will_scope import GLOBAL_SCOPE, scope_context
+from engines.will_delivery_receipt import atomic, delivery_connection
 
 
 CAPABILITIES: Dict[str, Dict[str, str]] = {
@@ -119,21 +119,19 @@ class WillExpressionEngine:
         return datetime.utcnow().isoformat()
 
     def _fetch(self, expression_id: int) -> Optional[Dict[str, Any]]:
-        cursor = self.db.conn.cursor()
-        cursor.execute("SELECT * FROM will_expressions WHERE id = ?", (int(expression_id),))
-        return _row(cursor.fetchone())
+        with delivery_connection(self.db) as conn:
+            return _row(conn.execute("SELECT * FROM will_expressions WHERE id = ?", (int(expression_id),)).fetchone())
 
     def _fetch_key(self, key: str) -> Optional[Dict[str, Any]]:
-        cursor = self.db.conn.cursor()
-        cursor.execute("SELECT * FROM will_expressions WHERE idempotency_key = ?", (key,))
-        return _row(cursor.fetchone())
+        with delivery_connection(self.db) as conn:
+            return _row(conn.execute("SELECT * FROM will_expressions WHERE idempotency_key = ?", (key,)).fetchone())
 
     def _receipt(self, expression_id: int, status: str, code: str, summary: str, evidence: Optional[Dict[str, Any]] = None) -> None:
-        self.db.conn.execute(
-            "INSERT INTO will_expression_receipts (expression_id, status, result_code, summary, evidence_json) VALUES (?, ?, ?, ?, ?)",
-            (int(expression_id), status, code, summary[:500], _dump(evidence)),
-        )
-        self.db.conn.commit()
+        with delivery_connection(self.db) as conn, atomic(conn):
+            conn.execute(
+                "INSERT INTO will_expression_receipts (expression_id, status, result_code, summary, evidence_json) VALUES (?, ?, ?, ?, ?)",
+                (int(expression_id), status, code, summary[:500], _dump(evidence)),
+            )
 
     def _set_status(self, expression_id: int, status: str, reason: Optional[str], payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         columns = ["status = ?", "reason = ?", "updated_at = ?"]
@@ -142,9 +140,9 @@ class WillExpressionEngine:
             columns.append("prepared_payload_json = ?")
             values.append(_dump(payload))
         values.append(int(expression_id))
-        self.db.conn.execute(f"UPDATE will_expressions SET {', '.join(columns)} WHERE id = ?", tuple(values))
-        self.db.conn.commit()
-        return self._fetch(expression_id) or {}
+        with delivery_connection(self.db) as conn, atomic(conn):
+            conn.execute(f"UPDATE will_expressions SET {', '.join(columns)} WHERE id = ?", tuple(values))
+            return _row(conn.execute("SELECT * FROM will_expressions WHERE id = ?", (expression_id,)).fetchone()) or {}
 
     @staticmethod
     def _availability(capability_key: str, proactive_system: Any) -> tuple[bool, Optional[str]]:
@@ -165,27 +163,24 @@ class WillExpressionEngine:
             str(user_id), str(cycle_id), will_name, capability_key,
         ))
 
-    def _create(self, scope: Dict[str, Optional[str]], user_id: str, cycle_id: str, will_name: str, capability_key: str, key: str, intent: Dict[str, Any]) -> Dict[str, Any]:
+    def _create(self, scope: Dict[str, Optional[str]], user_id: str, cycle_id: str, will_name: str, capability_key: str, key: str, intent: Dict[str, Any]) -> tuple[Dict[str, Any], bool]:
         capability = CAPABILITIES[capability_key]
-        try:
-            cursor = self.db.conn.cursor()
-            cursor.execute(
+        # Only the transaction that creates the row may execute the capability.
+        with delivery_connection(self.db) as conn, atomic(conn):
+            cursor = conn.execute(
                 """
                 INSERT INTO will_expressions (
                     agent_instance, relation_id, scope_kind, user_id, cycle_id, will_name,
                     capability_key, gate_level, cost_class, idempotency_key, status,
                     intent_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'preparing', ?, ?, ?)
+                ON CONFLICT(idempotency_key) DO NOTHING
                 """,
                 (scope["agent_instance"], scope.get("relation_id"), scope["scope_kind"], user_id, cycle_id, will_name, capability_key, capability["gate_level"], capability["cost_class"], key, _dump(intent), self._now(), self._now()),
             )
-            self.db.conn.commit()
-            return self._fetch(cursor.lastrowid) or {}
-        except sqlite3.IntegrityError:
-            existing = self._fetch_key(key)
-            if existing:
-                return existing
-            raise
+            created = cursor.rowcount == 1
+            expression = _row(conn.execute("SELECT * FROM will_expressions WHERE idempotency_key = ?", (key,)).fetchone())
+            return expression, created
 
     def _prepared(self, expression: Dict[str, Any], reused: bool = False) -> Dict[str, Any]:
         delivery = dict(expression.get("prepared_payload") or {})
@@ -197,25 +192,32 @@ class WillExpressionEngine:
 
     def _claim_delivery(self, expression: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Claim a prepared expression so a retry cannot duplicate delivery."""
-        cursor = self.db.conn.cursor()
-        cursor.execute(
-            """
-            UPDATE will_expressions
-            SET status = 'delivering', updated_at = ?
-            WHERE id = ? AND status = 'prepared'
-            """,
-            (self._now(), int(expression["id"])),
+        with delivery_connection(self.db) as conn, atomic(conn):
+            cursor = conn.execute(
+                "UPDATE will_expressions SET status = 'delivering', updated_at = ? WHERE id = ? AND status = 'prepared'",
+                (self._now(), int(expression["id"])),
+            )
+            if cursor.rowcount != 1:
+                return None
+            conn.execute(
+                """INSERT INTO will_expression_receipts (expression_id, status, result_code, summary)
+                   VALUES (?, 'delivering', 'delivery_claimed', ?)""",
+                (expression["id"], "Expressao reivindicada para uma unica tentativa de entrega."),
+            )
+            return _row(conn.execute("SELECT * FROM will_expressions WHERE id = ?", (expression["id"],)).fetchone())
+
+    def _reuse(self, expression: Dict[str, Any]) -> Dict[str, Any]:
+        if expression.get("status") == "prepared":
+            claimed = self._claim_delivery(expression)
+            if claimed:
+                return self._prepared(claimed, reused=True)
+            expression = self._fetch(expression["id"]) or expression
+        status = {"delivering": "delivery_in_progress", "preparing": "preparation_in_progress"}.get(
+            expression.get("status"), expression.get("status") or "blocked",
         )
-        if cursor.rowcount != 1:
-            return None
-        self.db.conn.commit()
-        self._receipt(
-            expression["id"],
-            "delivering",
-            "delivery_claimed",
-            "Expressao reivindicada para uma unica tentativa de entrega.",
-        )
-        return self._fetch(expression["id"])
+        return {"status": status, "success": False, "expression": expression,
+                "action_summary": expression.get("reason") or "Expressao ja registrada; nenhuma nova tentativa foi iniciada.",
+                "reused": True}
 
     def prepare(self, *, user_id: str, cycle_id: str, will_name: str, scope: Optional[Dict[str, Optional[str]]] = None, intent: Optional[Dict[str, Any]] = None, proactive_system: Any = None, prepare_capability: Callable[[str], Dict[str, Any]]) -> Dict[str, Any]:
         capability_key = CAPABILITY_BY_WILL.get(will_name)
@@ -225,21 +227,11 @@ class WillExpressionEngine:
         key = self._key(resolved_scope, user_id, cycle_id, will_name, capability_key)
         expression = self._fetch_key(key)
         if expression:
-            if expression.get("status") == "prepared":
-                claimed = self._claim_delivery(expression)
-                if claimed:
-                    return self._prepared(claimed, reused=True)
-            if expression.get("status") == "delivering":
-                return {
-                    "status": "delivery_in_progress",
-                    "success": False,
-                    "expression": expression,
-                    "action_summary": "Expressao ja esta em tentativa de entrega; nenhuma duplicacao sera criada.",
-                    "reused": True,
-                }
-            return {"status": expression.get("status") or "blocked", "expression": expression, "action_summary": expression.get("reason") or "Expressao ja registrada neste ciclo.", "reused": True}
+            return self._reuse(expression)
 
-        expression = self._create(resolved_scope, user_id, cycle_id, will_name, capability_key, key, {"will_name": will_name, "capability_key": capability_key, "scope_kind": resolved_scope.get("scope_kind"), **(intent or {})})
+        expression, created = self._create(resolved_scope, user_id, cycle_id, will_name, capability_key, key, {"will_name": will_name, "capability_key": capability_key, "scope_kind": resolved_scope.get("scope_kind"), **(intent or {})})
+        if not created:
+            return self._reuse(expression)
         available, reason = self._availability(capability_key, proactive_system)
         if not available:
             expression = self._set_status(expression["id"], "blocked", reason)
@@ -285,12 +277,5 @@ class WillExpressionEngine:
         return result
 
     def finalize_delivery(self, expression_id: int, *, success: bool, summary: str, evidence: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
-        expression = self._fetch(expression_id)
-        if not expression:
-            return None
-        if expression.get("status") in {"completed", "failed", "blocked"}:
-            return expression
-        status, code = ("completed", "delivery_confirmed") if success else ("failed", "delivery_failed")
-        expression = self._set_status(expression_id, status, summary)
-        self._receipt(expression_id, status, code, summary, evidence)
-        return expression
+        """Reject the legacy shortcut: callers must provide the complete scoped contract."""
+        raise ValueError("will_delivery_use_finalize_pending_delivery")

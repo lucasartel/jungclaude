@@ -3,6 +3,10 @@ from __future__ import annotations
 
 import sqlite3
 from argparse import Namespace
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
+import pytest
 
 from engines.will_expression import WillExpressionDatabaseMixin, WillExpressionEngine
 from scripts.remote_db_probe import query_expressions
@@ -82,7 +86,8 @@ def test_blocked_capability_does_not_prepare_or_discharge() -> None:
     assert tuple(receipt) == ("blocked", "proactive_executor_unavailable")
 
 
-def test_delivery_receipt_is_terminal_and_keeps_evidence() -> None:
+@pytest.mark.parametrize("success", [True, False])
+def test_legacy_finalizer_cannot_bypass_scoped_contract(success) -> None:
     engine = _engine()
     prepared = engine.prepare(
         user_id="user-a",
@@ -95,27 +100,18 @@ def test_delivery_receipt_is_terminal_and_keeps_evidence() -> None:
     )
     expression_id = prepared["expression"]["id"]
 
-    completed = engine.finalize_delivery(
-        expression_id,
-        success=True,
-        summary="Canal confirmou a entrega.",
-        evidence={"transport": "test", "message_id": "m-1"},
-    )
-    repeated = engine.finalize_delivery(
-        expression_id,
-        success=False,
-        summary="Tentativa repetida.",
-    )
-
-    assert completed["status"] == "completed"
-    assert repeated["status"] == "completed"
+    with pytest.raises(ValueError, match="use_finalize_pending_delivery"):
+        engine.finalize_delivery(
+            expression_id, success=success, summary="Canal confirmou a entrega.",
+            evidence={"transport": "telegram", "chat_id": 42, "message_ids": [1]},
+        )
+    assert engine._fetch(expression_id)["status"] == "delivering"
     receipts = engine.db.conn.execute(
         "SELECT status, result_code FROM will_expression_receipts ORDER BY id"
     ).fetchall()
     assert [tuple(row) for row in receipts] == [
         ("prepared", "delivery_prepared"),
         ("delivering", "delivery_claimed"),
-        ("completed", "delivery_confirmed"),
     ]
 
 
@@ -150,3 +146,98 @@ def test_expression_probe_exposes_lifecycle_without_delivery_payload() -> None:
     assert "private_note" not in row["intent"]
     assert "prepared_payload" not in row
     assert "conteudo privado" not in str(payload)
+
+
+def test_concurrent_creation_executes_capability_once(tmp_path):
+    path = tmp_path / "expressions.db"
+    db = ExpressionDB()
+    db.conn.close()
+    db.conn = sqlite3.connect(path)
+    db._init_will_expression_schema()
+    db.conn.close()
+    ready = Barrier(2)
+    calls = []
+
+    def worker():
+        local = ExpressionDB()
+        local.conn.close()
+        local.conn = sqlite3.connect(path)
+        local.conn.row_factory = sqlite3.Row
+        try:
+            engine = WillExpressionEngine(local)
+            original = engine._fetch_key
+
+            def simultaneous_read(key):
+                result = original(key)
+                ready.wait(timeout=10)
+                return result
+
+            engine._fetch_key = simultaneous_read
+
+            def prepare(capability):
+                calls.append(capability)
+                return {"success": True, "pending_delivery": {"text": "private"}}
+
+            return engine.prepare(user_id="u", cycle_id="c", will_name="saber", prepare_capability=prepare)
+        finally:
+            local.conn.close()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: worker(), range(2)))
+    assert calls == ["saber_world_refresh"]
+    assert sum(bool(item.get("pending_delivery")) for item in results) == 1
+    assert len({item["expression"]["id"] for item in results}) == 1
+    with sqlite3.connect(path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM will_expressions").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM will_expression_receipts WHERE result_code = 'delivery_claimed'").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize("status", ["planned", "preparing", "delivering", "delivery_uncertain"])
+def test_interrupted_or_legacy_expression_is_not_blindly_reexecuted(status):
+    engine = _engine()
+    args = dict(user_id="u", cycle_id="c", will_name="saber")
+    scope = {"agent_instance": engine.db.agent_instance, "scope_kind": "global", "relation_id": None}
+    capability = "saber_world_refresh"
+    key = engine._key(scope, "u", "c", "saber", capability)
+    expression, created = engine._create(scope, "u", "c", "saber", capability, key, {})
+    assert created
+    engine._set_status(expression["id"], status, "interrupted")
+    restarted = WillExpressionEngine(engine.db)
+    calls = []
+    result = restarted.prepare(**args, prepare_capability=lambda _: calls.append(True))
+    assert calls == []
+    assert result["reused"] is True
+    assert not result.get("pending_delivery")
+    assert restarted._fetch(expression["id"])["status"] == status
+
+
+def test_delivery_claim_and_receipt_roll_back_together():
+    engine = _engine()
+    engine.db.conn.execute("""CREATE TRIGGER reject_claim_receipt BEFORE INSERT ON will_expression_receipts
+        WHEN NEW.result_code = 'delivery_claimed' BEGIN SELECT RAISE(ABORT, 'injected_claim_failure'); END""")
+    engine.db.conn.commit()
+    args = dict(user_id="u", cycle_id="c", will_name="saber")
+    calls = []
+
+    def prepare(_):
+        calls.append(True)
+        return {"success": True, "pending_delivery": {"text": "private"}}
+
+    with pytest.raises(sqlite3.IntegrityError, match="injected_claim_failure"):
+        engine.prepare(**args, prepare_capability=prepare)
+    assert engine.db.conn.execute("SELECT status FROM will_expressions").fetchone()[0] == "prepared"
+    assert not engine.db.conn.in_transaction
+    engine.db.conn.execute("DROP TRIGGER reject_claim_receipt")
+    engine.db.conn.commit()
+    resumed = engine.prepare(**args, prepare_capability=prepare)
+    assert resumed["status"] == "prepared"
+    assert calls == [True]
+
+
+def test_rejected_claim_does_not_leave_transaction_open():
+    engine = _engine()
+    prepared = engine.prepare(user_id="u", cycle_id="c", will_name="saber", prepare_capability=lambda _: {
+        "success": True, "pending_delivery": {"text": "private"},
+    })
+    assert engine._claim_delivery(prepared["expression"]) is None
+    assert not engine.db.conn.in_transaction
