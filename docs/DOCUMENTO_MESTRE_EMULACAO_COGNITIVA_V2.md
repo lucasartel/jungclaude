@@ -1,6 +1,6 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 3.10 - C9a: Confirmacao de Entrega e Alivio Idempotente - Setembro 2026**
+**Versao 3.11 - C9b: Evidencia Equivalente e Consumo Transacional - Setembro 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
@@ -11,6 +11,8 @@
 *Direcao atual aprovada pelo mantenedor em 05/09/2026: fechar as garantias do WILL, regular disponibilidade, unificar expressao conversacional, completar isolamento cognitivo e so entao abrir um piloto convidado. Base da revisao inicial: codigo local `5ea892f`, oito testes focados aprovados e verificacao isolada de arbitragem em SQLite temporario. A implementacao local posterior C9a e seus 497 testes estao registrados na Secao 10.1.2. Railway nao foi revalidado; nenhuma nova ativacao em producao foi realizada.*
 
 *Tres leitores: o mantenedor (decide), o consultor estrategico (orienta e audita) e o modelo executor (codifica). A Parte II e enderecada diretamente ao executor.*
+
+*Atualizacao de 06/09/2026: C9a preservado no commit local `11d485b`; C9b implementado no commit local `119eab9`, com 538 testes e 20 cenarios mock aprovados. Nenhum push, deploy ou revalidacao de producao nesta entrega. C9 permanece aberto para C9c; ver Secao 10.1.2.*
 
 ---
 
@@ -206,7 +208,7 @@ Cada entrega deve registrar quatro dimensoes separadas: **implementado** (codigo
 | Frente | Estado observado nesta revisao | Condicao ainda aberta |
 |---|---|---|
 | Corte 7: expressoes WILL | Infraestrutura implementada; C9a implementado e testado localmente, ainda sem deploy | Recuperacao automatica, concorrencia da preparacao e gates executaveis continuam abertos no C9; C9a fecha o caminho de confirmacao e alivio |
-| Corte 8: arbitragem WILL-ciclo | Infraestrutura implementada; testes focados aprovados; producao nao revalidada | Equivalencia real, origem do recibo, isolamento e consumo recuperavel; fechamento no C9 |
+| Corte 8: arbitragem WILL-ciclo | C9b implementado e testado localmente em `119eab9`, com adaptador de evidencia para world; producao nao revalidada | Hobby nao suprime fase sem adaptador proprio; recuperacao de integracoes posteriores e aceite operacional permanecem no C9c |
 | Interioridade multi-relacional | Cortes 1-6 fornecem fundacao; nao equivalem a isolamento integral | Working Memory, sonhos, identidade e contexto exigem auditoria e fechamento no C12 |
 | Fase III: Working Memory | Implementacao registrada; aceite longitudinal continua pendente | Consolidar janela de 7 dias com evidencias; primeiro verificar os dados ja existentes |
 | Fases IV-VI | Preservar os estados e flags historicos, sem nova ativacao | Regressao antes/depois do ISM, qualidade da metacognicao, auditoria de 100 triplas com precisao >= 80% e maturacao real de Theory of Mind |
@@ -225,7 +227,7 @@ Fase 0 - Consolidacao e Instrumentacao        <- CONCLUIDA
                   -> Fase VII - Agencia epistemica  <- IMPLEMENTACAO INICIAL; GATE FORMAL PENDENTE
 
 Trilha cognitiva ativa (Secao 10.1.2):
-  C9  - Fechamento das expressoes e arbitragem     <- EM ANDAMENTO; C9a LOCAL, C9b/C9c PENDENTES
+  C9  - Fechamento das expressoes e arbitragem     <- EM ANDAMENTO; C9a/C9b LOCAIS; PROXIMO C9c
   C10 - Disponibilidade e periodo refratario      <- PLANEJADO
   C11 - Expressao conversacional e proatividade   <- PLANEJADO
   C12 - Fechamento cognitivo multi-relacional     <- PLANEJADO; GATE DO PILOTO
@@ -528,7 +530,7 @@ Uma acao pode combinar vontades: uma iniciativa relacional pode selecionar uma p
 
 ### 10.1.2 Sequencia de desenvolvimento aprovada - 05/09/2026
 
-**C9 - Fechamento das expressoes e da arbitragem (em andamento; C9a implementado localmente).** Consolidar os cortes 7 e 8 antes de ampliar autonomia. Superficie inicial: `engines/will_expression.py`, `engines/will_phase_arbitration.py`, `will_pressure.py` e seus pontos de entrega e consumo em `main.py` e `consciousness_loop.py`, com testes correspondentes. O gate so fecha quando todos os criterios abaixo estiverem comprovados.
+**C9 - Fechamento das expressoes e da arbitragem (em andamento; C9a/C9b implementados localmente; C9c pendente).** Consolidar os cortes 7 e 8 antes de ampliar autonomia. Superficie inicial: `engines/will_expression.py`, `engines/will_phase_arbitration.py`, `will_pressure.py` e seus pontos de entrega e consumo em `main.py` e `consciousness_loop.py`, com testes correspondentes. O gate so fecha quando todos os criterios abaixo estiverem comprovados.
 
 - Validar a correspondencia entre expressao persistida, evento, vontade, instancia, relacao, ciclo e recibo antes de mudar pressao. Confirmacoes repetidas, conflitantes ou de origem desconhecida nao repetem alivio nem alteram um resultado final valido.
 - Separar preparacao, tentativa, confirmacao do transporte e integracao interna. Persistir evidencia do resultado, incluindo identificador externo quando disponivel; erro interno depois de envio confirmado nao equivale a falha de envio.
@@ -544,12 +546,24 @@ Uma acao pode combinar vontades: uma iniciativa relacional pode selecionar uma p
 - **Efeito recuperavel**: o recibo do canal e persistido antes da integracao da pressao; marcador, alivio/frustracao e resultado do evento sao aplicados na mesma transacao. Repeticao nao reaplica alivio nem estende refratariedade. Em banco persistente a transacao usa conexao propria para nao compartilhar commits com outras threads. Reaplicar a confirmacao apos falha/reinicio permite concluir apenas o efeito interno.
 - **Resultado incerto**: envio parcial ou sem confirmacao integral fica `delivery_uncertain`, sem alivio e sem reenvio automatico. O probe `expressions` mostra evento vinculado, marcador de efeito, necessidade de reconciliacao e integracao de pressao pendente. Ainda nao ha reconciliador automatico nem ferramenta operacional dedicada para resolver essas pendencias.
 - **Testado**: 27 testes novos em `tests/test_will_delivery_receipt.py`, incluindo repeticao, conflito terminal, escopo/destinatario incorretos, isolamento relacional, concorrencia, falha transacional com retomada apos reconexao, envio parcial e erros posteriores ao envio; suite completa `497 passed`; sintaxe dos arquivos tocados aprovada. Nenhuma chamada externa ou paga nesses testes.
-- **Habilitado / operacao**: somente alteracoes locais, sem commit, push ou deploy nesta entrega; nao validado em producao. Imagens e novos canais nao foram ativados. Registrar commit e evidencias operacionais quando houver publicacao autorizada.
+- **Commit / habilitacao / operacao**: C9a preservado no commit local `11d485b`; sem push ou deploy e nao validado em producao. Imagens e novos canais nao foram ativados.
 
-**Continuacao obrigatoria do C9 (nao implementada pelo C9a)**:
+**C9b - Evidencia equivalente e consumo transacional (06/09/2026; commit local `119eab9`).**
 
-1. **C9b - Arbitragem e evidencia equivalente**: validar origem e conteudo util dos recibos, remover qualidade constante, bloquear consumo cruzado de Relation/global e garantir consumo unico e recuperavel por pulso com integracao do resultado. A arbitragem anterior continua presente e suas lacunas da Secao 10.5 nao foram corrigidas pelo C9a; esta entrega nao e aceite para ampliar a supressao do loop.
-2. **C9c - Ciclo de tentativas e gates**: fechar concorrencia da preparacao, estados interrompidos/legados sem evento vinculado, retry/backoff/vencimento, reconciliacao automatica ou assistida e integracao posterior ao transporte, alem de executar os gates restantes de capacidade, consentimento e orcamento. Revisar tambem o finalizador de baixo nivel `WillExpressionEngine.finalize_delivery`, que nao deve servir de atalho ao contrato integrado. Completar regressao ponta a ponta, publicar apenas com autorizacao e validar por probes antes de encerrar C9.
+- **Implementado**: `engines/will_phase_evidence.py` projeta o resultado real de `saber` em um recibo cognitivo persistido, separado do recibo de envio. A arbitragem relê a expressao, o evento, a confirmacao do canal e o recibo cognitivo; verifica instancia, usuario, ciclo e escopo global, e compara a referencia e o hash da evidencia original. Um dicionario marcado como concluido nao basta.
+- **Equivalencia v1 para world**: exige cobertura das areas configuradas, fontes HTTP/HTTPS identificadas por area, ausencia de areas stale, snapshot com menos de 24 horas, mesmo ciclo e confianca do World >= 0.54, limiar de lucidez media ja usado no dominio. `quality` reflete essa confianca observada, nao uma constante nem uma prova de verdade semantica. A evidencia e limitada a 64 KiB e nao acrescenta chamadas LLM ou pesquisas alem do trabalho ja executado pela capacidade.
+- **Isolamento e limites**: recibos relacionais nao satisfazem fases globais. Pulsos de outra instancia, usuario, ciclo, fase, agendados no futuro ou em modo manual/dry-run nao consomem evidencia. Registros legados sem evidencia verificavel sao invalidados, sem apagar o historico. `work` e as fases metabolicas protegidas nao ganham supressao. `hobby` fica inelegivel para supressao ate possuir adaptador proprio; uma imagem ou mensagem confirmada nao comprova equivalencia. Isso preserva a execucao normal de hobby e nao reativa imagens pagas.
+- **Reserva e consumo**: o pulso primeiro reserva uma evidencia; so consome ao gravar, na mesma transacao, resultado da fase, artefatos, vinculo do pulso e recibo. Repeticoes e commits concorrentes nao criam outro resultado. Reserva sem progresso por pelo menos 5 minutos retorna a politica existente de retries/cooldown, respeitando seus limites; reservas recentes nao sao retomadas.
+- **Integracao**: o resultado equivalente preserva conteudo de mundo, sementes, metricas e referencia da evidencia. A passagem normal le a inbox de Working Memory e observa/transmite o resultado para a proxima fase; nao se limita a uma frase de confirmacao. Repetir um pulso ja gravado devolve seu resultado persistido, sem repetir investigacao ou notificacoes especializadas.
+- **Testado / habilitado / operacao**: 45 testes de arbitragem, incluindo execucao do loop, isolamento, evidencias invalidas, migracao, concorrencia, rollback, retomada apos reconexao e recuperacao pelo scheduler; suite completa `538 passed`; 20 cenarios de regressao `--mock` aprovados; sintaxe e `git diff --check` aprovados. Testes offline, sem provedor pago. Apenas commit local, sem push, deploy ou validacao de producao.
+
+**Continuacao obrigatoria: C9c - Ciclo de tentativas e gates (proximo; nao implementado).**
+
+1. Fechar concorrencia da preparacao, estados interrompidos/legados sem evento vinculado, retry/backoff/vencimento e reconciliacao automatica ou assistida de entregas incertas, sem reenvio cego.
+2. Recuperar integracoes posteriores ao transporte e ao commit do resultado: registro proativo, observacao/broadcast de Working Memory e auditoria. O C9b protege a gravacao transacional da fase, mas ainda nao retoma automaticamente um broadcast interrompido depois desse commit; tambem deve tratar reservas de janelas encerradas e tentativas esgotadas.
+3. Executar os gates restantes de capacidade, consentimento e orcamento. Revisar o finalizador de baixo nivel `WillExpressionEngine.finalize_delivery`, que nao deve servir de atalho ao contrato integrado.
+4. Registrar o aceite do escopo world-only ou implementar e validar um adaptador proprio antes de autorizar supressao de hobby. A ausencia desse adaptador nunca autoriza satisfacao automatica por imagem ou envio; nao exige reativar geracao paga.
+5. Completar regressao ponta a ponta, publicar apenas com autorizacao e validar por probes antes de encerrar C9. Nao iniciar C10 nem convidar participantes como consequencia automatica dos commits locais.
 
 **C10 - Disponibilidade e periodo refratario (planejado; depende do C9).** Criar estado persistente por instancia e Relation, com janelas de contato, orcamento de turnos/profundidade, recuperacao, cooldown e retomada. Decidir e testar continuidade da pressao na virada de ciclo e consumo de sinais sem aliviar repetidamente pela mesma evidencia. Uma relacao em elaboracao nao bloqueia automaticamente as demais; limites globais de custo ou disponibilidade sao distintos e explicitos. Preservar comandos essenciais e protocolos de seguranca. Aceite: cenarios com tempo simulado, conversas intensas, relacoes concorrentes, reinicio, virada de dia e esgotamento de orcamento, sem chamadas pagas.
 
@@ -559,7 +573,7 @@ Uma acao pode combinar vontades: uma iniciativa relacional pode selecionar uma p
 
 **C13 - Piloto convidado observavel (bloqueado ate aceite C9-C12 e aprovacao do mantenedor).** Comecar com poucas pessoas explicitamente convidadas, Relation ativa, consentimento e regras de uso, privacidade e apagamento definidos. Usar limites de custo e contato, revogacao de acesso e mecanismo de pausa. Cockpit e probes devem mostrar disponibilidade, motivo de bloqueio/adiamento, retomadas, recibos, escopo e custo sem expor conversas privadas. Definir antes de abrir a janela, metricas, criterios de interrupcao e aceite; nao encerrar apenas pelo numero de dias. Observar continuidade da memoria, pertinencia das iniciativas, respeito ao descanso, isolamento e custo por relacao. Este e um piloto relacional da instancia existente, nao uma liberacao comercial multi-instancia.
 
-**Registro obrigatorio em cada entrega**: ID do corte, commit, cenarios testados, estado de habilitacao, evidencias operacionais, pendencias com proxima acao e aprovacao ainda necessaria. A implementacao parcial C9a nao encerra C9 e nao antecipa C10-C13. A higiene dos monolitos acompanha as fronteiras tocadas por cada corte, preservando fachadas e contratos, sem reescrita geral.
+**Registro obrigatorio em cada entrega**: ID do corte, commit, cenarios testados, estado de habilitacao, evidencias operacionais, pendencias com proxima acao e aprovacao ainda necessaria. As entregas locais C9a/C9b nao encerram C9 e nao antecipam C10-C13. A higiene dos monolitos acompanha as fronteiras tocadas por cada corte, preservando fachadas e contratos, sem reescrita geral.
 
 ### 10.2 Trilha comercial: Jung Inner Life Engine
 
@@ -758,6 +772,7 @@ Em 19/08/2026 foi auditado o caminho completo `scores -> pressao -> pulso -> aca
 | Versoes 3.7/3.8 - Expressoes e arbitragem WILL-ciclo | 04/09/2026 | Registra a infraestrutura dos cortes 7/8; a revisao 3.9 explicita as garantias de ponta a ponta ainda abertas |
 | Versao 3.9 - Fechamento Volitivo e Direcao Multi-relacional | 05/09/2026 | Aprova C9-C13, distingue implementacao de validacao, registra lacunas da revisao local, amplia expressao para texto e prioriza multi-instancia, API minima e conector textual apos os gates |
 | Versao 3.10 - C9a: Confirmacao de Entrega e Alivio Idempotente | 05/09/2026 | Registra implementacao local e 497 testes aprovados, sem deploy; mantem C9 aberto com C9b/C9c explicitos |
+| Versao 3.11 - C9b: Evidencia Equivalente e Consumo Transacional | 06/09/2026 | Registra commits locais C9a/C9b, adaptador world, hobby inelegivel sem evidencia propria, 538 testes e 20 cenarios mock aprovados, e proximo C9c sem liberar producao |
 
 ---
 
