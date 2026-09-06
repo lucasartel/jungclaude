@@ -1,6 +1,6 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 3.11 - C9b: Evidencia Equivalente e Consumo Transacional - Setembro 2026**
+**Versao 3.12 - C9c1: Preparacao Unica e Fechamento do Finalizador Legado - Setembro 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
@@ -13,6 +13,8 @@
 *Tres leitores: o mantenedor (decide), o consultor estrategico (orienta e audita) e o modelo executor (codifica). A Parte II e enderecada diretamente ao executor.*
 
 *Atualizacao de 06/09/2026: C9a preservado no commit local `11d485b`; C9b implementado no commit local `119eab9`, com 538 testes e 20 cenarios mock aprovados. Nenhum push, deploy ou revalidacao de producao nesta entrega. C9 permanece aberto para C9c; ver Secao 10.1.2.*
+
+*Continuacao de 06/09/2026: C9c1 implementado no commit local `aeb414b`, com 546 testes e 20 cenarios mock aprovados. Fecha concorrencia de criacao/preparacao e o atalho de confirmacao legado; nao conclui recuperacao, consentimento ou orcamento do C9c. Sem push, deploy ou novas ativacoes; pendencias e proxima acao na Secao 10.1.2.*
 
 ---
 
@@ -557,11 +559,19 @@ Uma acao pode combinar vontades: uma iniciativa relacional pode selecionar uma p
 - **Integracao**: o resultado equivalente preserva conteudo de mundo, sementes, metricas e referencia da evidencia. A passagem normal le a inbox de Working Memory e observa/transmite o resultado para a proxima fase; nao se limita a uma frase de confirmacao. Repetir um pulso ja gravado devolve seu resultado persistido, sem repetir investigacao ou notificacoes especializadas.
 - **Testado / habilitado / operacao**: 45 testes de arbitragem, incluindo execucao do loop, isolamento, evidencias invalidas, migracao, concorrencia, rollback, retomada apos reconexao e recuperacao pelo scheduler; suite completa `538 passed`; 20 cenarios de regressao `--mock` aprovados; sintaxe e `git diff --check` aprovados. Testes offline, sem provedor pago. Apenas commit local, sem push, deploy ou validacao de producao.
 
-**Continuacao obrigatoria: C9c - Ciclo de tentativas e gates (proximo; nao implementado).**
+**C9c1 - Preparacao unica e finalizador legado fechado (06/09/2026; commit local `aeb414b`).**
 
-1. Fechar concorrencia da preparacao, estados interrompidos/legados sem evento vinculado, retry/backoff/vencimento e reconciliacao automatica ou assistida de entregas incertas, sem reenvio cego.
+- **Implementado**: a criacao idempotente e a posse da preparacao passam pela mesma transacao. Somente quem insere a expressao em `preparing` pode executar a capacidade; o concorrente reutiliza o registro sem repetir o trabalho. As operacoes de expressao usam conexoes privadas em SQLite persistente. A reivindicacao de envio e seu recibo sao gravados juntos; falha no recibo desfaz a reivindicacao e permite aproveitar a entrega ja preparada sem refazer a capacidade.
+- **Finalizador legado**: `WillExpressionEngine.finalize_delivery` agora rejeita qualquer chamada sem alterar estado ou recibos. O chamador deve usar `WillPressureEngine.finalize_pending_delivery`, com evento, escopo e evidencia de transporte. Os caminhos de producao ja usavam esse contrato integrado; a revisao nao adiciona envios nem amplia destinatarios.
+- **Limite explicito**: `planned` legado, `preparing` interrompido, `delivering` e `delivery_uncertain` nao sao reiniciados cegamente. Ainda nao ha lease, vencimento ou reconciliador de preparacao; uma interrupcao pode continuar pendente. Persistencia do resultado da capacidade, payload preparado e recibos anteriores ao envio ainda tem pontos de commit separados. Essa entrega impede duplicacao concorrente, mas nao comprova recuperacao ponta a ponta nem encerra C9c.
+- **Testado**: 12 testes de expressao (antes 4), incluindo duas threads com conexoes independentes e leitura inicial simultanea, estados interrompidos/legados, rollback do recibo de reivindicacao, ausencia de transacao aberta apos disputa e rejeicao do finalizador antigo tanto para sucesso quanto para falha. Conjunto de expressao/entrega/arbitragem: 84 aprovados; suite completa: `546 passed`; 20 cenarios `--mock`, sintaxe e `git diff --check` aprovados. Nenhuma chamada externa ou paga.
+- **Habilitacao / operacao**: apenas checkpoint local. Nenhum push, deploy ou probe de producao nesta entrega. Imagens, novos canais e acesso de participantes nao foram ativados. As alteracoes locais alheias ao corte foram preservadas.
+
+**Continuacao obrigatoria: C9c2 e fechamento do C9c - Recuperacao e gates (pendentes).**
+
+1. Proxima acao: tratar estados interrompidos/legados sem evento vinculado, persistencia incompleta da preparacao, retry/backoff/vencimento e reconciliacao automatica ou assistida de entregas incertas, sem reenvio cego. A concorrencia de criacao/preparacao foi fechada no C9c1, mas retomada exige evidencia e protecao contra o retorno de um executor antigo.
 2. Recuperar integracoes posteriores ao transporte e ao commit do resultado: registro proativo, observacao/broadcast de Working Memory e auditoria. O C9b protege a gravacao transacional da fase, mas ainda nao retoma automaticamente um broadcast interrompido depois desse commit; tambem deve tratar reservas de janelas encerradas e tentativas esgotadas.
-3. Executar os gates restantes de capacidade, consentimento e orcamento. Revisar o finalizador de baixo nivel `WillExpressionEngine.finalize_delivery`, que nao deve servir de atalho ao contrato integrado.
+3. Executar os gates restantes de capacidade, consentimento e orcamento. O atalho `WillExpressionEngine.finalize_delivery` foi bloqueado no C9c1; manter o contrato integrado como unico caminho de confirmacao e testar os gates antes de qualquer nova tentativa.
 4. Registrar o aceite do escopo world-only ou implementar e validar um adaptador proprio antes de autorizar supressao de hobby. A ausencia desse adaptador nunca autoriza satisfacao automatica por imagem ou envio; nao exige reativar geracao paga.
 5. Completar regressao ponta a ponta, publicar apenas com autorizacao e validar por probes antes de encerrar C9. Nao iniciar C10 nem convidar participantes como consequencia automatica dos commits locais.
 
@@ -573,7 +583,7 @@ Uma acao pode combinar vontades: uma iniciativa relacional pode selecionar uma p
 
 **C13 - Piloto convidado observavel (bloqueado ate aceite C9-C12 e aprovacao do mantenedor).** Comecar com poucas pessoas explicitamente convidadas, Relation ativa, consentimento e regras de uso, privacidade e apagamento definidos. Usar limites de custo e contato, revogacao de acesso e mecanismo de pausa. Cockpit e probes devem mostrar disponibilidade, motivo de bloqueio/adiamento, retomadas, recibos, escopo e custo sem expor conversas privadas. Definir antes de abrir a janela, metricas, criterios de interrupcao e aceite; nao encerrar apenas pelo numero de dias. Observar continuidade da memoria, pertinencia das iniciativas, respeito ao descanso, isolamento e custo por relacao. Este e um piloto relacional da instancia existente, nao uma liberacao comercial multi-instancia.
 
-**Registro obrigatorio em cada entrega**: ID do corte, commit, cenarios testados, estado de habilitacao, evidencias operacionais, pendencias com proxima acao e aprovacao ainda necessaria. As entregas locais C9a/C9b nao encerram C9 e nao antecipam C10-C13. A higiene dos monolitos acompanha as fronteiras tocadas por cada corte, preservando fachadas e contratos, sem reescrita geral.
+**Registro obrigatorio em cada entrega**: ID do corte, commit, cenarios testados, estado de habilitacao, evidencias operacionais, pendencias com proxima acao e aprovacao ainda necessaria. As entregas locais C9a/C9b/C9c1 nao encerram C9 e nao antecipam C10-C13. A higiene dos monolitos acompanha as fronteiras tocadas por cada corte, preservando fachadas e contratos, sem reescrita geral.
 
 ### 10.2 Trilha comercial: Jung Inner Life Engine
 
