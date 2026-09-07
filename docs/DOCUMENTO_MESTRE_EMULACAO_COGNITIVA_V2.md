@@ -1,6 +1,6 @@
 # Documento Mestre: JungAgent - Laboratorio de Emulacao Cognitiva
 
-**Versao 3.16 - C9c3 em andamento: retomada duravel do loop normal e do registro proativo - Setembro 2026**
+**Versao 3.17 - C9c3 em andamento: retomada duravel, agenda fechada e registro proativo - Setembro 2026**
 
 *Arquivo canonico vigente: `docs/DOCUMENTO_MESTRE_EMULACAO_COGNITIVA_V2.md`. O antigo `docs/DOCUMENTO_MESTRE_AGI_COGNITIVA.md` permanece como documento historico/operacional de referencia, mas este arquivo e a fonte de autoridade daqui em diante.*
 
@@ -20,7 +20,7 @@
 
 *Publicacao posterior autorizada: os sete commits ate `0fe253a` foram enviados a main publica de `lucasartel/JungAgent`. Railway confirmou SUCCESS no deploy `129fd623-6a52-4c5a-9f5e-12acfd191f26` em 07/09/2026 UTC (noite de 06/09 no Brasil). Verificacao pos-deploy: HTTP 200, bot/loop iniciados, sondas acessiveis, IMAGE_GENERATION_ENABLED=false e primeiro pulso com expression_reused, sem reenvio da tentativa antiga. Isso confirma inicializacao, nao exercita todos os caminhos de recuperacao em producao.*
 
-*C9c3 iniciado em 07/09/2026: primeiro bloco local no commit `5291360`, com 598 testes e 20 cenarios mock aprovados. O segundo bloco local fecha o recibo proativo duravel e sua retomada sem repetir processamento de memoria. O terceiro bloco fecha a integracao pos-commit de resultados normais bem-sucedidos do loop; a validacao final soma 610 testes e 20 cenarios mock aprovados. C9c3 e C9 continuam abertos para falhas de fase, conciliacao assistida e gates. Nao houve novo push, deploy ou sondagem de producao nestes blocos.*
+*C9c3 iniciado em 07/09/2026: primeiro bloco local no commit `5291360`, com 598 testes e 20 cenarios mock aprovados. O segundo bloco local fecha o recibo proativo duravel e sua retomada sem repetir processamento de memoria. O terceiro fecha a integracao pos-commit de resultados normais bem-sucedidos; o quarto fecha a agenda de pulsos e suas reservas quando a janela termina ou as tentativas acabam. A validacao final soma 613 testes e 20 cenarios mock aprovados. C9c3 e C9 continuam abertos para falhas de fase, conciliacao assistida e gates. Nao houve novo push, deploy ou sondagem de producao nestes blocos.*
 
 ---
 
@@ -610,9 +610,17 @@ Uma acao pode combinar vontades: uma iniciativa relacional pode selecionar uma p
 - **Validacao / habilitacao**: 8 testes novos verificam integracao unica, rollback em cada uma das cinco gravacoes, reinicio sem reexecutar a fase e a passagem pelo caminho normal de `execute_phase`. Suite completa `610 passed`; sintaxe, `git diff --check` e 20 cenarios `--mock` aprovados. Nenhuma chamada externa ou paga; apenas checkpoint local, sem push, deploy ou ativacao de participante.
 - **Limite explicito**: falhas de fase continuam com sua trilha existente de fragmento para ruminação, pois ela possui efeitos adicionais e deve receber um corte proprio. A fila tambem nao resolve reservas de pulso encerradas/tentativas esgotadas, nao reconcilia efeitos parcialmente existentes e nao altera politicas de notificacao ou custo.
 
+**C9c3 - Quarto bloco: fechamento de janelas, tentativas e reservas (07/09/2026; checkpoint local; C9c3 ainda em andamento).**
+
+- **Implementado**: antes de cada `sync_loop`, a agenda primeiro tenta reparar um pulso `running` que ja tenha resultado persistido. Pulsos sem resultado cuja janela ja fechou recebem destino terminal: `pending` vira `skipped`, `running` vira `interrupted` e `failed` que esgotou sua politica vira `exhausted`; falha ainda elegivel, mas fora da janela, tambem vira `skipped`. Os motivos ficam em `last_error`, sem criar um novo agendamento nem rodar a fase de novo.
+- **Tentativas e reservas WILL**: ao atingir o limite dentro da janela, o pulso tambem passa para `exhausted` e deixa a razao registrada. Toda evidencia WILL ainda `reserved` por um pulso terminalizado e sem resultado e invalidada com um codigo persistido. Assim, uma reserva antiga nao pode ser consumida tardiamente para produzir uma fase fora de sua janela. Resultado efetivamente gravado continua prevalecendo e e reparado pelo caminho existente.
+- **Observabilidade**: a sonda `phase_pulses` marca `interrupted` e `exhausted` como estados que requerem revisao e preserva a causa ja resumida no pulso. Nao expoe evidencias privadas nem habilita qualquer comando de reenvio.
+- **Validacao / habilitacao**: 3 testes novos verificam os tres destinos de janela fechada, o limite de tentativas e a invalidacao da reserva WILL; suite completa `613 passed`, sintaxe, `git diff --check` e 20 cenarios `--mock` aprovados. Apenas checkpoint local, sem push, deploy, nova mensagem, imagem ou participante.
+- **Limite explicito**: `interrupted`, `exhausted`, efeitos parciais e falhas de fase nao sao resolvidos automaticamente. Eles agora tem estado e evidencia para uma conciliacao assistida futura; essa ferramenta ainda nao foi criada.
+
 **Continuacao obrigatoria: restante do C9c3 e fechamento do C9c.**
 
-1. Proxima acao: tratar reservas de pulsos em janelas encerradas e tentativas esgotadas. A decisao deve separar um pulso que nao executou de um que pode ter produzido efeito externo, preservar a evidencia existente e registrar o encaminhamento para revisao sem liberar reenvio, nova geracao ou gasto cego. Depois tratar a trilha pos-commit especifica das fases `failed`.
+1. Proxima acao: tratar a trilha pos-commit especifica das fases `failed`, que inclui o fragmento de ruminação da falha e a auditoria associada. Delimitar quais efeitos sao puramente locais, registrar sua conclusao sem repetir a fase e deixar qualquer ambiguidade externa para conciliacao assistida. Depois desenhar a ferramenta assistida para `interrupted`, `exhausted` e efeitos parciais.
 2. Criar procedimento/ferramenta assistida para preparacao incerta, entrega sem evidencia integral, evento ausente e recuperacao esgotada. Exigir evidencia confiavel e registrar a decisao; nao oferecer reset de estado que autorize reenvio ou gasto cego. A quarentena do C9c2 torna esses casos observaveis, mas nao os resolve automaticamente.
 3. Executar os gates restantes de capacidade, consentimento e orcamento. O atalho `WillExpressionEngine.finalize_delivery` foi bloqueado no C9c1; manter o contrato integrado como unico caminho de confirmacao e testar os gates antes de qualquer nova tentativa.
 4. Registrar o aceite do escopo world-only ou implementar e validar um adaptador proprio antes de autorizar supressao de hobby. A ausencia desse adaptador nunca autoriza satisfacao automatica por imagem ou envio; nao exige reativar geracao paga.
