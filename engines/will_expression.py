@@ -94,7 +94,11 @@ class WillExpressionDatabaseMixin:
             """
         )
         columns = {row[1] for row in cursor.execute("PRAGMA table_info(will_expressions)")}
-        for column, definition in (("delivery_event_id", "INTEGER"), ("pressure_effect_at", "TEXT")):
+        for column, definition in (
+            ("delivery_event_id", "INTEGER"), ("pressure_effect_at", "TEXT"),
+            ("phase_integration_at", "TEXT"), ("recovery_attempts", "INTEGER NOT NULL DEFAULT 0"),
+            ("recovery_next_at", "TEXT"), ("recovery_error", "TEXT"),
+        ):
             if column not in columns:
                 cursor.execute(f"ALTER TABLE will_expressions ADD COLUMN {column} {definition}")
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_will_expression_delivery_event ON will_expressions(delivery_event_id) WHERE delivery_event_id IS NOT NULL")
@@ -126,12 +130,28 @@ class WillExpressionEngine:
         with delivery_connection(self.db) as conn:
             return _row(conn.execute("SELECT * FROM will_expressions WHERE idempotency_key = ?", (key,)).fetchone())
 
-    def _receipt(self, expression_id: int, status: str, code: str, summary: str, evidence: Optional[Dict[str, Any]] = None) -> None:
+    def _finish_preparation(self, expression_id, status, reason, code, payload=None, proof=None):
+        from engines.will_recovery import expire_expression, utc_time
+
         with delivery_connection(self.db) as conn, atomic(conn):
+            stored = dict(conn.execute("SELECT * FROM will_expressions WHERE id = ?", (expression_id,)).fetchone())
+            expire_expression(conn, stored, utc_time(self._now()))
+            current = dict(conn.execute("SELECT * FROM will_expressions WHERE id = ?", (expression_id,)).fetchone())
+            if current["status"] != "preparing":
+                return _row(current)
+            conn.execute("""UPDATE will_expressions SET status = ?, reason = ?, prepared_payload_json = ?,
+                updated_at = ? WHERE id = ? AND status = 'preparing'""",
+                (status, reason, _dump(payload), self._now(), expression_id))
+            if proof:
+                conn.execute("""INSERT INTO will_expression_receipts
+                    (expression_id, status, result_code, summary, evidence_json)
+                    VALUES (?, 'capability_completed', 'phase_evidence_v1', ?, ?)""",
+                    (expression_id, "Resultado cognitivo persistido; ainda nao confirma entrega.", _dump(proof)))
             conn.execute(
                 "INSERT INTO will_expression_receipts (expression_id, status, result_code, summary, evidence_json) VALUES (?, ?, ?, ?, ?)",
-                (int(expression_id), status, code, summary[:500], _dump(evidence)),
+                (expression_id, status, code, str(reason or "")[:500], _dump({"capability_key": current["capability_key"]})),
             )
+            return _row(conn.execute("SELECT * FROM will_expressions WHERE id = ?", (expression_id,)).fetchone())
 
     def _set_status(self, expression_id: int, status: str, reason: Optional[str], payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         columns = ["status = ?", "reason = ?", "updated_at = ?"]
@@ -192,7 +212,13 @@ class WillExpressionEngine:
 
     def _claim_delivery(self, expression: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Claim a prepared expression so a retry cannot duplicate delivery."""
+        from engines.will_recovery import expire_expression, utc_time
+
         with delivery_connection(self.db) as conn, atomic(conn):
+            stored = conn.execute("SELECT * FROM will_expressions WHERE id = ?", (expression["id"],)).fetchone()
+            if stored is None:
+                return None
+            expire_expression(conn, dict(stored), utc_time(self._now()))
             cursor = conn.execute(
                 "UPDATE will_expressions SET status = 'delivering', updated_at = ? WHERE id = ? AND status = 'prepared'",
                 (self._now(), int(expression["id"])),
@@ -234,36 +260,38 @@ class WillExpressionEngine:
             return self._reuse(expression)
         available, reason = self._availability(capability_key, proactive_system)
         if not available:
-            expression = self._set_status(expression["id"], "blocked", reason)
-            self._receipt(expression["id"], "blocked", reason or "capability_unavailable", "Capacidade indisponivel; nenhuma descarga de pressao foi aplicada.", {"capability_key": capability_key})
+            expression = self._finish_preparation(expression["id"], "blocked", reason, reason or "capability_unavailable")
+            if expression["status"] != "blocked":
+                return self._reuse(expression)
             return {"status": "blocked", "expression": expression, "action_summary": reason}
 
         try:
             prepared = prepare_capability(capability_key) or {}
         except Exception as exc:
-            expression = self._set_status(expression["id"], "failed", f"executor_error:{exc}")
-            self._receipt(expression["id"], "failed", "executor_error", "A capacidade encontrou um erro inesperado antes da entrega.", {"capability_key": capability_key})
+            expression = self._finish_preparation(expression["id"], "failed", f"executor_error:{exc}", "executor_error")
+            if expression["status"] != "failed":
+                return self._reuse(expression)
             return {"status": "failed", "expression": expression, "action_summary": expression.get("reason")}
         delivery = prepared.get("pending_delivery")
         if not prepared.get("success") or not delivery:
             reason = prepared.get("action_summary") or "capability_did_not_prepare_delivery"
-            expression = self._set_status(expression["id"], "failed", reason)
-            self._receipt(expression["id"], "failed", "delivery_not_prepared", "A capacidade nao produziu uma entrega valida; nenhuma descarga foi aplicada.", {"capability_key": capability_key})
+            expression = self._finish_preparation(expression["id"], "failed", reason, "delivery_not_prepared")
+            if expression["status"] != "failed":
+                return self._reuse(expression)
             return {"status": "failed", "expression": expression, "action_summary": reason, "payload": prepared.get("payload")}
 
         phase_evidence = prepared.get("phase_evidence")
+        proof = None
         if phase_evidence and resolved_scope.get("scope_kind") == GLOBAL_SCOPE and not resolved_scope.get("relation_id"):
             from engines.will_phase_evidence import SCOPE_FIELDS, validate_evidence
 
             if (len(_dump(phase_evidence).encode("utf-8")) <= 65536
                     and validate_evidence(phase_evidence, capability_key, self._now())):
-                self._receipt(
-                    expression["id"], "capability_completed", "phase_evidence_v1",
-                    "Resultado cognitivo persistido; ainda nao confirma entrega ou equivalencia do pulso.",
-                    {"scope": {key: expression.get(key) for key in SCOPE_FIELDS}, "result": phase_evidence},
-                )
-        expression = self._set_status(expression["id"], "prepared", prepared.get("action_summary") or "Expressao preparada para entrega.", delivery)
-        self._receipt(expression["id"], "prepared", "delivery_prepared", "Expressao preparada; aguarda confirmacao do canal.", {"capability_key": capability_key, "gate_level": expression.get("gate_level")})
+                proof = {"scope": {key: expression.get(key) for key in SCOPE_FIELDS}, "result": phase_evidence}
+        expression = self._finish_preparation(expression["id"], "prepared",
+            prepared.get("action_summary") or "Expressao preparada para entrega.", "delivery_prepared", delivery, proof)
+        if expression["status"] != "prepared":
+            return self._reuse(expression)
         claimed = self._claim_delivery(expression)
         if not claimed:
             return {

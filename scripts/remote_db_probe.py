@@ -609,12 +609,17 @@ def query_expressions(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[
     columns = table_columns(cursor, "will_expressions")
     event_field = "delivery_event_id" if "delivery_event_id" in columns else "NULL AS delivery_event_id"
     effect_field = "pressure_effect_at" if "pressure_effect_at" in columns else "NULL AS pressure_effect_at"
+    recovery_fields = ", ".join(
+        name if name in columns else f"NULL AS {name}"
+        for name in ("phase_integration_at", "recovery_attempts", "recovery_next_at", "recovery_error")
+    )
     cursor.execute(
         f"""
         SELECT
             id,
             {event_field},
             {effect_field},
+            {recovery_fields},
             agent_instance,
             relation_id,
             scope_kind,
@@ -641,6 +646,7 @@ def query_expressions(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[
     rows = rows_to_dicts(cursor.fetchall())
     for row in rows:
         intent = json_or_empty(row.pop("intent_json", None), {})
+        row.pop("reason", None)
         row.pop("prepared_payload_json", None)
         row["intent"] = {
             key: intent.get(key)
@@ -655,16 +661,28 @@ def query_expressions(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[
             if key in intent
         }
         row["has_prepared_delivery"] = bool(row.get("status") in {"prepared", "delivering", "completed"})
-        row["requires_reconciliation"] = row.get("status") == "delivery_uncertain"
+        row["requires_reconciliation"] = row.get("status") in {"delivery_uncertain", "preparation_uncertain"}
         row["pressure_integration_pending"] = (
             row.get("status") in {"completed", "failed"}
             and row.get("delivery_event_id") is not None
             and not row.get("pressure_effect_at")
         )
+        row["phase_integration_pending"] = (
+            row.get("status") in {"completed", "failed"}
+            and row.get("delivery_event_id") is not None
+            and not row.get("phase_integration_at")
+        )
+        row["recovery_exhausted"] = (
+            (row["pressure_integration_pending"] or row["phase_integration_pending"])
+            and int(row.get("recovery_attempts") or 0) >= 5
+        )
+        row["requires_reconciliation"] = row["requires_reconciliation"] or row["recovery_exhausted"] or (
+            row.get("status") == "completed" and row.get("delivery_event_id") is None
+        )
         if table_exists(cursor, "will_expression_receipts"):
             cursor.execute(
                 """
-                SELECT id, status, result_code, summary, created_at
+                SELECT id, status, result_code, created_at
                 FROM will_expression_receipts
                 WHERE expression_id = ?
                 ORDER BY id DESC

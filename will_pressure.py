@@ -1079,7 +1079,22 @@ ESTADO QUALITATIVO:
 
             expression = self._expression_engine()._fetch(expression_id)
             WillPhaseArbitration(self.db).record_expression_completion(expression)
+        from engines.will_delivery_receipt import atomic, delivery_connection
+
+        with delivery_connection(self.db) as conn, atomic(conn):
+            conn.execute("""UPDATE will_expressions SET phase_integration_at = COALESCE(phase_integration_at, ?),
+                recovery_error = NULL, recovery_next_at = NULL
+                WHERE id = ? AND pressure_effect_at IS NOT NULL AND status IN ('completed', 'failed')""",
+                (datetime.utcnow().isoformat(), expression_id))
         return _row_to_pressure_state(state) or {}
+
+    def reconcile_pending_deliveries(self, user_id: str = ADMIN_USER_ID, *, relation_id=None,
+                                    agent_instance=None, scope_kind=None, now=None):
+        from engines.will_recovery import reconcile
+
+        scope = scope_context(self.db, relation_id=relation_id,
+                              agent_instance=agent_instance or self._scope_instance(), scope_kind=scope_kind)
+        return reconcile(self, user_id=user_id, scope=scope, now=now)
 
     def run_pulse(
         self,

@@ -269,6 +269,9 @@ async def lifespan(app: FastAPI):
         while True:
             try:
                 engine = WillPressureEngine(bot_state.db)
+                recovery = await asyncio.to_thread(engine.reconcile_pending_deliveries, ADMIN_USER_ID)
+                if any(recovery.values()):
+                    logger.info("[WILL RECOVERY] %s", recovery)
                 proactive_executor = bot_state.proactive if proactive_messages_enabled() else None
                 pulse = await asyncio.to_thread(
                     engine.run_pulse,

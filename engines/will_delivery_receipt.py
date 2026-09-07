@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 FIELDS = ("agent_instance", "relation_id", "scope_kind", "user_id", "cycle_id")
 TERMINAL = {"completed", "failed"}
@@ -88,8 +88,8 @@ def _receipt(conn, expression_id, outcome, summary, evidence):
             "delivery_uncertain": "delivery_requires_reconciliation"}[outcome]
     conn.execute(
         """INSERT INTO will_expression_receipts
-           (expression_id, status, result_code, summary, evidence_json) VALUES (?, ?, ?, ?, ?)""",
-        (expression_id, outcome, code, summary[:500], json.dumps(evidence, ensure_ascii=False)),
+           (expression_id, status, result_code, summary, evidence_json, created_at) VALUES (?, ?, ?, ?, ?, ?)""",
+        (expression_id, outcome, code, summary[:500], json.dumps(evidence, ensure_ascii=False), datetime.utcnow().isoformat()),
     )
 
 
@@ -99,7 +99,7 @@ def finalize(db, *, expression_id, event_id, expected, outcome, summary, evidenc
         raise ValueError("will_delivery_invalid_outcome")
     if outcome == "completed":
         ids = evidence.get("message_ids")
-        if (not evidence.get("transport") or evidence.get("chat_id") is None
+        if (evidence.get("transport") != "telegram" or evidence.get("chat_id") is None
                 or not isinstance(ids, list) or not ids
                 or any(not isinstance(item, (str, int)) or isinstance(item, bool) or not str(item) for item in ids)):
             raise ValueError("will_delivery_confirmation_required")
@@ -140,14 +140,20 @@ def finalize(db, *, expression_id, event_id, expected, outcome, summary, evidenc
                 )
                 return state
             persisted = conn.execute(
-                """SELECT summary FROM will_expression_receipts
-                   WHERE expression_id = ? AND status = ? ORDER BY id DESC LIMIT 1""",
-                (expression_id, expression["status"]),
+                """SELECT summary, created_at FROM will_expression_receipts
+                   WHERE expression_id = ? AND status = ? AND result_code = ? ORDER BY id DESC LIMIT 1""",
+                (expression_id, expression["status"],
+                 "delivery_confirmed" if expression["status"] == "completed" else "delivery_failed"),
             ).fetchone()
             if persisted is None:
                 raise ValueError("will_delivery_receipt_missing")
             summary = persisted["summary"]
             now = datetime.utcnow()
+            confirmed_at = datetime.fromisoformat(persisted["created_at"])
+            if confirmed_at.tzinfo is not None:
+                confirmed_at = confirmed_at.astimezone(timezone.utc).replace(tzinfo=None)
+            if confirmed_at > now + timedelta(minutes=1):
+                raise ValueError("will_delivery_future_receipt")
             winner = expression["will_name"]
             pressures = {name: float(state.get(name + "_pressure") or 0)
                          for name in ("saber", "relacionar", "expressar")}
@@ -160,7 +166,7 @@ def finalize(db, *, expression_id, event_id, expected, outcome, summary, evidenc
                         last_release_will = ?, last_release_at = ?, last_action_status = 'completed',
                         last_action_summary = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?""",
                     (dominant, int(any(value >= threshold for value in pressures.values())),
-                     (now + timedelta(hours=refractory_hours)).isoformat(), winner, now.isoformat(),
+                     (confirmed_at + timedelta(hours=refractory_hours)).isoformat(), winner, confirmed_at.isoformat(),
                      summary[:240], state["id"]),
                 )
             else:

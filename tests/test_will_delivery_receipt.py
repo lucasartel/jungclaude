@@ -304,9 +304,15 @@ def test_scheduler_does_not_reclassify_post_send_failure(monkeypatch, failure_at
                     if isinstance(node, ast.AsyncFunctionDef) and node.name == "will_pulse_scheduler")
     confirmations = []
     sleeps = []
+    stages = []
 
     class Engine:
+        def reconcile_pending_deliveries(self, *args):
+            stages.append("recovery")
+            return {"recovered": 0}
+
         def run_pulse(self, *args):
+            stages.append("pulse")
             return {"status": "triggered", "event_id": 1, "winner": "relacionar",
                     "pending_delivery": {"delivery_type": "pressure_relational", "cycle_id": CYCLE,
                                          "will_expression_id": 1, "text": "message"}}
@@ -346,3 +352,4 @@ def test_scheduler_does_not_reclassify_post_send_failure(monkeypatch, failure_at
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(namespace["will_pulse_scheduler"]())
     assert confirmations == [True]
+    assert stages == ["recovery", "pulse"]
