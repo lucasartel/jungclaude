@@ -258,11 +258,23 @@ def query_loop(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[str, An
         """,
         (args.limit,),
     )
+    post_commit_effects = []
+    if table_exists(cursor, "consciousness_loop_post_commit_effects"):
+        cursor.execute("""SELECT phase_result_id, cycle_id, phase, integration_version, integration_at,
+            integration_attempts, integration_next_at, integration_error
+            FROM consciousness_loop_post_commit_effects WHERE agent_instance = ?
+            ORDER BY phase_result_id DESC LIMIT ?""", (args.agent_instance, args.limit))
+        post_commit_effects = rows_to_dicts(cursor.fetchall())
+        for effect in post_commit_effects:
+            effect["requires_reconciliation"] = (
+                effect["integration_at"] is None and int(effect["integration_attempts"] or 0) >= 5
+            )
     return {
         "probe": "loop",
         "state": state,
         "recent_phase_results": rows_to_dicts(cursor.fetchall()),
         "working_memory": query_working_memory_summary(cursor, args),
+        "post_commit_effects": post_commit_effects,
     }
 
 

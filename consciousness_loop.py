@@ -96,6 +96,9 @@ class ConsciousnessLoopManager:
         self.db = db_manager
         self.agent_instance = AGENT_INSTANCE
         self.admin_user_id = ADMIN_USER_ID
+        from engines.loop_post_commit_integration import ensure_schema
+
+        ensure_schema(self.db)
 
     def _now(self) -> datetime:
         return datetime.now(LOOP_TIMEZONE)
@@ -787,7 +790,8 @@ class ConsciousnessLoopManager:
             connection.commit()
         return cursor.lastrowid
 
-    def _save_phase_result(self, result: Dict, *, connection=None, commit: bool = True) -> int:
+    def _save_phase_result(self, result: Dict, *, connection=None, commit: bool = True,
+                           register_post_commit: bool = True) -> int:
         connection = connection if connection is not None else self.db.conn
         cursor = connection.cursor()
         cursor.execute(
@@ -837,6 +841,12 @@ class ConsciousnessLoopManager:
                     artifact.get("summary"),
                 ),
             )
+
+        if register_post_commit and result["status"] != "failed":
+            from engines.loop_post_commit_integration import register
+
+            register(connection, phase_result_id=phase_result_id, agent_instance=self.agent_instance,
+                     cycle_id=result["cycle_id"], phase=result["phase"])
 
         if commit:
             connection.commit()
@@ -2755,7 +2765,8 @@ class ConsciousnessLoopManager:
 
             WillPhaseArbitration(self.db).commit_for_phase(
                 satisfaction["id"], phase_pulse_id=pulse["id"],
-                save_result=lambda connection: self._save_phase_result(result, connection=connection, commit=False),
+                save_result=lambda connection: self._save_phase_result(
+                    result, connection=connection, commit=False, register_post_commit=False),
             )
             from engines.will_loop_integration import integrate
 
@@ -2763,10 +2774,21 @@ class ConsciousnessLoopManager:
         else:
             phase_result_id = self._save_phase_result(result)
             self._finish_phase_pulse(pulse, result, phase_result_id)
-        payloads_changed = self._observe_phase_for_working_memory(phase_result_id, phase, result) is not None
-        broadcast_id = self._broadcast_working_memory_to_next_phase(phase, result)
-        if broadcast_id or result["metrics"].get("working_memory_broadcast_error"):
-            payloads_changed = True
+        normal_post_commit = result["status"] != "failed" and hasattr(self.db, "working_memory_transaction")
+        if normal_post_commit:
+            from engines.loop_post_commit_integration import integrate
+
+            try:
+                result = integrate(self, phase_result_id)
+            except Exception as exc:
+                logger.warning("LOOP POST-COMMIT pending phase_result_id=%s error_type=%s",
+                               phase_result_id, type(exc).__name__)
+                result["metrics"]["post_commit_integration_pending"] = 1
+        else:
+            payloads_changed = self._observe_phase_for_working_memory(phase_result_id, phase, result) is not None
+            broadcast_id = self._broadcast_working_memory_to_next_phase(phase, result)
+            if broadcast_id or result["metrics"].get("working_memory_broadcast_error"):
+                payloads_changed = True
         if result["status"] == "failed":
             fragment_id = self._feed_loop_failure_to_rumination(
                 phase_result_id=phase_result_id,
@@ -2778,23 +2800,24 @@ class ConsciousnessLoopManager:
                 result["metrics"]["failure_rumination_fragment_id"] = fragment_id
                 result["raw_result"]["failure_rumination_fragment_id"] = fragment_id
                 payloads_changed = True
-        if payloads_changed:
+        if not normal_post_commit and payloads_changed:
             self._update_phase_result_payloads(phase_result_id, result)
-        self._insert_event(
-            cycle_id=cycle_id,
-            phase=phase.key,
-            status="failed" if result["status"] == "failed" else "completed",
-            trigger_name=phase.trigger_name,
-            trigger_source=trigger_source,
-            execution_mode=execution_mode,
-            input_summary=result["input_summary"],
-            output_summary=result["output_summary"],
-            duration_seconds=result["duration_ms"] / 1000.0,
-            phase_result_id=phase_result_id,
-            warnings=result["warnings"],
-            errors=result["errors"],
-            metrics=result["metrics"],
-        )
+        if not normal_post_commit:
+            self._insert_event(
+                cycle_id=cycle_id,
+                phase=phase.key,
+                status="failed" if result["status"] == "failed" else "completed",
+                trigger_name=phase.trigger_name,
+                trigger_source=trigger_source,
+                execution_mode=execution_mode,
+                input_summary=result["input_summary"],
+                output_summary=result["output_summary"],
+                duration_seconds=result["duration_ms"] / 1000.0,
+                phase_result_id=phase_result_id,
+                warnings=result["warnings"],
+                errors=result["errors"],
+                metrics=result["metrics"],
+            )
 
         logger.info(
             "LOOP PHASE RESULT cycle_id=%s phase=%s status=%s duration_ms=%s artifact_count=%s warning_count=%s error_count=%s",
@@ -2879,8 +2902,10 @@ class ConsciousnessLoopManager:
     def sync_loop(self, trigger_source: str = "scheduled_trigger", notify_admin: bool = False) -> Dict:
         self._ensure_phase_config()
         from engines.will_loop_integration import recover
+        from engines.loop_post_commit_integration import recover as recover_post_commit
 
         recover(self)
+        recover_post_commit(self)
         window = self._phase_window_for()
         target_phase = window["phase"]
         next_phase = window["next_phase"]
