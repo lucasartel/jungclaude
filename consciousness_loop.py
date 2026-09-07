@@ -749,8 +749,11 @@ class ConsciousnessLoopManager:
         warnings: Optional[List[str]] = None,
         errors: Optional[List[str]] = None,
         metrics: Optional[Dict] = None,
+        connection=None,
+        commit: bool = True,
     ) -> int:
-        cursor = self.db.conn.cursor()
+        connection = connection if connection is not None else self.db.conn
+        cursor = connection.cursor()
         now_iso = self._now().isoformat()
         cursor.execute(
             """
@@ -780,7 +783,8 @@ class ConsciousnessLoopManager:
                 phase_result_id,
             ),
         )
-        self.db.conn.commit()
+        if commit:
+            connection.commit()
         return cursor.lastrowid
 
     def _save_phase_result(self, result: Dict, *, connection=None, commit: bool = True) -> int:
@@ -838,8 +842,9 @@ class ConsciousnessLoopManager:
             connection.commit()
         return phase_result_id
 
-    def _update_phase_result_payloads(self, phase_result_id: int, result: Dict) -> None:
-        cursor = self.db.conn.cursor()
+    def _update_phase_result_payloads(self, phase_result_id: int, result: Dict, *, connection=None, commit=True) -> None:
+        connection = connection if connection is not None else self.db.conn
+        cursor = connection.cursor()
         cursor.execute(
             """
             UPDATE consciousness_loop_phase_results
@@ -857,7 +862,8 @@ class ConsciousnessLoopManager:
                 phase_result_id,
             ),
         )
-        self.db.conn.commit()
+        if commit:
+            connection.commit()
 
     def _phase_input_summary(self, cycle_id: str, phase_key: str) -> str:
         cursor = self.db.conn.cursor()
@@ -2648,7 +2654,9 @@ class ConsciousnessLoopManager:
             cycle_id=cycle_id,
         )
         if satisfaction and satisfaction.get("already_committed"):
-            return satisfaction["stored_result"]
+            from engines.will_loop_integration import integrate
+
+            return integrate(self, satisfaction["id"])
         self._read_working_memory_inbox(phase, result)
         if satisfaction:
             result["status"] = "satisfied_by_will"
@@ -2745,12 +2753,13 @@ class ConsciousnessLoopManager:
         if satisfaction:
             from engines.will_phase_arbitration import WillPhaseArbitration
 
-            phase_result_id, created = WillPhaseArbitration(self.db).commit_for_phase(
+            WillPhaseArbitration(self.db).commit_for_phase(
                 satisfaction["id"], phase_pulse_id=pulse["id"],
                 save_result=lambda connection: self._save_phase_result(result, connection=connection, commit=False),
             )
-            if not created:
-                return result
+            from engines.will_loop_integration import integrate
+
+            return integrate(self, satisfaction["id"])
         else:
             phase_result_id = self._save_phase_result(result)
             self._finish_phase_pulse(pulse, result, phase_result_id)
@@ -2869,6 +2878,9 @@ class ConsciousnessLoopManager:
 
     def sync_loop(self, trigger_source: str = "scheduled_trigger", notify_admin: bool = False) -> Dict:
         self._ensure_phase_config()
+        from engines.will_loop_integration import recover
+
+        recover(self)
         window = self._phase_window_for()
         target_phase = window["phase"]
         next_phase = window["next_phase"]

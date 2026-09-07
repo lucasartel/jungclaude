@@ -57,6 +57,9 @@ class WillPhaseArbitrationDatabaseMixin:
             ("reserved_by_phase_pulse_id", "INTEGER"), ("reserved_at", "TEXT"),
             ("phase_result_id", "INTEGER"),
             ("user_id", "TEXT"),
+            ("integration_version", "INTEGER NOT NULL DEFAULT 0"),
+            ("integration_at", "TEXT"), ("integration_attempts", "INTEGER NOT NULL DEFAULT 0"),
+            ("integration_next_at", "TEXT"), ("integration_error", "TEXT"),
         ):
             if name not in columns:
                 self.conn.execute(f"ALTER TABLE will_phase_satisfactions ADD COLUMN {name} {definition}")
@@ -295,7 +298,7 @@ class WillPhaseArbitration:
                 raise ValueError("will_phase_result_mismatch")
             conn.execute("""
                 UPDATE will_phase_satisfactions SET status = 'consumed', consumed_by_phase_pulse_id = ?,
-                    consumed_at = ?, phase_result_id = ?, updated_at = ? WHERE id = ?
+                    consumed_at = ?, phase_result_id = ?, updated_at = ?, integration_version = 1 WHERE id = ?
             """, (phase_pulse_id, self._now().isoformat(), result_id, self._now().isoformat(), receipt_id))
             conn.execute("""
                 UPDATE consciousness_phase_pulses SET status = 'completed', phase_result_id = ?,

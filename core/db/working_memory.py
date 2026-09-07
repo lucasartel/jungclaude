@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime
+from threading import RLock
 from typing import Any, Dict, List, Optional, Sequence
 
 
@@ -28,6 +29,9 @@ def _json_loads(raw: Optional[str], fallback: Any) -> Any:
 
 
 class WorkingMemoryDatabaseMixin:
+    def working_memory_transaction(self, connection):
+        return _TransactionalMemory(connection)
+
     def _init_working_memory_schema(self) -> None:
         cursor = self.conn.cursor()
         cursor.execute(
@@ -170,6 +174,7 @@ class WorkingMemoryDatabaseMixin:
         status: str = "active",
         metadata: Optional[Dict[str, Any]] = None,
         expires_at: Optional[str] = None,
+        commit: bool = True,
     ) -> int:
         refs = self._normalize_source_refs(source_refs)
         clean_type = (item_type or "").strip().lower()
@@ -210,7 +215,8 @@ class WorkingMemoryDatabaseMixin:
                     now if clean_status in {"resolved", "expired"} else None,
                 ),
             )
-            self.conn.commit()
+            if commit:
+                self.conn.commit()
             return int(cursor.lastrowid)
 
     def list_working_memory_items(
@@ -259,7 +265,7 @@ class WorkingMemoryDatabaseMixin:
         item["metadata"] = _json_loads(item.pop("metadata_json", None), {})
         return item
 
-    def update_working_memory_item_status(self, item_id: int, status: str) -> bool:
+    def update_working_memory_item_status(self, item_id: int, status: str, *, commit: bool = True) -> bool:
         clean_status = (status or "").strip().lower()
         if clean_status not in {"resolved", "expired"}:
             raise ValueError(f"invalid_terminal_status:{status}")
@@ -274,7 +280,8 @@ class WorkingMemoryDatabaseMixin:
                 """,
                 (clean_status, now, now, item_id),
             )
-            self.conn.commit()
+            if commit:
+                self.conn.commit()
             return cursor.rowcount > 0
 
     def create_working_memory_broadcast(
@@ -286,6 +293,7 @@ class WorkingMemoryDatabaseMixin:
         focus_items: Sequence[Dict[str, Any]],
         fringe_items: Sequence[Dict[str, Any]],
         cycle_id: Optional[str] = None,
+        commit: bool = True,
     ) -> int:
         if not agent_instance or not from_phase or not to_phase:
             raise ValueError("agent_instance_from_phase_to_phase_required")
@@ -308,7 +316,8 @@ class WorkingMemoryDatabaseMixin:
                     _now_iso(),
                 ),
             )
-            self.conn.commit()
+            if commit:
+                self.conn.commit()
             return int(cursor.lastrowid)
 
     def get_latest_working_memory_broadcast(
@@ -729,3 +738,20 @@ class WorkingMemoryDatabaseMixin:
         action["evidence"] = _json_loads(action.pop("evidence_json", None), {})
         action["metadata"] = _json_loads(action.pop("metadata_json", None), {})
         return action
+
+
+class _TransactionalMemory(WorkingMemoryDatabaseMixin):
+    """Private connection view; the caller commits all WM effects together."""
+
+    def __init__(self, connection):
+        self.conn = connection
+        self._lock = RLock()
+
+    def create_working_memory_item(self, **kwargs):
+        return super().create_working_memory_item(**kwargs, commit=False)
+
+    def update_working_memory_item_status(self, item_id, status):
+        return super().update_working_memory_item_status(item_id, status, commit=False)
+
+    def create_working_memory_broadcast(self, **kwargs):
+        return super().create_working_memory_broadcast(**kwargs, commit=False)

@@ -38,7 +38,10 @@ def snapshot():
 
 @pytest.fixture
 def context():
+    from test_working_memory import WorkingMemoryDatabaseMixin
+
     db = ScopedWillDB()
+    db.working_memory_transaction = lambda conn: WorkingMemoryDatabaseMixin.working_memory_transaction(db, conn)
     _create_loop_schema(db.conn)
     pressure = WillPressureEngine(db, threshold=51)
     pressure._refractory_hours = lambda: 6
@@ -247,22 +250,23 @@ def test_result_cannot_be_committed_to_another_pulse(context):
 def test_real_loop_preserves_world_content_inbox_and_broadcast(context, monkeypatch):
     completed(context)
     p = pulse(context)
-    reads, broadcasts = [], []
+    reads = []
     manager = context.manager
     monkeypatch.setattr(manager, "_run_world_phase", lambda _: pytest.fail("must reuse completed work"))
     monkeypatch.setattr(manager, "_read_working_memory_inbox", lambda *args: reads.append(args))
-    monkeypatch.setattr(manager, "_observe_phase_for_working_memory", lambda *args: None)
-    monkeypatch.setattr(manager, "_broadcast_working_memory_to_next_phase", lambda phase, result: broadcasts.append(copy.deepcopy(result)))
     result = manager.execute_phase("world", CYCLE, pulse=p)
     assert result["status"] == "satisfied_by_will"
     assert result["metrics"]["phase_placeholder"] == 0
     assert result["metrics"]["artifacts_created_count"] == 1
     assert result["raw_result"]["world_state"]["knowledge_findings"] == snapshot()["knowledge_findings"]
-    assert len(reads) == 1 and len(broadcasts) == 1
+    assert len(reads) == 1
+    assert result["raw_result"]["working_memory_broadcast"]["from_phase"] == "world"
+    assert context.db.conn.execute("SELECT COUNT(*) FROM working_memory_broadcasts").fetchone()[0] == 1
     assert result["artifacts_created"][0]["artifact_table"] == "will_expression_receipts"
     replay = manager.execute_phase("world", CYCLE, pulse=p)
     assert replay["output_summary"] == result["output_summary"]
-    assert len(reads) == 1 and len(broadcasts) == 1
+    assert len(reads) == 1
+    assert context.db.conn.execute("SELECT COUNT(*) FROM working_memory_broadcasts").fetchone()[0] == 1
     assert context.db.conn.execute("SELECT COUNT(*) FROM consciousness_loop_phase_results").fetchone()[0] == 1
 
 
