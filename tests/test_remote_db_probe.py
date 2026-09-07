@@ -39,3 +39,4 @@ def test_phase_pulses_probe_reports_schema_and_recent_pulses(loop_db):
     assert payload["phase_config"][0]["pulse_count"] == 1
     assert payload["pulse_status_counts"] == [{"key": "pending", "count": 1}]
     assert payload["recent_pulses"][0]["phase"] == "dream"
+    assert payload["recent_pulses"][0]["requires_review"] is False

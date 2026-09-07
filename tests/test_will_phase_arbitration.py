@@ -329,6 +329,19 @@ def test_scheduler_recovers_only_abandoned_reservations(context):
     assert context.db.conn.execute("SELECT status FROM will_phase_satisfactions").fetchone()[0] == "reserved"
 
 
+def test_closed_window_invalidates_reserved_will_evidence(context):
+    completed(context)
+    p = pulse(context)
+    receipt = claim(context, p)
+    outcome = context.manager.reconcile_closed_phase_pulses(now=datetime(2026, 9, 6, 10, 0))
+    pulse_row = context.db.conn.execute("SELECT status FROM consciousness_phase_pulses WHERE id = ?", (p["id"],)).fetchone()
+    receipt_row = context.db.conn.execute("SELECT status, result_code FROM will_phase_satisfactions WHERE id = ?", (receipt["id"],)).fetchone()
+    assert outcome["interrupted"] == 1
+    assert outcome["reservations_invalidated"] == 1
+    assert pulse_row["status"] == "interrupted"
+    assert tuple(receipt_row) == ("invalidated", "phase_window_closed_before_consumption")
+
+
 def test_a_future_pulse_does_not_consume_current_work(context):
     completed(context)
     p = pulse(context)

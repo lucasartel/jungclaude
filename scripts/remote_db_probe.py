@@ -341,6 +341,8 @@ def query_phase_pulses(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict
             order_by="scheduled_at DESC, id DESC",
             limit=args.limit,
         )
+        for pulse in recent_pulses:
+            pulse["requires_review"] = pulse.get("status") in {"interrupted", "exhausted"}
         status_counts = grouped_counts(
             cursor,
             "consciousness_phase_pulses",

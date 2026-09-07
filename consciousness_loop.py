@@ -494,12 +494,16 @@ class ConsciousnessLoopManager:
                     cursor.execute(
                         """
                         UPDATE consciousness_phase_pulses
-                        SET status = 'exhausted', updated_at = ?
+                        SET status = 'exhausted', updated_at = ?,
+                            last_error = CASE WHEN last_error IS NULL OR last_error = ''
+                                THEN 'exhausted: retry limit reached'
+                                ELSE substr(last_error, 1, 400) || '; exhausted: retry limit reached' END
                         WHERE id = ?
                         """,
                         (current.isoformat(), pulse["id"]),
                     )
                     self.db.conn.commit()
+                    self._invalidate_will_reservations([pulse["id"]], "phase_pulse_attempts_exhausted")
                     continue
                 executed_at = self._parse_loop_datetime(pulse.get("executed_at"))
                 if executed_at and policy["cooldown_minutes"] > 0:
@@ -650,6 +654,68 @@ class ConsciousnessLoopManager:
             "repaired_count": len(repaired),
             "repaired": repaired,
         }
+
+    def _phase_deadline_for_cycle(self, cycle_id: str, phase: LoopPhase) -> Optional[datetime]:
+        try:
+            cycle_date = datetime.fromisoformat(str(cycle_id)).date()
+        except (TypeError, ValueError):
+            return None
+        if phase.end_hour == 24:
+            return datetime.combine(cycle_date + timedelta(days=1), time.min, tzinfo=LOOP_TIMEZONE)
+        return datetime.combine(cycle_date, time(hour=phase.end_hour), tzinfo=LOOP_TIMEZONE)
+
+    def _invalidate_will_reservations(self, pulse_ids: List[int], reason: str) -> int:
+        """Close evidence reserved by a terminal pulse; it cannot authorize a later replay."""
+        if not pulse_ids:
+            return 0
+        cursor = self.db.conn.cursor()
+        exists = cursor.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'will_phase_satisfactions'").fetchone()
+        if not exists:
+            return 0
+        marks = ",".join("?" for _ in pulse_ids)
+        cursor.execute(f"""UPDATE will_phase_satisfactions SET status = 'invalidated', result_code = ?,
+            updated_at = ? WHERE status = 'reserved' AND reserved_by_phase_pulse_id IN ({marks})""",
+            (reason, self._now().isoformat(), *pulse_ids))
+        self.db.conn.commit()
+        return int(cursor.rowcount or 0)
+
+    def reconcile_closed_phase_pulses(self, *, now: Optional[datetime] = None) -> Dict[str, int]:
+        """Terminalize old agenda entries without treating interruption as permission to replay."""
+        repaired = self.reconcile_phase_pulses()["repaired_count"]
+        current = (now or self._now()).astimezone(LOOP_TIMEZONE)
+        cursor = self.db.conn.cursor()
+        rows = cursor.execute("""SELECT * FROM consciousness_phase_pulses
+            WHERE agent_instance = ? AND status IN ('pending', 'running', 'failed')
+            ORDER BY cycle_id, phase, pulse_index""", (self.agent_instance,)).fetchall()
+        closed = {"skipped": 0, "interrupted": 0, "exhausted": 0}
+        invalidated_ids: List[int] = []
+        for row in rows:
+            pulse = dict(row)
+            phase = PHASE_BY_KEY.get(pulse.get("phase"))
+            deadline = self._phase_deadline_for_cycle(pulse.get("cycle_id"), phase) if phase else None
+            if deadline is None or current < deadline:
+                continue
+            attempts = int(pulse.get("attempts") or 0)
+            policy = self._get_phase_retry_policy(pulse["phase"])
+            if pulse["status"] == "running":
+                status, reason = "interrupted", "interrupted: phase window closed without persisted result"
+            elif pulse["status"] == "failed" and attempts >= policy["max_attempts"]:
+                status, reason = "exhausted", "exhausted: retry limit reached before phase window closed"
+            elif pulse["status"] == "failed":
+                status, reason = "skipped", "skipped: phase window closed before retry"
+            else:
+                status, reason = "skipped", "skipped: phase window closed before execution"
+            cursor.execute("""UPDATE consciousness_phase_pulses SET status = ?, updated_at = ?,
+                last_error = CASE WHEN last_error IS NULL OR last_error = '' THEN ?
+                    ELSE substr(last_error, 1, 400) || '; ' || ? END WHERE id = ?
+                AND status IN ('pending', 'running', 'failed') AND phase_result_id IS NULL""",
+                (status, current.isoformat(), reason, reason, pulse["id"]))
+            if cursor.rowcount:
+                closed[status] += 1
+                invalidated_ids.append(pulse["id"])
+        self.db.conn.commit()
+        invalidated = self._invalidate_will_reservations(invalidated_ids, "phase_window_closed_before_consumption")
+        return {"repaired": repaired, **closed, "reservations_invalidated": invalidated}
 
     def _skip_stale_phase_pulses(
         self,
@@ -2904,6 +2970,7 @@ class ConsciousnessLoopManager:
         from engines.will_loop_integration import recover
         from engines.loop_post_commit_integration import recover as recover_post_commit
 
+        self.reconcile_closed_phase_pulses()
         recover(self)
         recover_post_commit(self)
         window = self._phase_window_for()

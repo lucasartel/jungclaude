@@ -484,6 +484,44 @@ class TestPhasePulses:
 
         assert due is None
 
+    def test_closed_windows_terminalize_pending_running_and_exhausted_pulses(self, manager, loop_db):
+        tz = ZoneInfo("America/Sao_Paulo")
+        start = datetime(2026, 7, 4, 0, 0, tzinfo=tz)
+        deadline = datetime(2026, 7, 4, 2, 0, tzinfo=tz)
+        manager._ensure_phase_config()
+        loop_db.conn.execute("UPDATE consciousness_phase_config SET pulse_count = 3 WHERE phase = 'dream'")
+        loop_db.conn.commit()
+        rows = manager._ensure_phase_pulse_agenda(
+            cycle_id="2026-07-04", phase=PHASE_BY_KEY["dream"],
+            phase_started_at=start, phase_deadline_at=deadline,
+        )
+        loop_db.conn.execute("UPDATE consciousness_phase_pulses SET status = 'running', attempts = 1 WHERE id = ?", (rows[1]["id"],))
+        loop_db.conn.execute("UPDATE consciousness_phase_pulses SET status = 'failed', attempts = 3 WHERE id = ?", (rows[2]["id"],))
+        loop_db.conn.commit()
+        outcome = manager.reconcile_closed_phase_pulses(now=deadline + timedelta(minutes=1))
+        assert outcome == {"repaired": 0, "skipped": 1, "interrupted": 1, "exhausted": 1, "reservations_invalidated": 0}
+        statuses = [row[0] for row in loop_db.conn.execute(
+            "SELECT status FROM consciousness_phase_pulses WHERE cycle_id = ? ORDER BY pulse_index", ("2026-07-04",)
+        )]
+        assert statuses == ["skipped", "interrupted", "exhausted"]
+
+    def test_retry_limit_becomes_exhausted_without_returning_the_pulse(self, manager, loop_db, monkeypatch):
+        tz = ZoneInfo("America/Sao_Paulo")
+        now = datetime(2026, 7, 4, 1, 0, tzinfo=tz)
+        manager._ensure_phase_config()
+        rows = manager._ensure_phase_pulse_agenda(
+            cycle_id="2026-07-04", phase=PHASE_BY_KEY["dream"],
+            phase_started_at=datetime(2026, 7, 4, 0, 0, tzinfo=tz),
+            phase_deadline_at=datetime(2026, 7, 4, 2, 0, tzinfo=tz),
+        )
+        loop_db.conn.execute("UPDATE consciousness_phase_pulses SET status = 'failed', attempts = 3 WHERE id = ?", (rows[0]["id"],))
+        loop_db.conn.commit()
+        monkeypatch.setattr(manager, "_now", lambda: now)
+        assert manager._get_due_phase_pulse(cycle_id="2026-07-04", phase=PHASE_BY_KEY["dream"]) is None
+        row = loop_db.conn.execute("SELECT status, last_error FROM consciousness_phase_pulses WHERE id = ?", (rows[0]["id"],)).fetchone()
+        assert row["status"] == "exhausted"
+        assert "retry limit reached" in row["last_error"]
+
 
 # ---------------------------------------------------------------------------
 # 4. _get_phase_retry_policy — valores invalidos no DB
