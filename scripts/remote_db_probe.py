@@ -613,6 +613,10 @@ def query_expressions(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[
         name if name in columns else f"NULL AS {name}"
         for name in ("phase_integration_at", "recovery_attempts", "recovery_next_at", "recovery_error")
     )
+    proactive_fields = ", ".join(
+        name if name in columns else f"NULL AS {name}"
+        for name in ("proactive_record_version", "proactive_recorded_at", "proactive_conversation_id", "proactive_approach_id")
+    )
     cursor.execute(
         f"""
         SELECT
@@ -620,6 +624,7 @@ def query_expressions(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[
             {event_field},
             {effect_field},
             {recovery_fields},
+            {proactive_fields},
             agent_instance,
             relation_id,
             scope_kind,
@@ -672,13 +677,32 @@ def query_expressions(cursor: sqlite3.Cursor, args: argparse.Namespace) -> Dict[
             and row.get("delivery_event_id") is not None
             and not row.get("phase_integration_at")
         )
+        row["proactive_record_pending"] = (
+            row.get("status") == "completed"
+            and row.get("capability_key") == "relacionar_proactive_message"
+            and not row.get("proactive_recorded_at")
+        )
+        row["proactive_legacy_requires_review"] = (
+            row["proactive_record_pending"] and int(row.get("proactive_record_version") or 0) != 1
+        )
         row["recovery_exhausted"] = (
-            (row["pressure_integration_pending"] or row["phase_integration_pending"])
+            (row["pressure_integration_pending"] or row["phase_integration_pending"]
+             or row["proactive_record_pending"])
             and int(row.get("recovery_attempts") or 0) >= 5
         )
         row["requires_reconciliation"] = row["requires_reconciliation"] or row["recovery_exhausted"] or (
             row.get("status") == "completed" and row.get("delivery_event_id") is None
         )
+        if table_exists(cursor, "will_proactive_effects"):
+            cursor.execute("""SELECT effect, status, claimed_at, updated_at, error_type
+                FROM will_proactive_effects WHERE expression_id = ? ORDER BY effect""", (row["id"],))
+            row["proactive_effects"] = rows_to_dicts(cursor.fetchall())
+            row["proactive_effects_require_review"] = any(
+                item["status"] in {"running", "uncertain"} for item in row["proactive_effects"]
+            )
+        else:
+            row["proactive_effects"] = []
+            row["proactive_effects_require_review"] = False
         if table_exists(cursor, "will_expression_receipts"):
             cursor.execute(
                 """

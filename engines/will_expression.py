@@ -98,12 +98,25 @@ class WillExpressionDatabaseMixin:
             ("delivery_event_id", "INTEGER"), ("pressure_effect_at", "TEXT"),
             ("phase_integration_at", "TEXT"), ("recovery_attempts", "INTEGER NOT NULL DEFAULT 0"),
             ("recovery_next_at", "TEXT"), ("recovery_error", "TEXT"),
+            ("proactive_record_version", "INTEGER NOT NULL DEFAULT 0"),
+            ("proactive_recorded_at", "TEXT"), ("proactive_conversation_id", "INTEGER"),
+            ("proactive_approach_id", "INTEGER"),
         ):
             if column not in columns:
                 cursor.execute(f"ALTER TABLE will_expressions ADD COLUMN {column} {definition}")
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_will_expression_delivery_event ON will_expressions(delivery_event_id) WHERE delivery_event_id IS NOT NULL")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_will_expressions_scope ON will_expressions(agent_instance, scope_kind, relation_id, updated_at DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_will_expression_receipts_expression ON will_expression_receipts(expression_id, created_at DESC)")
+        cursor.execute("""CREATE TABLE IF NOT EXISTS will_proactive_effects (
+            expression_id INTEGER NOT NULL, effect TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+            claimed_at TEXT, updated_at TEXT, error_type TEXT,
+            PRIMARY KEY (expression_id, effect), FOREIGN KEY (expression_id) REFERENCES will_expressions(id))""")
+        for table in ("conversations", "proactive_approaches"):
+            existing = {row[1] for row in cursor.execute(f"PRAGMA table_info({table})")}
+            if existing:
+                for column in ("agent_instance", "relation_id"):
+                    if column not in existing:
+                        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} TEXT")
         self.conn.commit()
 
 
@@ -192,8 +205,8 @@ class WillExpressionEngine:
                 INSERT INTO will_expressions (
                     agent_instance, relation_id, scope_kind, user_id, cycle_id, will_name,
                     capability_key, gate_level, cost_class, idempotency_key, status,
-                    intent_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'preparing', ?, ?, ?)
+                    intent_json, created_at, updated_at, proactive_record_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'preparing', ?, ?, ?, 1)
                 ON CONFLICT(idempotency_key) DO NOTHING
                 """,
                 (scope["agent_instance"], scope.get("relation_id"), scope["scope_kind"], user_id, cycle_id, will_name, capability_key, capability["gate_level"], capability["cost_class"], key, _dump(intent), self._now(), self._now()),

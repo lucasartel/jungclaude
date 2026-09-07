@@ -947,50 +947,17 @@ Responda APENAS com JSON válido:
         payload: Dict,
     ) -> Optional[int]:
         """Persiste a mensagem proativa relacional após envio bem-sucedido."""
-        text = (payload or {}).get("text")
-        if not text:
-            return None
+        from engines.will_proactive_record import record_delivery, run_pending_effects
+        from engines.will_scope import scope_context
 
-        topic = (payload or {}).get("topic") or "aprofundamento relacional"
-        pressure_summary = (payload or {}).get("pressure_summary") or ""
-
-        cursor = self.db.conn.cursor()
-        cursor.execute("""
-            INSERT INTO proactive_approaches (
-                user_id,
-                archetype_primary,
-                archetype_secondary,
-                knowledge_domain,
-                topic_extracted,
-                autonomous_insight,
-                complexity_score,
-                facts_used
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            user_id,
-            "Cuidador",
-            "Amante",
-            "psicológico",
-            topic,
-            text,
-            0.62,
-            json.dumps([pressure_summary] if pressure_summary else []),
-        ))
-        self.db.conn.commit()
-
-        session_id = f"proactive_pressure_{datetime.now().isoformat()}"
-        conversation_id = self.db.save_conversation(
-            user_id=user_id,
-            user_name=user_name,
-            user_input="[PULSO RELACIONAL ENDOGENO]",
-            ai_response=text,
-            session_id=session_id,
-            platform="proactive",
-            keywords=[topic, "will_pressure", "relacional"],
-            complexity="proactive",
-            tension_level=0.0,
-            affective_charge=60.0,
-        )
+        expression_id = (payload or {}).get("will_expression_id")
+        if expression_id is None:
+            raise ValueError("will_proactive_expression_required")
+        scope = scope_context(self.db, **((payload or {}).get("will_scope") or {}))
+        expected = {**scope, "user_id": user_id}
+        conversation_id = record_delivery(self.db, expression_id, expected=expected)
+        if conversation_id is not None:
+            run_pending_effects(self.db, expression_id, expected=expected)
         return conversation_id
 
     def _generate_autonomous_knowledge(

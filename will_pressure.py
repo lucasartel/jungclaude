@@ -1079,6 +1079,9 @@ ESTADO QUALITATIVO:
 
             expression = self._expression_engine()._fetch(expression_id)
             WillPhaseArbitration(self.db).record_expression_completion(expression)
+            from engines.will_proactive_record import record_delivery
+
+            record_delivery(self.db, expression_id, expected={**scope, "user_id": user_id})
         from engines.will_delivery_receipt import atomic, delivery_connection
 
         with delivery_connection(self.db) as conn, atomic(conn):

@@ -317,7 +317,7 @@ async def lifespan(app: FastAPI):
                             expression_id=delivery.get("will_expression_id"),
                             delivery_evidence=evidence, **scope,
                         )
-                        if delivery.get("delivery_type") in {"pressure_relational", "relational_message"}:
+                        if pulse.get("winner") == "relacionar":
                             await asyncio.to_thread(
                                 bot_state.proactive.record_pressure_based_message,
                                 ADMIN_USER_ID, user_name, delivery,

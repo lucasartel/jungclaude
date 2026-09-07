@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from engines.will_delivery_receipt import FIELDS, atomic, delivery_connection
+from engines.will_proactive_record import PENDING_RECORD_SQL
 
 logger = logging.getLogger(__name__)
 MAX_RECOVERY_ATTEMPTS = 5
@@ -66,7 +67,7 @@ def reconcile(engine, *, user_id, scope, now=None, limit=50):
     with delivery_connection(engine.db) as conn:
         candidates = conn.execute(f"""SELECT id FROM will_expressions WHERE {where}
             AND status IN ('completed', 'failed') AND delivery_event_id IS NOT NULL
-            AND (pressure_effect_at IS NULL OR phase_integration_at IS NULL)
+            AND (pressure_effect_at IS NULL OR phase_integration_at IS NULL OR {PENDING_RECORD_SQL})
             AND recovery_attempts < ?
             AND (recovery_next_at IS NULL OR julianday(recovery_next_at) <= julianday(?))
             ORDER BY id LIMIT ?""", (*params, MAX_RECOVERY_ATTEMPTS, now.isoformat(), limit)).fetchall()
@@ -78,7 +79,7 @@ def reconcile(engine, *, user_id, scope, now=None, limit=50):
             claimed = conn.execute(f"""UPDATE will_expressions
                 SET recovery_attempts = recovery_attempts + 1, recovery_next_at = ?
                 WHERE id = ? AND {where} AND status IN ('completed', 'failed')
-                AND (pressure_effect_at IS NULL OR phase_integration_at IS NULL)
+                AND (pressure_effect_at IS NULL OR phase_integration_at IS NULL OR {PENDING_RECORD_SQL})
                 AND recovery_attempts < ?
                 AND (recovery_next_at IS NULL OR julianday(recovery_next_at) <= julianday(?))""",
                 ((now + timedelta(minutes=5)).isoformat(), expression_id, *params,
@@ -108,8 +109,8 @@ def reconcile(engine, *, user_id, scope, now=None, limit=50):
             logger.warning("[WILL RECOVERY] expression_id=%s integration_pending error_type=%s", expression_id, error)
             delay = timedelta(minutes=min(360, 5 * 2 ** (expression["recovery_attempts"] - 1)))
             with delivery_connection(engine.db) as conn, atomic(conn):
-                conn.execute("""UPDATE will_expressions SET recovery_error = ?, recovery_next_at = ?
-                    WHERE id = ? AND (pressure_effect_at IS NULL OR phase_integration_at IS NULL)""",
+                conn.execute(f"""UPDATE will_expressions SET recovery_error = ?, recovery_next_at = ?
+                    WHERE id = ? AND (pressure_effect_at IS NULL OR phase_integration_at IS NULL OR {PENDING_RECORD_SQL})""",
                     (error, (now + delay).isoformat(), expression_id))
             result["deferred"] += 1
     return result

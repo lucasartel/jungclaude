@@ -14,6 +14,7 @@ import pytest
 
 from engines.will_delivery_receipt import bind_event, finalize
 from engines.will_expression import WillExpressionEngine
+from engines.will_proactive_record import run_pending_effects
 from scripts.remote_db_probe import query_expressions
 from test_will_relation_scope import ScopedWillDB, TEST_INSTANCE
 from will_pressure import WillPressureEngine
@@ -26,6 +27,16 @@ EVIDENCE = {"transport": "telegram", "chat_id": 42, "message_ids": [123]}
 @pytest.fixture
 def delivery():
     db = ScopedWillDB()
+    db.conn.execute("CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, user_name TEXT)")
+    db.conn.execute("INSERT INTO users (user_id, user_name) VALUES (?, ?)", (USER, "Receipt User"))
+    db.conn.execute("""CREATE TABLE conversations (
+        id INTEGER PRIMARY KEY, user_id TEXT, user_name TEXT, session_id TEXT, user_input TEXT, ai_response TEXT,
+        platform TEXT, keywords TEXT, complexity TEXT, tension_level REAL, affective_charge REAL,
+        timestamp TEXT, chroma_id TEXT)""")
+    db.conn.execute("""CREATE TABLE proactive_approaches (
+        id INTEGER PRIMARY KEY, user_id TEXT, archetype_primary TEXT, archetype_secondary TEXT,
+        knowledge_domain TEXT, topic_extracted TEXT, autonomous_insight TEXT, complexity_score REAL,
+        facts_used TEXT, timestamp TEXT)""")
     db.conn.execute("""CREATE TABLE rumination_log (
         id INTEGER PRIMARY KEY, user_id TEXT, phase TEXT, operation TEXT,
         input_summary TEXT, output_summary TEXT, relation_id TEXT,
@@ -80,6 +91,61 @@ def test_confirmation_applies_once_even_after_pressure_grows(delivery):
     assert delivery.db.conn.execute(
         "SELECT COUNT(*) FROM will_expression_receipts WHERE status = 'completed'"
     ).fetchone()[0] == 1
+
+
+def test_confirmation_records_one_durable_proactive_conversation(delivery):
+    finish(delivery)
+    finish(delivery, action_summary="same confirmed evidence")
+    expression = delivery.engine._fetch(delivery.expression_id)
+    assert expression["proactive_recorded_at"]
+    assert delivery.db.conn.execute("SELECT COUNT(*) FROM conversations").fetchone()[0] == 1
+    assert delivery.db.conn.execute("SELECT COUNT(*) FROM proactive_approaches").fetchone()[0] == 1
+    assert delivery.db.conn.execute(
+        "SELECT COUNT(*) FROM will_proactive_effects WHERE expression_id = ? AND status = 'pending'",
+        (delivery.expression_id,),
+    ).fetchone()[0] == 4
+    row = query_expressions(delivery.db.conn.cursor(), Namespace(
+        user_id=USER, agent_instance=TEST_INSTANCE, relation_id=None, scope_kind="global", limit=5,
+    ))["rows"][0]
+    assert row["proactive_record_pending"] is False
+    assert {effect["status"] for effect in row["proactive_effects"]} == {"pending"}
+    assert "private message" not in str(row)
+
+
+def test_proactive_effects_are_invoked_once_after_durable_record(delivery, monkeypatch):
+    calls = []
+    delivery.db._update_agent_development = lambda user_id: calls.append(("development", user_id))
+    delivery.db.extract_and_save_facts = lambda *args: calls.append(("facts", args))
+    delivery.db.mem0 = SimpleNamespace(add_exchange=lambda *args: calls.append(("semantic_memory", args)))
+    import user_profile_writer
+
+    monkeypatch.setattr(user_profile_writer, "write_session_entry",
+                        lambda **kwargs: calls.append(("session_log", kwargs["tag"])))
+    finish(delivery)
+    expected = {"agent_instance": TEST_INSTANCE, "relation_id": None, "scope_kind": "global", "user_id": USER}
+    first = run_pending_effects(delivery.db, delivery.expression_id, expected=expected)
+    second = run_pending_effects(delivery.db, delivery.expression_id, expected=expected)
+    assert first == {effect: "returned" for effect in ("development", "facts", "session_log", "semantic_memory")}
+    assert second == {}
+    assert [call[0] for call in calls] == ["development", "facts", "session_log", "semantic_memory"]
+
+
+def test_private_relation_records_but_blocks_unscoped_memory_hooks(delivery):
+    relation_id = delivery.db.register_agent_relation(
+        agent_instance=TEST_INSTANCE, participant_user_id=USER, consent_status="granted",
+    )
+    for table in ("agent_will_pressure_state", "agent_will_pulse_events", "will_expressions"):
+        delivery.db.conn.execute(
+            f"UPDATE {table} SET relation_id = ?, scope_kind = 'relation'", (relation_id,)
+        )
+    delivery.db.conn.commit()
+    finish(delivery, relation_id=relation_id)
+    expected = {"agent_instance": TEST_INSTANCE, "relation_id": relation_id, "scope_kind": "relation", "user_id": USER}
+    assert run_pending_effects(delivery.db, delivery.expression_id, expected=expected) == {}
+    statuses = delivery.db.conn.execute(
+        "SELECT status FROM will_proactive_effects WHERE expression_id = ?", (delivery.expression_id,),
+    ).fetchall()
+    assert {row[0] for row in statuses} == {"blocked"}
 
 
 @pytest.mark.parametrize("change", [
@@ -254,14 +320,19 @@ def test_sender_rejects_empty_delivery():
 
 
 def test_relational_confirmation_only_changes_its_own_state(delivery):
+    relation_id = delivery.db.register_agent_relation(
+        agent_instance=TEST_INSTANCE,
+        participant_user_id=USER,
+        consent_status="granted",
+    )
     for table in ("agent_will_pressure_state", "agent_will_pulse_events", "will_expressions"):
         delivery.db.conn.execute(
-            f"UPDATE {table} SET relation_id = 'relation-a', scope_kind = 'relation'"
+            f"UPDATE {table} SET relation_id = ?, scope_kind = 'relation'", (relation_id,)
         )
     delivery.db.conn.commit()
     other = delivery.pressure._get_or_create_state(USER, CYCLE, relation_id="relation-b")
     delivery.pressure._update_state(other["id"], relacionar_pressure=90)
-    assert finish(delivery, relation_id="relation-a")["relacionar_pressure"] == 8
+    assert finish(delivery, relation_id=relation_id)["relacionar_pressure"] == 8
     assert delivery.db.conn.execute(
         "SELECT relacionar_pressure FROM agent_will_pressure_state WHERE id = ?", (other["id"],),
     ).fetchone()[0] == 90

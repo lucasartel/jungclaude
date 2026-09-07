@@ -30,6 +30,7 @@ def write_session_entry(
     ai_response: str,
     metadata: Optional[Dict] = None,
     tag: str = "",
+    raise_on_error: bool = False,
 ) -> None:
     """
     Appenda uma entrada de conversa no log diário do usuário.
@@ -62,6 +63,8 @@ def write_session_entry(
 
     except Exception as e:
         logger.warning(f"⚠️ user_profile_writer: erro ao gravar sessão de {user_id}: {e}")
+        if raise_on_error:
+            raise
 
 
 def rebuild_profile_md(

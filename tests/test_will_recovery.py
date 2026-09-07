@@ -92,6 +92,24 @@ def test_recovers_phase_registration_without_second_pressure_relief(delivery, mo
     assert not probe(delivery)["phase_integration_pending"]
 
 
+def test_recovery_finishes_missing_proactive_record_without_memory_dispatch(delivery, monkeypatch):
+    import engines.will_proactive_record as proactive_record
+
+    original = proactive_record.record_delivery
+    monkeypatch.setattr(proactive_record, "record_delivery", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("interrupted record")))
+    with pytest.raises(RuntimeError):
+        finish(delivery)
+    assert state(delivery)["relacionar_pressure"] == 8
+    assert delivery.db.conn.execute("SELECT COUNT(*) FROM conversations").fetchone()[0] == 0
+    monkeypatch.setattr(proactive_record, "record_delivery", original)
+    assert delivery.pressure.reconcile_pending_deliveries(USER)["recovered"] == 1
+    assert delivery.db.conn.execute("SELECT COUNT(*) FROM conversations").fetchone()[0] == 1
+    assert delivery.db.conn.execute(
+        "SELECT COUNT(*) FROM will_proactive_effects WHERE expression_id = ? AND status = 'pending'",
+        (delivery.expression_id,),
+    ).fetchone()[0] == 4
+
+
 def test_real_world_evidence_registration_is_recovered_after_failed_commit(context):
     WillPhaseArbitration(context.db)
     context.db.conn.execute("""CREATE TRIGGER reject_equivalence BEFORE INSERT ON will_phase_satisfactions
